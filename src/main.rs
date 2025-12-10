@@ -1,7 +1,7 @@
 use gpui::*;
 use humanboard::actions::{
-    ClosePreview, DeleteSelected, NextPage, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, Quit,
-    Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    ClosePreview, CloseTab, DeleteSelected, NextPage, NextTab, PdfZoomIn, PdfZoomOut, PdfZoomReset,
+    PrevPage, PrevTab, Quit, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 
@@ -29,6 +29,9 @@ fn main() {
             KeyBinding::new("+", PdfZoomIn, None),
             KeyBinding::new("-", PdfZoomOut, None),
             KeyBinding::new("0", PdfZoomReset, None),
+            KeyBinding::new("cmd-shift-]", NextTab, None),
+            KeyBinding::new("cmd-shift-[", PrevTab, None),
+            KeyBinding::new("cmd-w", CloseTab, None),
         ]);
 
         cx.open_window(

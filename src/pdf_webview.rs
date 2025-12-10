@@ -62,4 +62,12 @@ impl PdfWebView {
     pub fn webview(&self) -> Entity<WebView> {
         self.webview_entity.clone()
     }
+
+    /// Reload the PDF in the WebView
+    pub fn reload(&self, cx: &mut App) {
+        let file_url = format!("file://{}", self.path.display());
+        self.webview_entity.update(cx, |view, _| {
+            view.load_url(&file_url);
+        });
+    }
 }

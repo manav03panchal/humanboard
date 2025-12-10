@@ -10,11 +10,16 @@ pub enum SplitDirection {
     Horizontal, // Panel on the bottom
 }
 
-pub struct PreviewPanel {
+pub struct PdfTab {
     pub path: PathBuf,
+    pub webview: Option<PdfWebView>,
+}
+
+pub struct PreviewPanel {
+    pub tabs: Vec<PdfTab>,
+    pub active_tab: usize,
     pub split: SplitDirection,
     pub size: f32, // 0.0 to 1.0, percentage of window
-    pub pdf_webview: Option<PdfWebView>,
 }
 
 pub struct Humanboard {
@@ -61,24 +66,45 @@ impl Humanboard {
     }
 
     pub fn open_preview(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        self.preview = Some(PreviewPanel {
-            path,
-            split: SplitDirection::Vertical,
-            size: 0.4, // 40% of window
-            pdf_webview: None,
-        });
+        if let Some(ref mut preview) = self.preview {
+            // Check if PDF is already open in a tab
+            if let Some(index) = preview.tabs.iter().position(|tab| tab.path == path) {
+                preview.active_tab = index;
+            } else {
+                // Add new tab
+                preview.tabs.push(PdfTab {
+                    path,
+                    webview: None,
+                });
+                preview.active_tab = preview.tabs.len() - 1;
+            }
+        } else {
+            // Create new preview panel with first tab
+            self.preview = Some(PreviewPanel {
+                tabs: vec![PdfTab {
+                    path,
+                    webview: None,
+                }],
+                active_tab: 0,
+                split: SplitDirection::Vertical,
+                size: 0.4,
+            });
+        }
         cx.notify();
     }
 
     pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
         if let Some(ref mut preview) = self.preview {
-            if preview.pdf_webview.is_none() {
-                match PdfWebView::new(preview.path.clone(), window, cx) {
-                    Ok(webview) => {
-                        preview.pdf_webview = Some(webview);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to create PDF WebView: {}", e);
+            // Ensure all tabs have their WebViews created
+            for tab in preview.tabs.iter_mut() {
+                if tab.webview.is_none() {
+                    match PdfWebView::new(tab.path.clone(), window, cx) {
+                        Ok(webview) => {
+                            tab.webview = Some(webview);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to create PDF WebView: {}", e);
+                        }
                     }
                 }
             }
@@ -88,6 +114,65 @@ impl Humanboard {
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {
         self.preview = None;
         cx.notify();
+    }
+
+    pub fn close_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if tab_index < preview.tabs.len() {
+                preview.tabs.remove(tab_index);
+
+                if preview.tabs.is_empty() {
+                    // No more tabs, close preview panel
+                    self.preview = None;
+                } else {
+                    // Adjust active tab if needed
+                    if preview.active_tab >= preview.tabs.len() {
+                        preview.active_tab = preview.tabs.len() - 1;
+                    } else if tab_index < preview.active_tab {
+                        preview.active_tab -= 1;
+                    }
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    pub fn switch_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if tab_index < preview.tabs.len() {
+                preview.active_tab = tab_index;
+                cx.notify();
+            }
+        }
+    }
+
+    pub fn next_tab(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if !preview.tabs.is_empty() {
+                preview.active_tab = (preview.active_tab + 1) % preview.tabs.len();
+                cx.notify();
+            }
+        }
+    }
+
+    pub fn prev_tab(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if !preview.tabs.is_empty() {
+                preview.active_tab = if preview.active_tab == 0 {
+                    preview.tabs.len() - 1
+                } else {
+                    preview.active_tab - 1
+                };
+                cx.notify();
+            }
+        }
+    }
+
+    pub fn close_current_tab(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref preview) = self.preview {
+            let active = preview.active_tab;
+            self.close_tab(active, cx);
+        }
     }
 
     pub fn toggle_split_direction(&mut self, cx: &mut Context<Self>) {

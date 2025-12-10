@@ -18,14 +18,45 @@ actions!(
         PrevPage,
         PdfZoomIn,
         PdfZoomOut,
-        PdfZoomReset
+        PdfZoomReset,
+        NextTab,
+        PrevTab,
+        CloseTab
     ]
 );
 
 impl Humanboard {
-    pub fn zoom_in(&mut self, cx: &mut Context<Self>) {
-        let center_x = px(700.0);
-        let center_y = px(450.0);
+    pub fn zoom_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let bounds = window.bounds();
+        let window_size = bounds.size;
+
+        // Calculate center point based on canvas area (accounting for preview panel if open)
+        let (center_x, center_y) = if let Some(ref preview) = self.preview {
+            match preview.split {
+                crate::app::SplitDirection::Vertical => {
+                    // Canvas is on the left side
+                    let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
+                    (
+                        px(canvas_width / 2.0),
+                        px(f32::from(window_size.height) / 2.0),
+                    )
+                }
+                crate::app::SplitDirection::Horizontal => {
+                    // Canvas is on the top
+                    let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
+                    (
+                        px(f32::from(window_size.width) / 2.0),
+                        px(canvas_height / 2.0),
+                    )
+                }
+            }
+        } else {
+            // No preview panel, use full window center
+            (
+                px(f32::from(window_size.width) / 2.0),
+                px(f32::from(window_size.height) / 2.0),
+            )
+        };
 
         let old_zoom = self.board.zoom;
         self.board.zoom = (self.board.zoom * 1.2).clamp(0.1, 10.0);
@@ -41,9 +72,37 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn zoom_out(&mut self, cx: &mut Context<Self>) {
-        let center_x = px(700.0);
-        let center_y = px(450.0);
+    pub fn zoom_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let bounds = window.bounds();
+        let window_size = bounds.size;
+
+        // Calculate center point based on canvas area (accounting for preview panel if open)
+        let (center_x, center_y) = if let Some(ref preview) = self.preview {
+            match preview.split {
+                crate::app::SplitDirection::Vertical => {
+                    // Canvas is on the left side
+                    let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
+                    (
+                        px(canvas_width / 2.0),
+                        px(f32::from(window_size.height) / 2.0),
+                    )
+                }
+                crate::app::SplitDirection::Horizontal => {
+                    // Canvas is on the top
+                    let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
+                    (
+                        px(f32::from(window_size.width) / 2.0),
+                        px(canvas_height / 2.0),
+                    )
+                }
+            }
+        } else {
+            // No preview panel, use full window center
+            (
+                px(f32::from(window_size.width) / 2.0),
+                px(f32::from(window_size.height) / 2.0),
+            )
+        };
 
         let old_zoom = self.board.zoom;
         self.board.zoom = (self.board.zoom / 1.2).clamp(0.1, 10.0);

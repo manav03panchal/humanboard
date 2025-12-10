@@ -6,23 +6,26 @@ impl Humanboard {
     pub fn handle_mouse_down(
         &mut self,
         event: &MouseDownEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let mouse_pos = event.position;
 
         // Check if clicking on splitter bar
         if let Some(ref preview) = self.preview {
+            let bounds = window.bounds();
+            let window_size = bounds.size;
+
             let is_on_splitter = match preview.split {
                 SplitDirection::Vertical => {
                     // Splitter is a vertical bar on the left edge of preview
-                    let splitter_x = (1.0 - preview.size) * 1400.0; // Approximate window width
-                    (f32::from(mouse_pos.x) - splitter_x).abs() < 8.0
+                    let splitter_x = (1.0 - preview.size) * f32::from(window_size.width);
+                    (f32::from(mouse_pos.x) - splitter_x).abs() < 16.0 // Match splitter width
                 }
                 SplitDirection::Horizontal => {
                     // Splitter is a horizontal bar on the top edge of preview
-                    let splitter_y = (1.0 - preview.size) * 900.0; // Approximate window height
-                    (f32::from(mouse_pos.y) - splitter_y).abs() < 8.0
+                    let splitter_y = (1.0 - preview.size) * f32::from(window_size.height);
+                    (f32::from(mouse_pos.y) - splitter_y).abs() < 16.0 // Match splitter height
                 }
             };
 
@@ -219,25 +222,45 @@ impl Humanboard {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Native PDF view handles its own scrolling, we only handle canvas zoom
-        let zoom_delta = match event.delta {
-            ScrollDelta::Pixels(delta) => -f32::from(delta.y) / 500.0,
-            ScrollDelta::Lines(delta) => -delta.y / 50.0,
-        };
+        // Check if this is a pinch-to-zoom gesture (Cmd key for zoom on scroll wheel)
+        if event.modifiers.platform {
+            // Zoom mode (Cmd + Scroll on macOS)
+            let zoom_delta = match event.delta {
+                ScrollDelta::Pixels(delta) => -f32::from(delta.y) / 500.0,
+                ScrollDelta::Lines(delta) => -delta.y / 50.0,
+            };
 
-        if zoom_delta.abs() > 0.001 {
-            let old_zoom = self.board.zoom;
-            self.board.zoom = (self.board.zoom * (1.0 + zoom_delta)).clamp(0.1, 10.0);
+            if zoom_delta.abs() > 0.001 {
+                let old_zoom = self.board.zoom;
+                self.board.zoom = (self.board.zoom * (1.0 + zoom_delta)).clamp(0.1, 10.0);
 
-            let zoom_factor = self.board.zoom / old_zoom;
-            let mouse_canvas_x = event.position.x - self.board.canvas_offset.x;
-            let mouse_canvas_y = event.position.y - self.board.canvas_offset.y;
+                let zoom_factor = self.board.zoom / old_zoom;
+                let mouse_canvas_x = event.position.x - self.board.canvas_offset.x;
+                let mouse_canvas_y = event.position.y - self.board.canvas_offset.y;
 
-            self.board.canvas_offset.x = event.position.x - mouse_canvas_x * zoom_factor;
-            self.board.canvas_offset.y = event.position.y - mouse_canvas_y * zoom_factor;
+                self.board.canvas_offset.x = event.position.x - mouse_canvas_x * zoom_factor;
+                self.board.canvas_offset.y = event.position.y - mouse_canvas_y * zoom_factor;
 
-            self.board.save();
-            cx.notify();
+                self.board.save();
+                cx.notify();
+            }
+        } else {
+            // Pan mode (normal two-finger scroll on trackpad)
+            match event.delta {
+                ScrollDelta::Pixels(delta) => {
+                    self.board.canvas_offset.x += delta.x;
+                    self.board.canvas_offset.y += delta.y;
+                    self.board.save();
+                    cx.notify();
+                }
+                ScrollDelta::Lines(delta) => {
+                    // Convert lines to pixels (rough approximation)
+                    self.board.canvas_offset.x += px(delta.x * 20.0);
+                    self.board.canvas_offset.y += px(delta.y * 20.0);
+                    self.board.save();
+                    cx.notify();
+                }
+            }
         }
     }
 }
