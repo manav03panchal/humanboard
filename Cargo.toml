@@ -1,0 +1,18 @@
+[package]
+name = "humanboard"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gpui = "0.2.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+image = "0.25"
+pdfium-render = { version = "0.8", features = ["image"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
