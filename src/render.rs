@@ -1,6 +1,6 @@
 use crate::actions::{
-    ClosePreview, CloseTab, DeleteSelected, NextPage, NextTab, PdfZoomIn, PdfZoomOut, PdfZoomReset,
-    PrevPage, PrevTab, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    ClosePreview, CloseTab, DeleteSelected, NextPage, NextTab, OpenFile, PdfZoomIn, PdfZoomOut,
+    PdfZoomReset, PrevPage, PrevTab, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{Humanboard, PdfTab, SplitDirection};
 use crate::types::{CanvasItem, ItemContent};
@@ -501,6 +501,7 @@ impl Render for Humanboard {
             .on_mouse_up(MouseButton::Left, cx.listener(Humanboard::handle_mouse_up))
             .on_mouse_move(cx.listener(Humanboard::handle_mouse_move))
             .on_scroll_wheel(cx.listener(Humanboard::handle_scroll))
+            .on_action(cx.listener(|this, _: &OpenFile, window, cx| this.open_file(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| this.zoom_in(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomOut, window, cx| this.zoom_out(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomReset, _, cx| this.zoom_reset(cx)))

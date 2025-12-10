@@ -21,7 +21,8 @@ actions!(
         PdfZoomReset,
         NextTab,
         PrevTab,
-        CloseTab
+        CloseTab,
+        OpenFile
     ]
 );
 
@@ -146,5 +147,10 @@ impl Humanboard {
             self.selected_item = None;
             cx.notify();
         }
+    }
+
+    pub fn open_file(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        // TODO: Implement file picker (Cmd+O)
+        // For now, use drag-and-drop which works perfectly at mouse cursor position
     }
 }
