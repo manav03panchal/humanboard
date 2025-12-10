@@ -15,7 +15,10 @@ actions!(
         ClosePreview,
         ToggleSplit,
         NextPage,
-        PrevPage
+        PrevPage,
+        PdfZoomIn,
+        PdfZoomOut,
+        PdfZoomReset
     ]
 );
 
