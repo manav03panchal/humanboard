@@ -1,6 +1,6 @@
 use crate::actions::{
-    ClosePreview, DeleteSelected, NextPage, PrevPage, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut,
-    ZoomReset,
+    ClosePreview, DeleteSelected, NextPage, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, Redo,
+    ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{Humanboard, SplitDirection};
 use crate::types::{CanvasItem, ItemContent};
@@ -47,7 +47,7 @@ fn render_item_backgrounds(
         let bg_color = match &item.content {
             ItemContent::Video(_) => hsla(0.15, 0.7, 0.5, 0.9),
             ItemContent::Text(_) => hsla(0.6, 0.7, 0.5, 0.9),
-            ItemContent::Pdf(_) => hsla(0.0, 0.7, 0.5, 0.9),
+            ItemContent::Pdf { .. } => hsla(0.0, 0.7, 0.5, 0.9),
             ItemContent::Link(_) => hsla(0.35, 0.7, 0.5, 0.9),
             _ => hsla(0.0, 0.0, 0.5, 0.9),
         };
@@ -93,6 +93,22 @@ pub fn render_items(
                             if let ItemContent::Image(path) = &item.content {
                                 d.child(
                                     img(path.clone())
+                                        .absolute()
+                                        .size_full()
+                                        .object_fit(ObjectFit::Contain),
+                                )
+                            } else {
+                                d
+                            }
+                        })
+                        .when(matches!(&item.content, ItemContent::Pdf { .. }), |d| {
+                            if let ItemContent::Pdf {
+                                thumbnail: Some(thumb_path),
+                                ..
+                            } = &item.content
+                            {
+                                d.child(
+                                    img(thumb_path.clone())
                                         .absolute()
                                         .size_full()
                                         .object_fit(ObjectFit::Contain),
@@ -179,6 +195,7 @@ pub fn render_preview_panel(
     page_image_path: Option<std::path::PathBuf>,
     current_page: usize,
     page_count: usize,
+    zoom: f32,
 ) -> Div {
     // Truncate filename if too long
     let display_name = if file_name.len() > 25 {
@@ -233,13 +250,21 @@ pub fn render_preview_panel(
                         .text_color(rgb(0xaaaaaa))
                         .child(format!("{}/{}", current_page, page_count)),
                 )
+                // Zoom indicator
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .text_sm()
+                        .text_color(rgb(0x88aaff))
+                        .child(format!("{:.0}%", zoom * 100.0)),
+                )
                 // Keyboard hints
                 .child(
                     div()
                         .flex_shrink_0()
                         .text_xs()
                         .text_color(rgb(0x666666))
-                        .child("←→ T Esc"),
+                        .child("Scroll=Pages • ⌘+Scroll=Zoom • T=Split • O=Native"),
                 ),
         )
         .child(
@@ -282,17 +307,37 @@ pub fn render_preview_panel(
 pub fn render_splitter(direction: SplitDirection) -> Div {
     match direction {
         SplitDirection::Vertical => div()
-            .w(px(6.0))
+            .w(px(8.0))
             .h_full()
-            .bg(rgb(0x404040))
-            .hover(|s| s.bg(rgb(0x606060)))
-            .cursor(CursorStyle::ResizeLeftRight),
+            .bg(rgb(0x383838))
+            .hover(|s| s.bg(rgb(0x4a90e2)).shadow_lg())
+            .cursor(CursorStyle::ResizeLeftRight)
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .w(px(2.0))
+                    .h(px(40.0))
+                    .bg(rgb(0x555555))
+                    .rounded(px(1.0)),
+            ),
         SplitDirection::Horizontal => div()
-            .h(px(6.0))
+            .h(px(8.0))
             .w_full()
-            .bg(rgb(0x404040))
-            .hover(|s| s.bg(rgb(0x606060)))
-            .cursor(CursorStyle::ResizeUpDown),
+            .bg(rgb(0x383838))
+            .hover(|s| s.bg(rgb(0x4a90e2)).shadow_lg())
+            .cursor(CursorStyle::ResizeUpDown)
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .h(px(2.0))
+                    .w(px(40.0))
+                    .bg(rgb(0x555555))
+                    .rounded(px(1.0)),
+            ),
     }
 }
 
@@ -334,8 +379,14 @@ fn render_canvas_area(
 
 // Render implementation for Humanboard
 impl Render for Humanboard {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_fps();
+
+        // Ensure PDF WebView is created if preview is active
+        if self.preview.is_some() {
+            self.ensure_pdf_webview(window, cx);
+        }
+
         cx.notify();
 
         let canvas_offset = self.board.canvas_offset;
@@ -354,16 +405,12 @@ impl Render for Humanboard {
                 .map(|i| i.content.display_name())
         });
 
-        // Extract preview info without cloning the whole struct
+        // Extract preview info including WebView entity for rendering
         let preview_info = self.preview.as_ref().map(|p| {
             (
                 p.split,
                 p.size,
-                p.path.clone(),
-                p.current_page_image.clone(),
-                p.pdf_doc
-                    .as_ref()
-                    .map(|pdf| (pdf.current_page, pdf.page_count)),
+                p.pdf_webview.as_ref().map(|wv| wv.webview().clone()),
             )
         });
 
@@ -390,6 +437,9 @@ impl Render for Humanboard {
             .on_action(cx.listener(|this, _: &ToggleSplit, _, cx| this.toggle_split_direction(cx)))
             .on_action(cx.listener(|this, _: &NextPage, _, cx| this.next_page(cx)))
             .on_action(cx.listener(|this, _: &PrevPage, _, cx| this.prev_page(cx)))
+            .on_action(cx.listener(|this, _: &PdfZoomIn, _, cx| this.pdf_zoom_in(cx)))
+            .on_action(cx.listener(|this, _: &PdfZoomOut, _, cx| this.pdf_zoom_out(cx)))
+            .on_action(cx.listener(|this, _: &PdfZoomReset, _, cx| this.pdf_zoom_reset(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(first_path) = paths.paths().first() {
                     let drop_pos = point(px(400.0), px(300.0));
@@ -400,20 +450,13 @@ impl Render for Humanboard {
             }));
 
         match preview_info {
-            Some((split, size, path, page_image, pdf_info)) => {
+            Some((split, size, webview)) => {
                 let canvas_size = 1.0 - size;
                 let preview_size = size;
-                let file_name = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("PDF")
-                    .to_string();
-                let (current_page, page_count) =
-                    pdf_info.map(|(c, p)| (c + 1, p)).unwrap_or((0, 0));
 
                 match split {
                     SplitDirection::Vertical => {
-                        // Horizontal layout: canvas | splitter | preview
+                        // Horizontal layout: canvas | splitter | PDF WebView
                         base.flex()
                             .flex_row()
                             .child(
@@ -439,16 +482,12 @@ impl Render for Humanboard {
                                     .flex_shrink_0()
                                     .w(Fraction(preview_size))
                                     .h_full()
-                                    .child(render_preview_panel(
-                                        file_name,
-                                        page_image,
-                                        current_page,
-                                        page_count,
-                                    )),
+                                    .bg(rgb(0x1a1a1a))
+                                    .when_some(webview, |d, wv| d.child(wv)),
                             )
                     }
                     SplitDirection::Horizontal => {
-                        // Vertical layout: canvas / splitter / preview
+                        // Vertical layout: canvas / splitter / PDF WebView
                         base.flex()
                             .flex_col()
                             .child(
@@ -474,12 +513,8 @@ impl Render for Humanboard {
                                     .flex_shrink_0()
                                     .h(Fraction(preview_size))
                                     .w_full()
-                                    .child(render_preview_panel(
-                                        file_name,
-                                        page_image,
-                                        current_page,
-                                        page_count,
-                                    )),
+                                    .bg(rgb(0x1a1a1a))
+                                    .when_some(webview, |d, wv| d.child(wv)),
                             )
                     }
                 }

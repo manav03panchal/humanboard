@@ -1,5 +1,5 @@
 use crate::board::Board;
-use crate::pdf::PdfDocument;
+use crate::pdf_webview::PdfWebView;
 use gpui::*;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -14,8 +14,7 @@ pub struct PreviewPanel {
     pub path: PathBuf,
     pub split: SplitDirection,
     pub size: f32, // 0.0 to 1.0, percentage of window
-    pub pdf_doc: Option<PdfDocument>,
-    pub current_page_image: Option<PathBuf>,
+    pub pdf_webview: Option<PdfWebView>,
 }
 
 pub struct Humanboard {
@@ -62,25 +61,26 @@ impl Humanboard {
     }
 
     pub fn open_preview(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        let mut pdf_doc = PdfDocument::open(&path).ok();
-        let current_page_image = pdf_doc
-            .as_mut()
-            .and_then(|pdf| pdf.get_current_page_image());
-
         self.preview = Some(PreviewPanel {
             path,
             split: SplitDirection::Vertical,
             size: 0.4, // 40% of window
-            pdf_doc,
-            current_page_image,
+            pdf_webview: None,
         });
         cx.notify();
     }
 
-    fn update_page_image(&mut self) {
+    pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
         if let Some(ref mut preview) = self.preview {
-            if let Some(ref mut pdf) = preview.pdf_doc {
-                preview.current_page_image = pdf.get_current_page_image();
+            if preview.pdf_webview.is_none() {
+                match PdfWebView::new(preview.path.clone(), window, cx) {
+                    Ok(webview) => {
+                        preview.pdf_webview = Some(webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create PDF WebView: {}", e);
+                    }
+                }
             }
         }
     }
@@ -100,24 +100,12 @@ impl Humanboard {
         }
     }
 
-    pub fn next_page(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref mut preview) = self.preview {
-            if let Some(ref mut pdf) = preview.pdf_doc {
-                pdf.next_page();
-            }
-        }
-        self.update_page_image();
-        cx.notify();
+    pub fn next_page(&mut self, _cx: &mut Context<Self>) {
+        // WebView handles PDF navigation internally
     }
 
-    pub fn prev_page(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref mut preview) = self.preview {
-            if let Some(ref mut pdf) = preview.pdf_doc {
-                pdf.prev_page();
-            }
-        }
-        self.update_page_image();
-        cx.notify();
+    pub fn prev_page(&mut self, _cx: &mut Context<Self>) {
+        // WebView handles PDF navigation internally
     }
 
     pub fn update_fps(&mut self) {
@@ -143,5 +131,17 @@ impl Humanboard {
         } else {
             0.0
         }
+    }
+
+    pub fn pdf_zoom_in(&mut self, _cx: &mut Context<Self>) {
+        // WebView handles PDF zoom internally
+    }
+
+    pub fn pdf_zoom_out(&mut self, _cx: &mut Context<Self>) {
+        // WebView handles PDF zoom internally
+    }
+
+    pub fn pdf_zoom_reset(&mut self, _cx: &mut Context<Self>) {
+        // WebView handles PDF zoom internally
     }
 }

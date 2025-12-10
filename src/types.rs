@@ -1,3 +1,4 @@
+use crate::pdf_thumbnail::generate_pdf_thumbnail;
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -15,7 +16,10 @@ pub enum ItemContent {
     Image(PathBuf),
     Text(String),
     Video(PathBuf),
-    Pdf(PathBuf),
+    Pdf {
+        path: PathBuf,
+        thumbnail: Option<PathBuf>,
+    },
     Link(String),
 }
 
@@ -49,14 +53,19 @@ impl ItemContent {
             }
             ItemContent::Text(_) => (300.0, 100.0),
             ItemContent::Video(_) => (400.0, 300.0),
-            ItemContent::Pdf(_) => (250.0, 350.0),
+            ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
         }
     }
 
     pub fn display_name(&self) -> String {
         match self {
-            ItemContent::Image(path) | ItemContent::Video(path) | ItemContent::Pdf(path) => path
+            ItemContent::Image(path) | ItemContent::Video(path) => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown")
+                .to_string(),
+            ItemContent::Pdf { path, .. } => path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
@@ -70,7 +79,7 @@ impl ItemContent {
         match self {
             ItemContent::Image(_) => "IMAGE",
             ItemContent::Video(_) => "VIDEO",
-            ItemContent::Pdf(_) => "PDF",
+            ItemContent::Pdf { .. } => "PDF",
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
         }
@@ -83,7 +92,13 @@ impl ItemContent {
                     ItemContent::Image(path.clone())
                 }
                 "mp4" | "mov" | "avi" | "webm" | "mkv" => ItemContent::Video(path.clone()),
-                "pdf" => ItemContent::Pdf(path.clone()),
+                "pdf" => {
+                    let thumbnail = generate_pdf_thumbnail(path);
+                    ItemContent::Pdf {
+                        path: path.clone(),
+                        thumbnail,
+                    }
+                }
                 "txt" | "md" | "rs" | "js" | "json" | "html" | "css" => {
                     ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy()))
                 }
@@ -117,7 +132,7 @@ mod tests {
     fn test_item_content_from_path_pdf() {
         let path = PathBuf::from("/test/document.pdf");
         let content = ItemContent::from_path(&path);
-        assert!(matches!(content, ItemContent::Pdf(_)));
+        assert!(matches!(content, ItemContent::Pdf { .. }));
     }
 
     #[test]
@@ -138,7 +153,14 @@ mod tests {
     fn test_type_labels() {
         assert_eq!(ItemContent::Image(PathBuf::new()).type_label(), "IMAGE");
         assert_eq!(ItemContent::Video(PathBuf::new()).type_label(), "VIDEO");
-        assert_eq!(ItemContent::Pdf(PathBuf::new()).type_label(), "PDF");
+        assert_eq!(
+            ItemContent::Pdf {
+                path: PathBuf::new(),
+                thumbnail: None
+            }
+            .type_label(),
+            "PDF"
+        );
         assert_eq!(ItemContent::Text(String::new()).type_label(), "TEXT");
         assert_eq!(ItemContent::Link(String::new()).type_label(), "LINK");
     }
@@ -175,7 +197,10 @@ mod tests {
 
     #[test]
     fn test_default_size_pdf() {
-        let content = ItemContent::Pdf(PathBuf::new());
+        let content = ItemContent::Pdf {
+            path: PathBuf::new(),
+            thumbnail: None,
+        };
         assert_eq!(content.default_size(), (250.0, 350.0));
     }
 

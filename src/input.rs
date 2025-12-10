@@ -60,7 +60,7 @@ impl Humanboard {
 
             // Handle double-click for PDF preview
             if event.click_count == 2 {
-                if let ItemContent::Pdf(path) = &item.content {
+                if let ItemContent::Pdf { path, .. } = &item.content {
                     self.open_preview(path.clone(), cx);
                     return;
                 }
@@ -219,6 +219,7 @@ impl Humanboard {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Native PDF view handles its own scrolling, we only handle canvas zoom
         let zoom_delta = match event.delta {
             ScrollDelta::Pixels(delta) => -f32::from(delta.y) / 500.0,
             ScrollDelta::Lines(delta) => -delta.y / 50.0,
