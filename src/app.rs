@@ -39,6 +39,7 @@ pub struct Humanboard {
     pub preview: Option<PreviewPanel>,
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
+    pub last_drop_pos: Option<Point<Pixels>>,
 }
 
 impl Humanboard {
@@ -62,6 +63,7 @@ impl Humanboard {
             preview: None,
             dragging_splitter: false,
             splitter_drag_start: None,
+            last_drop_pos: None,
         }
     }
 

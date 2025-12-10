@@ -99,9 +99,10 @@ impl Board {
     pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) {
         for path in paths {
             let content = ItemContent::from_path(&path);
+            // Convert screen position to canvas position accounting for both offset and zoom
             let canvas_pos = point(
-                position.x - self.canvas_offset.x,
-                position.y - self.canvas_offset.y,
+                px((f32::from(position.x) - f32::from(self.canvas_offset.x)) / self.zoom),
+                px((f32::from(position.y) - f32::from(self.canvas_offset.y)) / self.zoom),
             );
             self.add_item(canvas_pos, content);
         }

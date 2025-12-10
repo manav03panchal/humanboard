@@ -519,32 +519,38 @@ impl Render for Humanboard {
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.close_current_tab(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 if let Some(first_path) = paths.paths().first() {
-                    // Drop at canvas center (accounting for canvas offset and zoom)
-                    let bounds = window.bounds();
-                    let window_size = bounds.size;
-
-                    let (canvas_center_x, canvas_center_y) = if let Some(ref preview) = this.preview
-                    {
-                        match preview.split {
-                            SplitDirection::Vertical => {
-                                let canvas_width =
-                                    f32::from(window_size.width) * (1.0 - preview.size);
-                                (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
-                            }
-                            SplitDirection::Horizontal => {
-                                let canvas_height =
-                                    f32::from(window_size.height) * (1.0 - preview.size);
-                                (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
-                            }
-                        }
+                    // Use tracked mouse position, or fall back to canvas center
+                    let drop_pos = if let Some(pos) = this.last_drop_pos {
+                        pos
                     } else {
-                        (
-                            f32::from(window_size.width) / 2.0,
-                            f32::from(window_size.height) / 2.0,
-                        )
+                        // Fallback: drop at canvas center
+                        let bounds = window.bounds();
+                        let window_size = bounds.size;
+
+                        let (canvas_center_x, canvas_center_y) = if let Some(ref preview) = this.preview
+                        {
+                            match preview.split {
+                                SplitDirection::Vertical => {
+                                    let canvas_width =
+                                        f32::from(window_size.width) * (1.0 - preview.size);
+                                    (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
+                                }
+                                SplitDirection::Horizontal => {
+                                    let canvas_height =
+                                        f32::from(window_size.height) * (1.0 - preview.size);
+                                    (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
+                                }
+                            }
+                        } else {
+                            (
+                                f32::from(window_size.width) / 2.0,
+                                f32::from(window_size.height) / 2.0,
+                            )
+                        };
+
+                        point(px(canvas_center_x), px(canvas_center_y))
                     };
 
-                    let drop_pos = point(px(canvas_center_x), px(canvas_center_y));
                     this.board
                         .handle_file_drop(drop_pos, vec![first_path.clone()]);
                     cx.notify();

@@ -145,6 +145,9 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Always track mouse position for file drops
+        self.last_drop_pos = Some(event.position);
+
         // Handle splitter dragging
         if self.dragging_splitter {
             if let Some(ref mut preview) = self.preview {
