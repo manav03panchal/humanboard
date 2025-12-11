@@ -113,7 +113,7 @@ pub fn render_header_bar(
                         )
                         .when(is_open, |d| {
                             if let Some(input) = command_palette {
-                                d.child(
+                                d.text_color(fg).child(
                                     Input::new(input)
                                         .w_full()
                                         .appearance(false)
