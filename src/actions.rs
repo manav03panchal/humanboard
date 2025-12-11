@@ -1,5 +1,6 @@
 use crate::app::Humanboard;
 use gpui::*;
+use std::sync::mpsc;
 
 // Action definitions
 actions!(
@@ -164,18 +165,20 @@ impl Humanboard {
         let center_x = f32::from(window_size.width) / 2.0;
         let center_y = f32::from(window_size.height) / 2.0;
 
-        // TODO: File picker implementation blocked by GPUI 0.2.2 async closure limitations
-        // The issue: cx.spawn() requires Higher-Rank Trait Bounds (HRTB) for async closures
-        // When we add type annotations like |this: WeakEntity<T>, cx|, it breaks the
-        // polymorphic lifetime requirement, causing compilation errors.
-        //
-        // Workaround: Use drag-and-drop which works perfectly at mouse cursor position
-        //
-        // For reference, Zed uses cx.spawn from App context, not Context<T>:
-        // https://github.com/zed-industries/zed/blob/main/crates/workspace/src/workspace.rs
-        //
-        // This may be fixed in newer GPUI versions or require upgrading to GPUI 0.3+
+        // Workaround for GPUI async limitations: use a channel to communicate back
+        let center_pos = point(px(center_x), px(center_y));
+        let (tx, rx) = mpsc::channel();
 
-        let _ = (paths_rx, center_x, center_y); // Suppress unused warnings
+        // Spawn background task to wait for file selection
+        cx.background_executor()
+            .spawn(async move {
+                if let Ok(Ok(Some(paths))) = paths_rx.await {
+                    let _ = tx.send((center_pos, paths));
+                }
+            })
+            .detach();
+
+        // Store the receiver - we'll poll it in the render cycle
+        self.file_drop_rx = Some(rx);
     }
 }

@@ -459,6 +459,15 @@ impl Render for Humanboard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_fps();
 
+        // Poll for file picker results (from Cmd+O)
+        if let Some(rx) = &self.file_drop_rx {
+            if let Ok((pos, paths)) = rx.try_recv() {
+                self.board.handle_file_drop(pos, paths);
+                self.file_drop_rx = None; // Clear the receiver after processing
+                cx.notify();
+            }
+        }
+
         // Ensure PDF WebView is created if preview is active
         if self.preview.is_some() {
             self.ensure_pdf_webview(window, cx);

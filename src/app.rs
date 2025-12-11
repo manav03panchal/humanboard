@@ -2,6 +2,7 @@ use crate::board::Board;
 use crate::pdf_webview::PdfWebView;
 use gpui::*;
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -40,6 +41,7 @@ pub struct Humanboard {
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
     pub last_drop_pos: Option<Point<Pixels>>,
+    pub file_drop_rx: Option<Receiver<(Point<Pixels>, Vec<PathBuf>)>>,
 }
 
 impl Humanboard {
@@ -64,6 +66,7 @@ impl Humanboard {
             dragging_splitter: false,
             splitter_drag_start: None,
             last_drop_pos: None,
+            file_drop_rx: None,
         }
     }
 
