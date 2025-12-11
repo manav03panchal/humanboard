@@ -37,7 +37,8 @@ impl Humanboard {
         }
 
         // Check if clicking on an item (in reverse order so top items are checked first)
-        let clicked_item = board
+        // Extract only the ID to avoid cloning the entire item
+        let clicked_item_id = board
             .items
             .iter()
             .rev()
@@ -52,36 +53,52 @@ impl Humanboard {
                     && f32::from(mouse_pos.y) >= scaled_y
                     && f32::from(mouse_pos.y) <= scaled_y + scaled_height
             })
-            .cloned();
+            .map(|item| item.id);
 
-        if let Some(item) = clicked_item {
-            self.selected_item = Some(item.id);
+        if let Some(item_id) = clicked_item_id {
+            self.selected_item = Some(item_id);
 
             // Handle double-click for PDF preview or YouTube activation
             if event.click_count == 2 {
-                if let ItemContent::Pdf { path, .. } = &item.content {
-                    self.open_preview(path.clone(), cx);
+                // Extract content info without holding borrow
+                let pdf_path = board.get_item(item_id).and_then(|item| {
+                    if let ItemContent::Pdf { path, .. } = &item.content {
+                        Some(path.clone())
+                    } else {
+                        None
+                    }
+                });
+                let is_youtube = board
+                    .get_item(item_id)
+                    .map(|item| matches!(item.content, ItemContent::YouTube(_)))
+                    .unwrap_or(false);
+
+                if let Some(path) = pdf_path {
+                    self.open_preview(path, cx);
                     return;
                 }
-                if let ItemContent::YouTube(_) = &item.content {
+                if is_youtube {
                     // Toggle YouTube activation
-                    if self.active_youtube_id == Some(item.id) {
+                    if self.active_youtube_id == Some(item_id) {
                         self.deactivate_youtube(cx);
                     } else {
-                        self.activate_youtube(item.id, cx);
+                        self.activate_youtube(item_id, cx);
                     }
                     return;
                 }
             }
 
-            let item_id = item.id;
-
             // Check if clicking on resize corner (bottom-right corner)
-            if let Some(item) = board.items.iter().find(|i| i.id == item_id) {
-                let scaled_x = item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
-                let scaled_y = item.position.1 * board.zoom + f32::from(board.canvas_offset.y);
-                let scaled_width = item.size.0 * board.zoom;
-                let scaled_height = item.size.1 * board.zoom;
+            // Use get_item for O(1) lookup - extract needed values
+            let item_info = board
+                .get_item(item_id)
+                .map(|item| (item.position, item.size));
+
+            if let Some((position, size)) = item_info {
+                let scaled_x = position.0 * board.zoom + f32::from(board.canvas_offset.x);
+                let scaled_y = position.1 * board.zoom + f32::from(board.canvas_offset.y);
+                let scaled_width = size.0 * board.zoom;
+                let scaled_height = size.1 * board.zoom;
 
                 let corner_x = scaled_x + scaled_width;
                 let corner_y = scaled_y + scaled_height;
@@ -94,15 +111,14 @@ impl Humanboard {
 
                 if in_corner {
                     self.resizing_item = Some(item_id);
-                    self.resize_start_size = Some(item.size);
+                    self.resize_start_size = Some(size);
                     self.resize_start_pos = Some(mouse_pos);
                 } else {
                     self.dragging_item = Some(item_id);
-                    let item_x = item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
-                    let item_y = item.position.1 * board.zoom + f32::from(board.canvas_offset.y);
-
-                    self.item_drag_offset =
-                        Some(point(mouse_pos.x - px(item_x), mouse_pos.y - px(item_y)));
+                    self.item_drag_offset = Some(point(
+                        mouse_pos.x - px(scaled_x),
+                        mouse_pos.y - px(scaled_y),
+                    ));
                 }
             }
         } else {
@@ -120,9 +136,14 @@ impl Humanboard {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.dragging_item.is_some() || self.resizing_item.is_some() {
+        // Only push history on mouse up if we were dragging/resizing
+        let was_modifying = self.dragging_item.is_some() || self.resizing_item.is_some();
+
+        if was_modifying {
             if let Some(ref mut board) = self.board {
                 board.push_history();
+                // Force save after drag/resize completes
+                board.flush_save();
             }
         }
 
@@ -176,40 +197,46 @@ impl Humanboard {
         if let Some(item_id) = self.resizing_item {
             if let Some(start_size) = self.resize_start_size {
                 if let Some(start_pos) = self.resize_start_pos {
-                    if let Some(item) = board.items.iter_mut().find(|i| i.id == item_id) {
-                        let delta_x = f32::from(event.position.x - start_pos.x) / board.zoom;
-                        let delta_y = f32::from(event.position.y - start_pos.y) / board.zoom;
+                    // Capture values before mutable borrow
+                    let zoom = board.zoom;
+                    let delta_x = f32::from(event.position.x - start_pos.x) / zoom;
+                    let delta_y = f32::from(event.position.y - start_pos.y) / zoom;
+                    let new_width = (start_size.0 + delta_x).max(50.0);
+                    let new_height = (start_size.1 + delta_y).max(50.0);
 
-                        let new_width = (start_size.0 + delta_x).max(50.0);
-                        let new_height = (start_size.1 + delta_y).max(50.0);
-
+                    // Use get_item_mut for O(1) lookup
+                    if let Some(item) = board.get_item_mut(item_id) {
                         item.size = (new_width, new_height);
-                        board.save();
-                        cx.notify();
                     }
+                    // Mark dirty but don't save immediately (debounced)
+                    board.mark_dirty();
+                    cx.notify();
                 }
             }
         } else if let Some(item_id) = self.dragging_item {
             if let Some(offset) = self.item_drag_offset {
-                if let Some(item) = board.items.iter_mut().find(|i| i.id == item_id) {
-                    let new_x = (f32::from(event.position.x - offset.x)
-                        - f32::from(board.canvas_offset.x))
-                        / board.zoom;
-                    let new_y = (f32::from(event.position.y - offset.y)
-                        - f32::from(board.canvas_offset.y))
-                        / board.zoom;
+                // Capture values before mutable borrow
+                let zoom = board.zoom;
+                let canvas_offset_x = f32::from(board.canvas_offset.x);
+                let canvas_offset_y = f32::from(board.canvas_offset.y);
+                let new_x = (f32::from(event.position.x - offset.x) - canvas_offset_x) / zoom;
+                let new_y = (f32::from(event.position.y - offset.y) - canvas_offset_y) / zoom;
 
+                // Use get_item_mut for O(1) lookup
+                if let Some(item) = board.get_item_mut(item_id) {
                     item.position = (new_x, new_y);
-                    board.save();
-                    cx.notify();
                 }
+                // Mark dirty but don't save immediately (debounced)
+                board.mark_dirty();
+                cx.notify();
             }
         } else if self.dragging {
             if let Some(last_pos) = self.last_mouse_pos {
                 let delta = event.position - last_pos;
                 board.canvas_offset = board.canvas_offset + delta;
                 self.last_mouse_pos = Some(event.position);
-                board.save();
+                // Mark dirty but don't save immediately (debounced)
+                board.mark_dirty();
                 cx.notify();
             }
         }
@@ -226,37 +253,29 @@ impl Humanboard {
         };
 
         if event.modifiers.platform {
-            let zoom_delta = match event.delta {
-                ScrollDelta::Pixels(delta) => -f32::from(delta.y) / 500.0,
-                ScrollDelta::Lines(delta) => -delta.y / 50.0,
+            // Pinch-to-zoom: calculate zoom factor from scroll delta
+            let zoom_factor = match event.delta {
+                ScrollDelta::Pixels(delta) => 1.0 - f32::from(delta.y) / 500.0,
+                ScrollDelta::Lines(delta) => 1.0 - delta.y / 50.0,
             };
 
-            if zoom_delta.abs() > 0.001 {
-                let old_zoom = board.zoom;
-                board.zoom = (board.zoom * (1.0 + zoom_delta)).clamp(0.1, 10.0);
-
-                let zoom_factor = board.zoom / old_zoom;
-                let mouse_canvas_x = event.position.x - board.canvas_offset.x;
-                let mouse_canvas_y = event.position.y - board.canvas_offset.y;
-
-                board.canvas_offset.x = event.position.x - mouse_canvas_x * zoom_factor;
-                board.canvas_offset.y = event.position.y - mouse_canvas_y * zoom_factor;
-
-                board.save();
-                cx.notify();
+            if (zoom_factor - 1.0).abs() > 0.001 {
+                if board.zoom_around(zoom_factor, event.position) {
+                    cx.notify();
+                }
             }
         } else {
             match event.delta {
                 ScrollDelta::Pixels(delta) => {
                     board.canvas_offset.x += delta.x;
                     board.canvas_offset.y += delta.y;
-                    board.save();
+                    board.mark_dirty();
                     cx.notify();
                 }
                 ScrollDelta::Lines(delta) => {
                     board.canvas_offset.x += px(delta.x * 20.0);
                     board.canvas_offset.y += px(delta.y * 20.0);
-                    board.save();
+                    board.mark_dirty();
                     cx.notify();
                 }
             }

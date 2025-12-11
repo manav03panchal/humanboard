@@ -32,102 +32,57 @@ actions!(
 );
 
 impl Humanboard {
-    pub fn zoom_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(ref mut board) = self.board else {
-            return;
-        };
-
+    /// Get the center point of the canvas area (accounting for preview panel)
+    fn canvas_center(&self, window: &Window) -> Point<Pixels> {
         let bounds = window.bounds();
         let window_size = bounds.size;
 
-        let (center_x, center_y) = if let Some(ref preview) = self.preview {
+        if let Some(ref preview) = self.preview {
             match preview.split {
                 crate::app::SplitDirection::Vertical => {
                     let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
-                    (
+                    point(
                         px(canvas_width / 2.0),
                         px(f32::from(window_size.height) / 2.0),
                     )
                 }
                 crate::app::SplitDirection::Horizontal => {
                     let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
-                    (
+                    point(
                         px(f32::from(window_size.width) / 2.0),
                         px(canvas_height / 2.0),
                     )
                 }
             }
         } else {
-            (
+            point(
                 px(f32::from(window_size.width) / 2.0),
                 px(f32::from(window_size.height) / 2.0),
             )
-        };
+        }
+    }
 
-        let old_zoom = board.zoom;
-        board.zoom = (board.zoom * 1.2).clamp(0.1, 10.0);
-
-        let zoom_factor = board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - board.canvas_offset.x;
-        let mouse_canvas_y = center_y - board.canvas_offset.y;
-
-        board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
-
-        board.save();
-        cx.notify();
+    pub fn zoom_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let center = self.canvas_center(window);
+        if let Some(ref mut board) = self.board {
+            if board.zoom_in(center) {
+                cx.notify();
+            }
+        }
     }
 
     pub fn zoom_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(ref mut board) = self.board else {
-            return;
-        };
-
-        let bounds = window.bounds();
-        let window_size = bounds.size;
-
-        let (center_x, center_y) = if let Some(ref preview) = self.preview {
-            match preview.split {
-                crate::app::SplitDirection::Vertical => {
-                    let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
-                    (
-                        px(canvas_width / 2.0),
-                        px(f32::from(window_size.height) / 2.0),
-                    )
-                }
-                crate::app::SplitDirection::Horizontal => {
-                    let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
-                    (
-                        px(f32::from(window_size.width) / 2.0),
-                        px(canvas_height / 2.0),
-                    )
-                }
+        let center = self.canvas_center(window);
+        if let Some(ref mut board) = self.board {
+            if board.zoom_out(center) {
+                cx.notify();
             }
-        } else {
-            (
-                px(f32::from(window_size.width) / 2.0),
-                px(f32::from(window_size.height) / 2.0),
-            )
-        };
-
-        let old_zoom = board.zoom;
-        board.zoom = (board.zoom / 1.2).clamp(0.1, 10.0);
-
-        let zoom_factor = board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - board.canvas_offset.x;
-        let mouse_canvas_y = center_y - board.canvas_offset.y;
-
-        board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
-
-        board.save();
-        cx.notify();
+        }
     }
 
     pub fn zoom_reset(&mut self, cx: &mut Context<Self>) {
         if let Some(ref mut board) = self.board {
-            board.zoom = 1.0;
-            board.save();
+            board.zoom_reset();
             cx.notify();
         }
     }

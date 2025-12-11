@@ -2,8 +2,16 @@ use crate::board_index::BoardIndex;
 use crate::types::{CanvasItem, ItemContent};
 use gpui::{Pixels, Point, point, px};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+/// Save debounce delay - saves are batched within this window
+const SAVE_DEBOUNCE_MS: u64 = 500;
+
+/// Maximum history states to keep
+const MAX_HISTORY_STATES: usize = 50;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BoardState {
@@ -36,10 +44,20 @@ pub struct Board {
     pub id: String,
     pub canvas_offset: Point<Pixels>,
     pub zoom: f32,
+
+    // Items stored in Vec for ordered rendering, with HashMap index for O(1) lookups
     pub items: Vec<CanvasItem>,
+    items_index: HashMap<u64, usize>, // id -> index in items vec
+
     pub next_item_id: u64,
-    history: Vec<BoardState>,
+
+    // History using VecDeque for O(1) front removal
+    history: VecDeque<BoardState>,
     history_index: usize,
+
+    // Debounced save tracking
+    dirty: bool,
+    last_change: Instant,
 }
 
 impl Board {
@@ -48,15 +66,19 @@ impl Board {
         let board_path = BoardIndex::board_path(&id);
 
         if let Some(state) = BoardState::load_from_path(&board_path) {
+            let items_index = Self::build_items_index(&state.items);
             let initial_state = state.clone();
             Self {
                 id,
                 canvas_offset: point(px(state.canvas_offset.0), px(state.canvas_offset.1)),
                 zoom: state.zoom,
                 items: state.items,
+                items_index,
                 next_item_id: state.next_item_id,
-                history: vec![initial_state],
+                history: VecDeque::from([initial_state]),
                 history_index: 0,
+                dirty: false,
+                last_change: Instant::now(),
             }
         } else {
             Self::new_empty(id)
@@ -76,38 +98,83 @@ impl Board {
             canvas_offset: point(px(0.0), px(0.0)),
             zoom: 1.0,
             items: Vec::new(),
+            items_index: HashMap::new(),
             next_item_id: 0,
-            history: vec![initial_state],
+            history: VecDeque::from([initial_state]),
             history_index: 0,
+            dirty: false,
+            last_change: Instant::now(),
         }
     }
 
+    /// Build the items index from a Vec of items
+    fn build_items_index(items: &[CanvasItem]) -> HashMap<u64, usize> {
+        items
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| (item.id, idx))
+            .collect()
+    }
+
+    /// Rebuild the index after items vec changes
+    fn rebuild_index(&mut self) {
+        self.items_index = Self::build_items_index(&self.items);
+    }
+
+    /// Get item by ID in O(1)
+    pub fn get_item(&self, id: u64) -> Option<&CanvasItem> {
+        self.items_index
+            .get(&id)
+            .and_then(|&idx| self.items.get(idx))
+    }
+
+    /// Get mutable item by ID in O(1)
+    pub fn get_item_mut(&mut self, id: u64) -> Option<&mut CanvasItem> {
+        self.items_index
+            .get(&id)
+            .and_then(|&idx| self.items.get_mut(idx))
+    }
+
+    /// Add a single item (still triggers history + save for single operations)
     pub fn add_item(&mut self, position: Point<Pixels>, content: ItemContent) {
+        self.add_item_internal(position, content);
+        self.push_history();
+        self.mark_dirty();
+    }
+
+    /// Internal add without history/save - used for batch operations
+    fn add_item_internal(&mut self, position: Point<Pixels>, content: ItemContent) {
         let size = content.default_size();
+        let id = self.next_item_id;
 
         self.items.push(CanvasItem {
-            id: self.next_item_id,
+            id,
             position: (f32::from(position.x), f32::from(position.y)),
             size,
             content,
         });
+        self.items_index.insert(id, self.items.len() - 1);
         self.next_item_id += 1;
-        self.push_history();
-        self.save();
     }
 
+    /// Handle file drop - batched operation (single history push + save)
     pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+
         for path in paths {
             let content = ItemContent::from_path(&path);
-            // Convert screen position to canvas position accounting for both offset and zoom
-            let canvas_pos = point(
-                px((f32::from(position.x) - f32::from(self.canvas_offset.x)) / self.zoom),
-                px((f32::from(position.y) - f32::from(self.canvas_offset.y)) / self.zoom),
-            );
-            self.add_item(canvas_pos, content);
+            let canvas_pos = self.screen_to_canvas(position);
+            self.add_item_internal(canvas_pos, content);
         }
+
+        // Single history push and save for the entire batch
+        self.push_history();
+        self.mark_dirty();
     }
 
+    /// Add URL (YouTube or generic link)
     pub fn add_url(&mut self, url: &str, position: Point<Pixels>) {
         use crate::types::extract_youtube_id;
 
@@ -117,14 +184,99 @@ impl Board {
             ItemContent::Link(url.to_string())
         };
 
-        let canvas_pos = point(
-            px((f32::from(position.x) - f32::from(self.canvas_offset.x)) / self.zoom),
-            px((f32::from(position.y) - f32::from(self.canvas_offset.y)) / self.zoom),
-        );
+        let canvas_pos = self.screen_to_canvas(position);
         self.add_item(canvas_pos, content);
     }
 
-    pub fn save(&self) {
+    /// Remove an item by ID
+    pub fn remove_item(&mut self, id: u64) -> bool {
+        if let Some(&idx) = self.items_index.get(&id) {
+            self.items.remove(idx);
+            self.rebuild_index();
+            self.push_history();
+            self.mark_dirty();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Convert screen position to canvas position
+    #[inline]
+    pub fn screen_to_canvas(&self, screen_pos: Point<Pixels>) -> Point<Pixels> {
+        point(
+            px((f32::from(screen_pos.x) - f32::from(self.canvas_offset.x)) / self.zoom),
+            px((f32::from(screen_pos.y) - f32::from(self.canvas_offset.y)) / self.zoom),
+        )
+    }
+
+    /// Convert canvas position to screen position
+    #[inline]
+    pub fn canvas_to_screen(&self, canvas_pos: Point<Pixels>) -> Point<Pixels> {
+        point(
+            px(f32::from(canvas_pos.x) * self.zoom + f32::from(self.canvas_offset.x)),
+            px(f32::from(canvas_pos.y) * self.zoom + f32::from(self.canvas_offset.y)),
+        )
+    }
+
+    /// Zoom by a factor, keeping the given screen position fixed
+    /// Returns true if zoom changed
+    pub fn zoom_around(&mut self, factor: f32, center: Point<Pixels>) -> bool {
+        let old_zoom = self.zoom;
+        self.zoom = (self.zoom * factor).clamp(0.1, 10.0);
+
+        if (self.zoom - old_zoom).abs() < 0.0001 {
+            return false;
+        }
+
+        let zoom_factor = self.zoom / old_zoom;
+        let mouse_canvas_x = center.x - self.canvas_offset.x;
+        let mouse_canvas_y = center.y - self.canvas_offset.y;
+
+        self.canvas_offset.x = center.x - mouse_canvas_x * zoom_factor;
+        self.canvas_offset.y = center.y - mouse_canvas_y * zoom_factor;
+
+        self.mark_dirty();
+        true
+    }
+
+    /// Zoom in by standard step (1.2x)
+    pub fn zoom_in(&mut self, center: Point<Pixels>) -> bool {
+        self.zoom_around(1.2, center)
+    }
+
+    /// Zoom out by standard step (1/1.2x)
+    pub fn zoom_out(&mut self, center: Point<Pixels>) -> bool {
+        self.zoom_around(1.0 / 1.2, center)
+    }
+
+    /// Reset zoom to 1.0
+    pub fn zoom_reset(&mut self) {
+        self.zoom = 1.0;
+        self.mark_dirty();
+    }
+
+    /// Mark the board as dirty (needing save)
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+        self.last_change = Instant::now();
+    }
+
+    /// Check if enough time has passed to save (debouncing)
+    pub fn should_save(&self) -> bool {
+        self.dirty && self.last_change.elapsed() >= Duration::from_millis(SAVE_DEBOUNCE_MS)
+    }
+
+    /// Flush save if dirty (call this periodically or on app idle)
+    pub fn flush_save(&mut self) {
+        if self.dirty {
+            self.save_immediate();
+            self.dirty = false;
+        }
+    }
+
+    /// Force immediate save (used when leaving board)
+    pub fn save_immediate(&self) {
         let state = BoardState {
             canvas_offset: (
                 f32::from(self.canvas_offset.x),
@@ -138,9 +290,16 @@ impl Board {
         state.save_to_path(&board_path);
     }
 
+    /// Legacy save method - now marks dirty for debounced save
+    pub fn save(&mut self) {
+        self.mark_dirty();
+    }
+
     pub fn push_history(&mut self) {
         // Remove any states after current index (for redo branch pruning)
-        self.history.truncate(self.history_index + 1);
+        while self.history.len() > self.history_index + 1 {
+            self.history.pop_back();
+        }
 
         let state = BoardState {
             canvas_offset: (
@@ -152,12 +311,12 @@ impl Board {
             next_item_id: self.next_item_id,
         };
 
-        self.history.push(state);
+        self.history.push_back(state);
         self.history_index = self.history.len() - 1;
 
-        // Limit history to 50 states
-        if self.history.len() > 50 {
-            self.history.remove(0);
+        // Limit history - O(1) removal from front with VecDeque
+        while self.history.len() > MAX_HISTORY_STATES {
+            self.history.pop_front();
             self.history_index = self.history_index.saturating_sub(1);
         }
     }
@@ -183,12 +342,15 @@ impl Board {
     }
 
     fn restore_from_history(&mut self) {
-        if let Some(state) = self.history.get(self.history_index) {
+        // Clone the state to avoid borrow issues
+        let state = self.history.get(self.history_index).cloned();
+        if let Some(state) = state {
             self.canvas_offset = point(px(state.canvas_offset.0), px(state.canvas_offset.1));
             self.zoom = state.zoom;
             self.items = state.items.clone();
             self.next_item_id = state.next_item_id;
-            self.save();
+            self.rebuild_index();
+            self.mark_dirty();
         }
     }
 
@@ -223,6 +385,22 @@ mod tests {
     }
 
     #[test]
+    fn test_get_item_by_id() {
+        let mut board = Board::new_for_test();
+        board.add_item(
+            point(px(0.0), px(0.0)),
+            ItemContent::Text("Test".to_string()),
+        );
+
+        let item = board.get_item(0);
+        assert!(item.is_some());
+        assert_eq!(item.unwrap().id, 0);
+
+        let missing = board.get_item(999);
+        assert!(missing.is_none());
+    }
+
+    #[test]
     fn test_add_multiple_items() {
         let mut board = Board::new_for_test();
 
@@ -247,15 +425,33 @@ mod tests {
     }
 
     #[test]
+    fn test_remove_item() {
+        let mut board = Board::new_for_test();
+        board.add_item(
+            point(px(0.0), px(0.0)),
+            ItemContent::Text("First".to_string()),
+        );
+        board.add_item(
+            point(px(100.0), px(100.0)),
+            ItemContent::Text("Second".to_string()),
+        );
+
+        assert!(board.remove_item(0));
+        assert_eq!(board.items.len(), 1);
+        assert!(board.get_item(0).is_none());
+        assert!(board.get_item(1).is_some());
+    }
+
+    #[test]
     fn test_undo_empty() {
         let mut board = Board::new_for_test();
-        assert!(!board.undo()); // Can't undo with no history
+        assert!(!board.undo());
     }
 
     #[test]
     fn test_redo_empty() {
         let mut board = Board::new_for_test();
-        assert!(!board.redo()); // Can't redo with no history
+        assert!(!board.redo());
     }
 
     #[test]
@@ -327,15 +523,13 @@ mod tests {
             ItemContent::Text("Second".to_string()),
         );
 
-        board.undo(); // Go back to 1 item
+        board.undo();
 
-        // Add a new item - this should clear the redo history
         board.add_item(
             point(px(200.0), px(200.0)),
             ItemContent::Text("Third".to_string()),
         );
 
-        // Redo should fail since we added a new item
         assert!(!board.redo());
     }
 
@@ -366,7 +560,6 @@ mod tests {
     fn test_history_limit() {
         let mut board = Board::new_for_test();
 
-        // Add 60 items (exceeds 50 limit)
         for i in 0..60 {
             board.add_item(
                 point(px(i as f32 * 10.0), px(0.0)),
@@ -374,7 +567,20 @@ mod tests {
             );
         }
 
-        // History should be capped at 50
-        assert!(board.history.len() <= 51); // 50 + initial state
+        assert!(board.history.len() <= MAX_HISTORY_STATES + 1);
+    }
+
+    #[test]
+    fn test_screen_to_canvas_conversion() {
+        let mut board = Board::new_for_test();
+        board.canvas_offset = point(px(100.0), px(50.0));
+        board.zoom = 2.0;
+
+        let screen_pos = point(px(300.0), px(150.0));
+        let canvas_pos = board.screen_to_canvas(screen_pos);
+
+        // (300 - 100) / 2 = 100, (150 - 50) / 2 = 50
+        assert_eq!(f32::from(canvas_pos.x), 100.0);
+        assert_eq!(f32::from(canvas_pos.y), 50.0);
     }
 }

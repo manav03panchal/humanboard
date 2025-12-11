@@ -1,7 +1,8 @@
 use gpui::*;
 use gpui_component::webview::WebView;
-use std::sync::atomic::{AtomicU16, Ordering};
-use std::thread;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::thread::{self, JoinHandle};
 use tiny_http::{Response, Server};
 use wry::WebViewBuilder;
 
@@ -12,7 +13,9 @@ static PORT_COUNTER: AtomicU16 = AtomicU16::new(19800);
 pub struct YouTubeWebView {
     webview_entity: Entity<WebView>,
     video_id: String,
-    _port: u16, // Keep track of port (server runs in background thread)
+    port: u16,
+    shutdown_flag: Arc<AtomicBool>,
+    _server_thread: Option<JoinHandle<()>>,
 }
 
 impl YouTubeWebView {
@@ -21,9 +24,11 @@ impl YouTubeWebView {
         // Get a unique port for this instance
         let port = PORT_COUNTER.fetch_add(1, Ordering::SeqCst);
         let video_id_clone = video_id.clone();
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let shutdown_flag_clone = shutdown_flag.clone();
 
         // Start a local HTTP server in a background thread
-        thread::spawn(move || {
+        let server_thread = thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", port);
             let server = match Server::http(&addr) {
                 Ok(s) => s,
@@ -60,12 +65,31 @@ impl YouTubeWebView {
                 video_id = video_id_clone
             );
 
-            // Serve requests (will serve until program exits)
-            for request in server.incoming_requests() {
-                let response = Response::from_string(&html).with_header(
-                    tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap(),
-                );
-                let _ = request.respond(response);
+            // Serve requests with non-blocking check for shutdown
+            // tiny_http doesn't have non-blocking recv, but we can use try_recv with timeout
+            loop {
+                // Check shutdown flag
+                if shutdown_flag_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                // Use recv_timeout to periodically check shutdown flag
+                match server.recv_timeout(std::time::Duration::from_millis(100)) {
+                    Ok(Some(request)) => {
+                        let response = Response::from_string(&html).with_header(
+                            tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..])
+                                .unwrap(),
+                        );
+                        let _ = request.respond(response);
+                    }
+                    Ok(None) => {
+                        // Timeout, loop continues to check shutdown
+                    }
+                    Err(_) => {
+                        // Server error, exit
+                        break;
+                    }
+                }
             }
         });
 
@@ -105,7 +129,9 @@ impl YouTubeWebView {
         Ok(Self {
             webview_entity,
             video_id,
-            _port: port,
+            port,
+            shutdown_flag,
+            _server_thread: Some(server_thread),
         })
     }
 
@@ -114,8 +140,27 @@ impl YouTubeWebView {
         &self.video_id
     }
 
+    /// Get the port this server is running on
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     /// Get the WebView entity for rendering
     pub fn webview(&self) -> Entity<WebView> {
         self.webview_entity.clone()
+    }
+
+    /// Shutdown the HTTP server
+    pub fn shutdown(&self) {
+        self.shutdown_flag.store(true, Ordering::Relaxed);
+    }
+}
+
+impl Drop for YouTubeWebView {
+    fn drop(&mut self) {
+        // Signal server to shutdown
+        self.shutdown_flag.store(true, Ordering::Relaxed);
+        // Note: We don't join the thread here to avoid blocking
+        // The thread will exit on its own within 100ms
     }
 }

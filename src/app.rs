@@ -150,9 +150,9 @@ impl Humanboard {
     }
 
     pub fn go_home(&mut self, cx: &mut Context<Self>) {
-        // Save current board before leaving
-        if let Some(ref board) = self.board {
-            board.save();
+        // Force save current board before leaving
+        if let Some(ref mut board) = self.board {
+            board.flush_save();
         }
         self.board = None;
         self.preview = None;
