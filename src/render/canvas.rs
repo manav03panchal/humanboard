@@ -295,20 +295,23 @@ pub fn render_items(
                 .h(px(h))
                 .child(render_item_content(item, zoom, youtube_webviews))
                 .when(is_selected, |d| {
-                    d.child(
-                        // Selection resize handle
-                        div()
-                            .absolute()
-                            .right(px(0.0))
-                            .bottom(px(0.0))
-                            .w(px(selection_size))
-                            .h(px(selection_size))
-                            .bg(hsla(0.0, 0.0, 1.0, 0.7))
-                            .rounded_tl(px(4.0 * zoom))
-                            .border_2()
-                            .border_color(hsla(0.0, 0.0, 1.0, 1.0))
-                            .cursor(CursorStyle::ResizeUpLeftDownRight),
-                    )
+                    d
+                        // Selection border
+                        .border_2()
+                        .border_color(rgb(0x6688ff))
+                        .rounded(px(8.0 * zoom))
+                        .child(
+                            // Resize handle - small corner indicator
+                            div()
+                                .absolute()
+                                .right(px(-2.0))
+                                .bottom(px(-2.0))
+                                .w(px(10.0 * zoom))
+                                .h(px(10.0 * zoom))
+                                .bg(rgb(0x6688ff))
+                                .rounded(px(2.0 * zoom))
+                                .cursor(CursorStyle::ResizeUpLeftDownRight),
+                        )
                 })
         })
         .collect()
