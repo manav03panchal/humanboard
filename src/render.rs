@@ -126,55 +126,17 @@ pub fn render_items(
                             }
                         })
                         .when(matches!(&item.content, ItemContent::YouTube(_)), |d| {
-                            let title_bar_height = 28.0 * zoom;
-                            let border_width = 4.0 * zoom;
+                            let padding = 8.0 * zoom;
 
-                            // Always show WebView with border for easy moving/resizing
-                            d.border(px(border_width))
-                                .border_color(rgb(0x333333))
-                                .rounded(px(8.0 * zoom))
-                                .bg(rgb(0x0f0f0f))
-                                // WebView fills the container
-                                .when_some(youtube_webviews.get(&item.id), |d, yt_webview| {
-                                    d.child(yt_webview.webview())
-                                })
-                                // Title bar overlay at top for dragging
+                            // Simple border with padding around video
+                            d.p(px(padding))
+                                .bg(rgb(0x222222))
+                                .rounded(px(4.0 * zoom))
                                 .child(
-                                    div()
-                                        .absolute()
-                                        .top_0()
-                                        .left_0()
-                                        .right_0()
-                                        .h(px(title_bar_height))
-                                        .bg(hsla(0.0, 0.0, 0.0, 0.9))
-                                        .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .px(px(8.0 * zoom))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(6.0 * zoom))
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .text_color(rgb(0xff0000))
-                                                        .child("▶"),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(rgb(0x888888))
-                                                        .child("YouTube"),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(rgb(0x555555))
-                                                .child("drag to move"),
-                                        ),
+                                    div().size_full().overflow_hidden().when_some(
+                                        youtube_webviews.get(&item.id),
+                                        |d, yt_webview| d.child(yt_webview.webview()),
+                                    ),
                                 )
                         }),
                 )
