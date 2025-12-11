@@ -8,5 +8,6 @@ pub mod markdown_card;
 pub mod pdf_thumbnail;
 pub mod pdf_webview;
 pub mod render;
+pub mod settings;
 pub mod types;
 pub mod youtube_webview;

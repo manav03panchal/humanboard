@@ -12,8 +12,8 @@ pub mod preview;
 // Re-export commonly used items
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use overlays::{
-    render_command_palette, render_footer_bar, render_header_bar, render_shortcuts_overlay,
-    render_stats_overlay,
+    render_command_palette, render_footer_bar, render_header_bar, render_settings_modal,
+    render_shortcuts_overlay, render_stats_overlay,
 };
 pub use preview::{
     render_preview_panel, render_selected_item_label, render_splitter, render_tab_bar,
@@ -22,8 +22,8 @@ pub use preview::{
 
 use crate::actions::{
     ClosePreview, CloseTab, CommandPalette, DeleteSelected, GoHome, NewBoard, NextPage, NextTab,
-    OpenFile, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts,
-    ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo,
+    ShowShortcuts, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -60,6 +60,9 @@ impl Render for Humanboard {
             .when(self.show_shortcuts, |d| {
                 d.child(render_shortcuts_overlay(cx))
             })
+            .when(self.show_settings, |d| {
+                d.child(render_settings_modal(&self.settings.theme, cx))
+            })
     }
 }
 
@@ -92,6 +95,7 @@ impl Humanboard {
             })
             .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .child(render_landing_page(
                 &self.board_index,
                 self.editing_board_id.as_deref(),
@@ -215,6 +219,7 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
             }))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 if let Some(first_path) = paths.paths().first() {
                     let drop_pos = if let Some(pos) = this.last_drop_pos {

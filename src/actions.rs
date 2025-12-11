@@ -28,7 +28,8 @@ actions!(
         NewBoard,
         ShowShortcuts,
         Paste,
-        CommandPalette
+        CommandPalette,
+        OpenSettings
     ]
 );
 

@@ -1,12 +1,14 @@
-//! UI Overlays - header bar, footer, shortcuts modal, command palette
+//! UI Overlays - header bar, footer, shortcuts modal, command palette, settings
 //!
 //! This module contains all overlay UI elements that appear on top of the canvas:
 //! - Header bar with navigation and command palette
 //! - Footer bar with status info
 //! - Keyboard shortcuts modal
 //! - Command palette popup
+//! - Settings modal
 
 use crate::app::Humanboard;
+use crate::settings::Settings;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputState};
@@ -721,4 +723,159 @@ pub fn render_command_palette(
             ),
     )
     .with_priority(2000)
+}
+
+/// Render the settings modal
+pub fn render_settings_modal(
+    current_theme: &str,
+    cx: &mut Context<Humanboard>,
+) -> impl IntoElement {
+    let themes = Settings::available_themes(cx);
+
+    deferred(
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .bg(hsla(0.0, 0.0, 0.0, 0.8))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.show_settings = false;
+                    cx.notify();
+                }),
+            )
+            .child(
+                v_flex()
+                    .w(px(400.0))
+                    .bg(rgb(0x141414))
+                    .border_1()
+                    .border_color(rgb(0x2a2a2a))
+                    .rounded(px(16.0))
+                    .overflow_hidden()
+                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    // Header
+                    .child(
+                        h_flex()
+                            .px_5()
+                            .py_4()
+                            .border_b_1()
+                            .border_color(rgb(0x2a2a2a))
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_base()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(rgb(0xffffff))
+                                    .child("Settings"),
+                            )
+                            .child(render_kbd("Cmd+,")),
+                    )
+                    // Content
+                    .child(
+                        v_flex()
+                            .p_5()
+                            .gap_4()
+                            // Theme section
+                            .child(
+                                v_flex()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(rgb(0x666666))
+                                            .child("THEME"),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("theme-list")
+                                            .max_h(px(300.0))
+                                            .overflow_y_scroll()
+                                            .child(v_flex().gap_1().children(themes.iter().map(
+                                                |theme_name| {
+                                                    let is_selected = theme_name == current_theme;
+                                                    let theme_name_clone = theme_name.clone();
+
+                                                    h_flex()
+                                                        .id(ElementId::Name(
+                                                            format!("theme-{}", theme_name).into(),
+                                                        ))
+                                                        .px_3()
+                                                        .py_2()
+                                                        .rounded(px(6.0))
+                                                        .cursor(CursorStyle::PointingHand)
+                                                        .when(is_selected, |d| {
+                                                            d.bg(rgb(0x2a2a4a))
+                                                                .border_1()
+                                                                .border_color(rgb(0x4444aa))
+                                                        })
+                                                        .when(!is_selected, |d| {
+                                                            d.hover(|s| s.bg(rgb(0x252525)))
+                                                        })
+                                                        .on_click(cx.listener(
+                                                            move |this, _, _, cx| {
+                                                                this.set_theme(
+                                                                    theme_name_clone.clone(),
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        ))
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .text_sm()
+                                                                .text_color(if is_selected {
+                                                                    rgb(0xffffff)
+                                                                } else {
+                                                                    rgb(0xcccccc)
+                                                                })
+                                                                .child(theme_name.clone()),
+                                                        )
+                                                        .when(is_selected, |d| {
+                                                            d.child(
+                                                                Icon::new(IconName::Check)
+                                                                    .size(px(14.0))
+                                                                    .text_color(rgb(0x88aaff)),
+                                                            )
+                                                        })
+                                                },
+                                            ))),
+                                    ),
+                            ),
+                    )
+                    // Footer
+                    .child(
+                        h_flex()
+                            .px_5()
+                            .py_3()
+                            .border_t_1()
+                            .border_color(rgb(0x2a2a2a))
+                            .justify_end()
+                            .child(
+                                div()
+                                    .id("settings-close-btn")
+                                    .px_4()
+                                    .py_2()
+                                    .bg(rgb(0x2a2a2a))
+                                    .rounded(px(6.0))
+                                    .cursor(CursorStyle::PointingHand)
+                                    .hover(|s| s.bg(rgb(0x3a3a3a)))
+                                    .text_sm()
+                                    .text_color(rgb(0xcccccc))
+                                    .child("Close")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.show_settings = false;
+                                        cx.notify();
+                                    })),
+                            ),
+                    ),
+            ),
+    )
+    .with_priority(1500)
 }

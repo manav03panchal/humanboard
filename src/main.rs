@@ -1,7 +1,7 @@
 use gpui::*;
 use humanboard::actions::{
     ClosePreview, CloseTab, CommandPalette, DeleteSelected, GoHome, NewBoard, NextTab, OpenFile,
-    Paste, PrevTab, Quit, Redo, ShowShortcuts, Undo, ZoomIn, ZoomOut, ZoomReset,
+    OpenSettings, Paste, PrevTab, Quit, Redo, ShowShortcuts, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use std::borrow::Cow;
@@ -61,6 +61,11 @@ fn main() {
     Application::new().with_assets(Assets).run(|cx: &mut App| {
         cx.activate(true);
         gpui_component::init(cx);
+
+        // Apply saved theme on startup
+        let settings = humanboard::settings::Settings::load();
+        settings.apply_theme(cx);
+
         cx.on_action(|_: &Quit, cx| cx.quit());
         // Global shortcuts (always active)
         cx.bind_keys([
@@ -79,6 +84,7 @@ fn main() {
             KeyBinding::new("cmd-h", GoHome, None),
             KeyBinding::new("cmd-/", ShowShortcuts, None),
             KeyBinding::new(":", CommandPalette, Some("Canvas")),
+            KeyBinding::new("cmd-,", OpenSettings, None),
         ]);
 
         // Canvas-only shortcuts (not active when text input is focused)
