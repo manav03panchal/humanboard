@@ -149,8 +149,33 @@ impl Humanboard {
         }
     }
 
-    pub fn open_file(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        // TODO: Implement file picker (Cmd+O)
-        // For now, use drag-and-drop which works perfectly at mouse cursor position
+    pub fn open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Show file picker for multiple files
+        let paths_rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: None,
+        });
+
+        // Get window center for default drop position
+        let bounds = window.bounds();
+        let window_size = bounds.size;
+        let center_x = f32::from(window_size.width) / 2.0;
+        let center_y = f32::from(window_size.height) / 2.0;
+
+        // TODO: File picker implementation blocked by GPUI 0.2.2 async closure limitations
+        // The issue: cx.spawn() requires Higher-Rank Trait Bounds (HRTB) for async closures
+        // When we add type annotations like |this: WeakEntity<T>, cx|, it breaks the
+        // polymorphic lifetime requirement, causing compilation errors.
+        //
+        // Workaround: Use drag-and-drop which works perfectly at mouse cursor position
+        //
+        // For reference, Zed uses cx.spawn from App context, not Context<T>:
+        // https://github.com/zed-industries/zed/blob/main/crates/workspace/src/workspace.rs
+        //
+        // This may be fixed in newer GPUI versions or require upgrading to GPUI 0.3+
+
+        let _ = (paths_rx, center_x, center_y); // Suppress unused warnings
     }
 }
