@@ -42,10 +42,16 @@ pub fn render_header_bar(
                 .gap_3()
                 .items_center()
                 .child(
-                    Button::new("go-home")
-                        .ghost()
-                        .xsmall()
-                        .icon(Icon::new(IconName::ArrowLeft).text_color(rgb(0xcccccc)))
+                    div()
+                        .id("go-home-btn")
+                        .px_2()
+                        .py_1()
+                        .rounded(px(4.0))
+                        .cursor(CursorStyle::PointingHand)
+                        .hover(|s| s.bg(rgb(0x333333)))
+                        .text_sm()
+                        .text_color(rgb(0xaaaaaa))
+                        .child("←")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.go_home(cx);
                         })),
@@ -272,10 +278,16 @@ pub fn render_header_bar(
         // Right side - shortcuts button
         .child(
             h_flex().gap_2().child(
-                Button::new("show-shortcuts")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(IconName::Info).text_color(rgb(0xcccccc)))
+                div()
+                    .id("show-shortcuts-btn")
+                    .px_2()
+                    .py_1()
+                    .rounded(px(4.0))
+                    .cursor(CursorStyle::PointingHand)
+                    .hover(|s| s.bg(rgb(0x333333)))
+                    .text_sm()
+                    .text_color(rgb(0xaaaaaa))
+                    .child("?")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_shortcuts(cx);
                     })),
