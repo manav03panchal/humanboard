@@ -45,7 +45,7 @@ pub fn render_header_bar(
                     Button::new("go-home")
                         .ghost()
                         .xsmall()
-                        .icon(Icon::new(IconName::ArrowLeft))
+                        .icon(Icon::new(IconName::ArrowLeft).text_color(rgb(0xcccccc)))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.go_home(cx);
                         })),
@@ -275,7 +275,7 @@ pub fn render_header_bar(
                 Button::new("show-shortcuts")
                     .ghost()
                     .xsmall()
-                    .icon(Icon::new(IconName::Info))
+                    .icon(Icon::new(IconName::Info).text_color(rgb(0xcccccc)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_shortcuts(cx);
                     })),
