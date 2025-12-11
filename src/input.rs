@@ -67,8 +67,11 @@ impl Humanboard {
                 } else {
                     self.selected_items.insert(item_id);
                 }
+            } else if self.selected_items.contains(&item_id) {
+                // Clicked on an already-selected item - keep the selection for group move
+                // (don't clear, don't change anything)
             } else {
-                // Without shift, clear and select only this item
+                // Clicked on an unselected item - clear and select only this item
                 self.selected_items.clear();
                 self.selected_items.insert(item_id);
             }
