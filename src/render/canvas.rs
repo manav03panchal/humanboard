@@ -243,18 +243,11 @@ fn render_item_content(
                             .flex()
                             .items_center()
                             .justify_center()
-                            .gap(px(6.0))
                             .child(
                                 div()
                                     .text_size(px(14.0 * zoom))
-                                    .text_color(hsla(0.0, 0.0, 0.6, 1.0))
-                                    .child("≡≡≡"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.0 * zoom))
                                     .text_color(hsla(0.0, 0.0, 0.5, 1.0))
-                                    .child("drag to move"),
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
