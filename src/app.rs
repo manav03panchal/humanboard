@@ -239,9 +239,9 @@ impl Humanboard {
         .detach();
 
         self.command_palette = Some(input);
-        self.search_results.clear();
-        self.selected_result = 0;
-        cx.notify();
+
+        // Show all items initially
+        self.update_search_results("", cx);
     }
 
     pub fn hide_command_palette(&mut self, cx: &mut Context<Self>) {
@@ -263,9 +263,18 @@ impl Humanboard {
             return;
         }
 
-        // Search canvas items
+        // Search canvas items (empty string shows all items)
         if let Some(ref board) = self.board {
-            self.search_results = board.find_items(text);
+            if text.is_empty() {
+                // Show all items when no search text
+                self.search_results = board
+                    .items
+                    .iter()
+                    .map(|item| (item.id, item.content.display_name()))
+                    .collect();
+            } else {
+                self.search_results = board.find_items(text);
+            }
             self.selected_result = 0;
         } else {
             self.search_results.clear();
