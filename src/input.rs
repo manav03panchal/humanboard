@@ -191,8 +191,25 @@ impl Humanboard {
                     let zoom = board.zoom;
                     let delta_x = f32::from(event.position.x - start_pos.x) / zoom;
                     let delta_y = f32::from(event.position.y - start_pos.y) / zoom;
-                    let new_width = (start_size.0 + delta_x).max(50.0);
-                    let new_height = (start_size.1 + delta_y).max(50.0);
+
+                    // Check if this is a markdown item - if so, maintain aspect ratio
+                    let is_markdown = board.get_item(item_id)
+                        .map(|item| matches!(&item.content, ItemContent::Markdown { .. }))
+                        .unwrap_or(false);
+
+                    let (new_width, new_height) = if is_markdown {
+                        // Markdown cards have fixed aspect ratio of 200:36 (5.56:1)
+                        const MD_ASPECT_RATIO: f32 = 200.0 / 36.0;
+                        // Use width change to determine size, maintain aspect ratio
+                        let width = (start_size.0 + delta_x).max(100.0);
+                        let height = width / MD_ASPECT_RATIO;
+                        (width, height)
+                    } else {
+                        // Other items can resize freely
+                        let width = (start_size.0 + delta_x).max(50.0);
+                        let height = (start_size.1 + delta_y).max(50.0);
+                        (width, height)
+                    };
 
                     // Use get_item_mut for O(1) lookup
                     if let Some(item) = board.get_item_mut(item_id) {
