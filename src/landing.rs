@@ -38,6 +38,7 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
         .child(
             Button::new("new-board")
                 .primary()
+                .small()
                 .icon(Icon::new(IconName::Plus))
                 .label("New Board")
                 .on_click(cx.listener(|this, _, _, cx| {
