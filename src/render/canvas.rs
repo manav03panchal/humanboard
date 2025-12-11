@@ -233,24 +233,28 @@ fn render_item_content(
                     .rounded(corner_radius)
                     .relative()
                     .child(webview.webview().clone())
-                    // Add a transparent drag handle at the top of the video
+                    // Add a visible drag handle bar at the top of the video
                     .child(
                         div()
                             .absolute()
                             .top_0()
                             .left_0()
                             .right_0()
-                            .h(px(32.0 * zoom))
+                            .h(px(28.0 * zoom))
                             .cursor(CursorStyle::PointingHand)
-                            .bg(hsla(0.0, 0.0, 0.0, 0.01)) // Nearly invisible but captures events
+                            .bg(hsla(0.0, 0.0, 0.0, 0.7))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 1.0, 0.2))
                             .flex()
                             .items_center()
                             .justify_center()
+                            .gap(px(4.0))
+                            .child(div().text_color(hsla(0.0, 0.0, 1.0, 0.6)).child("≡"))
                             .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(hsla(0.0, 0.0, 1.0, 0.5))
-                                    .child("⋮⋮ drag here"),
+                                    .text_size(px(10.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 1.0, 0.6))
+                                    .child("Drag to move"),
                             ),
                     )
             } else {
