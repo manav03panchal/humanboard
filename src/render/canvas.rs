@@ -227,35 +227,44 @@ fn render_item_content(
         ItemContent::YouTube(video_id) => {
             // Render YouTube WebView if available, otherwise placeholder
             if let Some(webview) = youtube_webviews.get(&item.id) {
-                div()
+                // Use vertical flex with drag bar ABOVE the webview
+                // (overlays don't work on webviews - they render on top layer)
+                v_flex()
                     .size_full()
-                    .overflow_hidden()
-                    .rounded(corner_radius)
-                    .relative()
-                    .child(webview.webview().clone())
-                    // Add a visible drag handle bar at the top of the video
+                    // Drag handle bar at top - OUTSIDE the webview
                     .child(
                         div()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .right_0()
-                            .h(px(28.0 * zoom))
-                            .cursor(CursorStyle::PointingHand)
-                            .bg(hsla(0.0, 0.0, 0.0, 0.7))
+                            .w_full()
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.15, 1.0))
                             .border_b_1()
-                            .border_color(hsla(0.0, 0.0, 1.0, 0.2))
+                            .border_color(hsla(0.0, 0.0, 0.3, 1.0))
+                            .rounded_t(corner_radius)
                             .flex()
                             .items_center()
                             .justify_center()
-                            .gap(px(4.0))
-                            .child(div().text_color(hsla(0.0, 0.0, 1.0, 0.6)).child("≡"))
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_size(px(14.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.6, 1.0))
+                                    .child("≡≡≡"),
+                            )
                             .child(
                                 div()
                                     .text_size(px(10.0 * zoom))
-                                    .text_color(hsla(0.0, 0.0, 1.0, 0.6))
-                                    .child("Drag to move"),
+                                    .text_color(hsla(0.0, 0.0, 0.5, 1.0))
+                                    .child("drag to move"),
                             ),
+                    )
+                    // WebView takes remaining space
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .rounded_b(corner_radius)
+                            .child(webview.webview().clone()),
                     )
             } else {
                 div()
