@@ -1,6 +1,12 @@
-use crate::app::Humanboard;
-use gpui::*;
+//! Action definitions and handlers.
+//!
+//! Defines all keyboard-bindable actions and their implementations.
+
 use std::sync::mpsc;
+
+use gpui::*;
+
+use crate::app::Humanboard;
 
 // Action definitions
 actions!(
@@ -28,114 +34,34 @@ actions!(
 );
 
 impl Humanboard {
+    /// Zoom in toward the center of the canvas area
     pub fn zoom_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let bounds = window.bounds();
-        let window_size = bounds.size;
-
-        // Calculate center point based on canvas area (accounting for preview panel if open)
-        let (center_x, center_y) = if let Some(ref preview) = self.preview {
-            match preview.split {
-                crate::app::SplitDirection::Vertical => {
-                    // Canvas is on the left side
-                    let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
-                    (
-                        px(canvas_width / 2.0),
-                        px(f32::from(window_size.height) / 2.0),
-                    )
-                }
-                crate::app::SplitDirection::Horizontal => {
-                    // Canvas is on the top
-                    let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
-                    (
-                        px(f32::from(window_size.width) / 2.0),
-                        px(canvas_height / 2.0),
-                    )
-                }
-            }
-        } else {
-            // No preview panel, use full window center
-            (
-                px(f32::from(window_size.width) / 2.0),
-                px(f32::from(window_size.height) / 2.0),
-            )
-        };
-
-        let old_zoom = self.board.zoom;
-        self.board.zoom = (self.board.zoom * 1.2).clamp(0.1, 10.0);
-
-        let zoom_factor = self.board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - self.board.canvas_offset.x;
-        let mouse_canvas_y = center_y - self.board.canvas_offset.y;
-
-        self.board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        self.board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
-
-        self.board.save();
-        cx.notify();
+        let center = self.calculate_canvas_center(window);
+        self.zoom_toward_point(center, 1.2, cx);
     }
 
+    /// Zoom out from the center of the canvas area
     pub fn zoom_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let bounds = window.bounds();
-        let window_size = bounds.size;
-
-        // Calculate center point based on canvas area (accounting for preview panel if open)
-        let (center_x, center_y) = if let Some(ref preview) = self.preview {
-            match preview.split {
-                crate::app::SplitDirection::Vertical => {
-                    // Canvas is on the left side
-                    let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
-                    (
-                        px(canvas_width / 2.0),
-                        px(f32::from(window_size.height) / 2.0),
-                    )
-                }
-                crate::app::SplitDirection::Horizontal => {
-                    // Canvas is on the top
-                    let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
-                    (
-                        px(f32::from(window_size.width) / 2.0),
-                        px(canvas_height / 2.0),
-                    )
-                }
-            }
-        } else {
-            // No preview panel, use full window center
-            (
-                px(f32::from(window_size.width) / 2.0),
-                px(f32::from(window_size.height) / 2.0),
-            )
-        };
-
-        let old_zoom = self.board.zoom;
-        self.board.zoom = (self.board.zoom / 1.2).clamp(0.1, 10.0);
-
-        let zoom_factor = self.board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - self.board.canvas_offset.x;
-        let mouse_canvas_y = center_y - self.board.canvas_offset.y;
-
-        self.board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        self.board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
-
-        self.board.save();
-        cx.notify();
+        let center = self.calculate_canvas_center(window);
+        self.zoom_toward_point(center, 1.0 / 1.2, cx);
     }
 
+    /// Reset zoom to 1.0x
     pub fn zoom_reset(&mut self, cx: &mut Context<Self>) {
-        self.board.zoom = 1.0;
-        self.board.save();
+        self.board.update_zoom(1.0);
         cx.notify();
     }
 
+    /// Delete the currently selected item
     pub fn delete_selected(&mut self, cx: &mut Context<Self>) {
         if let Some(selected_id) = self.selected_item {
-            self.board.items.retain(|item| item.id != selected_id);
+            self.board.delete_item(selected_id);
             self.selected_item = None;
-            self.board.push_history();
-            self.board.save();
             cx.notify();
         }
     }
 
+    /// Undo the last action
     pub fn undo(&mut self, cx: &mut Context<Self>) {
         if self.board.undo() {
             self.selected_item = None;
@@ -143,6 +69,7 @@ impl Humanboard {
         }
     }
 
+    /// Redo the last undone action
     pub fn redo(&mut self, cx: &mut Context<Self>) {
         if self.board.redo() {
             self.selected_item = None;
@@ -150,8 +77,8 @@ impl Humanboard {
         }
     }
 
+    /// Open a file picker and add selected files to the canvas
     pub fn open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Show file picker for multiple files
         let paths_rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -159,17 +86,12 @@ impl Humanboard {
             prompt: None,
         });
 
-        // Get window center for default drop position
-        let bounds = window.bounds();
-        let window_size = bounds.size;
-        let center_x = f32::from(window_size.width) / 2.0;
-        let center_y = f32::from(window_size.height) / 2.0;
+        // Calculate center position for file drop
+        let center_pos = self.calculate_canvas_center(window);
 
-        // Workaround for GPUI async limitations: use a channel to communicate back
-        let center_pos = point(px(center_x), px(center_y));
+        // Use channel to communicate back from async task
         let (tx, rx) = mpsc::channel();
 
-        // Spawn background task to wait for file selection
         cx.background_executor()
             .spawn(async move {
                 if let Ok(Ok(Some(paths))) = paths_rx.await {
@@ -178,7 +100,26 @@ impl Humanboard {
             })
             .detach();
 
-        // Store the receiver - we'll poll it in the render cycle
+        // Store receiver to poll in render cycle
         self.file_drop_rx = Some(rx);
+    }
+
+    /// Zoom toward a specific point
+    fn zoom_toward_point(&mut self, center: Point<Pixels>, factor: f32, cx: &mut Context<Self>) {
+        let old_zoom = self.board.zoom;
+        let new_zoom = (old_zoom * factor).clamp(0.1, 10.0);
+
+        let zoom_factor = new_zoom / old_zoom;
+        let mouse_canvas_x = center.x - self.board.canvas_offset.x;
+        let mouse_canvas_y = center.y - self.board.canvas_offset.y;
+
+        let new_offset = point(
+            center.x - mouse_canvas_x * zoom_factor,
+            center.y - mouse_canvas_y * zoom_factor,
+        );
+
+        self.board.update_zoom(new_zoom);
+        self.board.update_offset(new_offset);
+        cx.notify();
     }
 }
