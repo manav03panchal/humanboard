@@ -298,10 +298,31 @@ impl Humanboard {
                     (f32::from(event.position.y - offset.y) - canvas_offset_y - header_offset)
                         / zoom;
 
-                // Use get_item_mut for O(1) lookup
-                if let Some(item) = board.get_item_mut(item_id) {
-                    item.position = (new_x, new_y);
+                // Get current position of dragged item to calculate delta
+                let old_pos = board.get_item(item_id).map(|i| i.position);
+
+                if let Some((old_x, old_y)) = old_pos {
+                    let delta_x = new_x - old_x;
+                    let delta_y = new_y - old_y;
+
+                    // Move all selected items by the same delta
+                    if self.selected_items.contains(&item_id) && self.selected_items.len() > 1 {
+                        // Group move - move all selected items
+                        let selected_ids: Vec<u64> = self.selected_items.iter().copied().collect();
+                        for id in selected_ids {
+                            if let Some(item) = board.get_item_mut(id) {
+                                item.position.0 += delta_x;
+                                item.position.1 += delta_y;
+                            }
+                        }
+                    } else {
+                        // Single item move
+                        if let Some(item) = board.get_item_mut(item_id) {
+                            item.position = (new_x, new_y);
+                        }
+                    }
                 }
+
                 // Mark dirty but don't save immediately (debounced)
                 board.mark_dirty();
                 cx.notify();
