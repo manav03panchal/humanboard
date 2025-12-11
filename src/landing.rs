@@ -15,14 +15,14 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
 
     h_flex()
         .w_full()
-        .h(px(64.0))
+        .h(px(40.0))
         .bg(bg)
         .border_b_1()
         .border_color(border)
         .items_center()
         .justify_between()
         .pl(px(80.0))
-        .pr_6()
+        .pr_4()
         .child(
             h_flex()
                 .gap_3()
