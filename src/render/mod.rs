@@ -145,13 +145,24 @@ impl Humanboard {
 
         let fps = self.calculate_fps();
         let frame_count = self.frame_count;
-        let selected_item_id = self.selected_item;
-        let selected_item_name = self.selected_item.and_then(|id| {
+        let selected_items = self.selected_items.clone();
+        let selected_item_name = if self.selected_items.len() == 1 {
+            let id = *self.selected_items.iter().next().unwrap();
             self.board
                 .as_ref()
                 .and_then(|b| b.items.iter().find(|i| i.id == id))
                 .map(|i| i.content.display_name())
-        });
+        } else if self.selected_items.len() > 1 {
+            Some(format!("{} items selected", self.selected_items.len()))
+        } else {
+            None
+        };
+
+        // Marquee selection state
+        let marquee = match (self.marquee_start, self.marquee_current) {
+            (Some(start), Some(current)) => Some((start, current)),
+            _ => None,
+        };
 
         // Get board name from index
         let board_name = if let AppView::Board(ref id) = self.view {
@@ -293,8 +304,9 @@ impl Humanboard {
                                     canvas_offset,
                                     zoom,
                                     &items,
-                                    selected_item_id,
+                                    &selected_items,
                                     &self.youtube_webviews,
+                                    marquee,
                                     cx,
                                 )),
                         )
@@ -336,8 +348,9 @@ impl Humanboard {
                                     canvas_offset,
                                     zoom,
                                     &items,
-                                    selected_item_id,
+                                    &selected_items,
                                     &self.youtube_webviews,
+                                    marquee,
                                     cx,
                                 )),
                         )
@@ -371,8 +384,9 @@ impl Humanboard {
                 canvas_offset,
                 zoom,
                 &items,
-                selected_item_id,
+                &selected_items,
                 &self.youtube_webviews,
+                marquee,
                 cx,
             )),
         }

@@ -94,10 +94,11 @@ impl Humanboard {
     }
 
     pub fn delete_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(selected_id) = self.selected_item {
+        if !self.selected_items.is_empty() {
             if let Some(ref mut board) = self.board {
-                board.items.retain(|item| item.id != selected_id);
-                self.selected_item = None;
+                let selected = self.selected_items.clone();
+                board.items.retain(|item| !selected.contains(&item.id));
+                self.selected_items.clear();
                 board.push_history();
                 board.save();
                 cx.notify();
@@ -106,10 +107,18 @@ impl Humanboard {
     }
 
     pub fn duplicate_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(selected_id) = self.selected_item {
+        if !self.selected_items.is_empty() {
             if let Some(ref mut board) = self.board {
-                // Find the selected item and clone it
-                if let Some(item) = board.get_item(selected_id) {
+                let mut new_ids = Vec::new();
+
+                // Collect items to duplicate
+                let items_to_dup: Vec<_> = self
+                    .selected_items
+                    .iter()
+                    .filter_map(|id| board.get_item(*id).cloned())
+                    .collect();
+
+                for item in items_to_dup {
                     let mut new_item = item.clone();
 
                     // Assign a new ID
@@ -120,24 +129,32 @@ impl Humanboard {
                     new_item.position.0 += 20.0;
                     new_item.position.1 += 20.0;
 
-                    // Add the new item to the board directly
-                    board.items.push(new_item.clone());
-
-                    // Select the new item
-                    self.selected_item = Some(new_item.id);
-
-                    // Save changes
-                    board.push_history();
-                    board.save();
-                    cx.notify();
+                    new_ids.push(new_item.id);
+                    board.items.push(new_item);
                 }
+
+                // Select the new items
+                self.selected_items.clear();
+                for id in new_ids {
+                    self.selected_items.insert(id);
+                }
+
+                // Save changes
+                board.push_history();
+                board.save();
+                cx.notify();
             }
         }
     }
 
-    pub fn select_all(&mut self, _cx: &mut Context<Self>) {
-        // Placeholder for future multi-select functionality
-        // Currently a no-op until multi-select is implemented
+    pub fn select_all(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref board) = self.board {
+            self.selected_items.clear();
+            for item in &board.items {
+                self.selected_items.insert(item.id);
+            }
+            cx.notify();
+        }
     }
 
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -157,7 +174,7 @@ impl Humanboard {
     pub fn undo(&mut self, cx: &mut Context<Self>) {
         if let Some(ref mut board) = self.board {
             if board.undo() {
-                self.selected_item = None;
+                self.selected_items.clear();
                 cx.notify();
             }
         }
@@ -166,7 +183,7 @@ impl Humanboard {
     pub fn redo(&mut self, cx: &mut Context<Self>) {
         if let Some(ref mut board) = self.board {
             if board.redo() {
-                self.selected_item = None;
+                self.selected_items.clear();
                 cx.notify();
             }
         }

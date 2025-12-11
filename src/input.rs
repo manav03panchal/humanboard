@@ -59,7 +59,19 @@ impl Humanboard {
             .map(|item| item.id);
 
         if let Some(item_id) = clicked_item_id {
-            self.selected_item = Some(item_id);
+            // Handle selection with Shift modifier for multi-select
+            if event.modifiers.shift {
+                // Toggle selection: add if not selected, remove if already selected
+                if self.selected_items.contains(&item_id) {
+                    self.selected_items.remove(&item_id);
+                } else {
+                    self.selected_items.insert(item_id);
+                }
+            } else {
+                // Without shift, clear and select only this item
+                self.selected_items.clear();
+                self.selected_items.insert(item_id);
+            }
 
             // Handle double-click for PDF/Markdown preview
             if event.click_count == 2 {
@@ -112,9 +124,14 @@ impl Humanboard {
                 }
             }
         } else {
-            self.dragging = true;
-            self.last_mouse_pos = Some(mouse_pos);
-            self.selected_item = None;
+            // Clicked on empty canvas - start marquee selection
+            self.marquee_start = Some(mouse_pos);
+            self.marquee_current = Some(mouse_pos);
+
+            // Clear selection unless shift is held
+            if !event.modifiers.shift {
+                self.selected_items.clear();
+            }
         }
 
         cx.notify();
@@ -122,7 +139,7 @@ impl Humanboard {
 
     pub fn handle_mouse_up(
         &mut self,
-        _event: &MouseUpEvent,
+        event: &MouseUpEvent,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -137,6 +154,52 @@ impl Humanboard {
             }
         }
 
+        // Finalize marquee selection
+        if let (Some(start), Some(end)) = (self.marquee_start, self.marquee_current) {
+            if let Some(ref board) = self.board {
+                let header_offset = 40.0;
+
+                // Calculate marquee bounds in screen space
+                let min_x = f32::from(start.x).min(f32::from(end.x));
+                let max_x = f32::from(start.x).max(f32::from(end.x));
+                let min_y = f32::from(start.y).min(f32::from(end.y));
+                let max_y = f32::from(start.y).max(f32::from(end.y));
+
+                // Only select if marquee has some size (not just a click)
+                if (max_x - min_x) > 5.0 || (max_y - min_y) > 5.0 {
+                    // Find all items that intersect with marquee
+                    for item in &board.items {
+                        let item_x =
+                            item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
+                        let item_y = item.position.1 * board.zoom
+                            + f32::from(board.canvas_offset.y)
+                            + header_offset;
+                        let item_w = item.size.0 * board.zoom;
+                        let item_h = item.size.1 * board.zoom;
+
+                        // Check if item intersects with marquee rectangle
+                        let intersects = !(item_x + item_w < min_x
+                            || item_x > max_x
+                            || item_y + item_h < min_y
+                            || item_y > max_y);
+
+                        if intersects {
+                            if event.modifiers.shift {
+                                // Toggle selection with shift
+                                if self.selected_items.contains(&item.id) {
+                                    self.selected_items.remove(&item.id);
+                                } else {
+                                    self.selected_items.insert(item.id);
+                                }
+                            } else {
+                                self.selected_items.insert(item.id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         self.dragging = false;
         self.last_mouse_pos = None;
         self.dragging_item = None;
@@ -146,6 +209,8 @@ impl Humanboard {
         self.resize_start_pos = None;
         self.dragging_splitter = false;
         self.splitter_drag_start = None;
+        self.marquee_start = None;
+        self.marquee_current = None;
         cx.notify();
     }
 
@@ -193,7 +258,8 @@ impl Humanboard {
                     let delta_y = f32::from(event.position.y - start_pos.y) / zoom;
 
                     // Check if this is a markdown item - if so, maintain aspect ratio
-                    let is_markdown = board.get_item(item_id)
+                    let is_markdown = board
+                        .get_item(item_id)
                         .map(|item| matches!(&item.content, ItemContent::Markdown { .. }))
                         .unwrap_or(false);
 
@@ -249,6 +315,10 @@ impl Humanboard {
                 board.mark_dirty();
                 cx.notify();
             }
+        } else if self.marquee_start.is_some() {
+            // Update marquee selection rectangle
+            self.marquee_current = Some(event.position);
+            cx.notify();
         }
     }
 

@@ -311,7 +311,7 @@ pub fn render_items(
     items: &[CanvasItem],
     canvas_offset: Point<Pixels>,
     zoom: f32,
-    selected_item_id: Option<u64>,
+    selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
@@ -331,7 +331,7 @@ pub fn render_items(
             let y = item.position.1 * zoom + offset_y;
             let w = item.size.0 * zoom;
             let h = item.size.1 * zoom;
-            let is_selected = selected_item_id == Some(item.id);
+            let is_selected = selected_items.contains(&item.id);
 
             div()
                 .absolute()
@@ -376,11 +376,13 @@ pub fn render_canvas_area(
     canvas_offset: Point<Pixels>,
     zoom: f32,
     items: &[CanvasItem],
-    selected_item_id: Option<u64>,
+    selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     cx: &Context<Humanboard>,
 ) -> Div {
     let bg = cx.theme().background;
+    let primary = cx.theme().primary;
 
     div()
         .size_full()
@@ -392,8 +394,35 @@ pub fn render_canvas_area(
             items,
             canvas_offset,
             zoom,
-            selected_item_id,
+            selected_items,
             youtube_webviews,
             cx,
         ))
+        // Render marquee selection rectangle
+        .when_some(marquee, |d, (start, current)| {
+            let min_x = f32::from(start.x).min(f32::from(current.x));
+            let max_x = f32::from(start.x).max(f32::from(current.x));
+            let min_y = f32::from(start.y).min(f32::from(current.y));
+            let max_y = f32::from(start.y).max(f32::from(current.y));
+            let width = max_x - min_x;
+            let height = max_y - min_y;
+
+            // Only show if has some size
+            if width > 2.0 && height > 2.0 {
+                d.child(
+                    div()
+                        .absolute()
+                        .left(px(min_x))
+                        .top(px(min_y - 40.0)) // Account for header offset
+                        .w(px(width))
+                        .h(px(height))
+                        .border_1()
+                        .border_color(primary)
+                        .bg(primary.opacity(0.1))
+                        .rounded(px(2.0)),
+                )
+            } else {
+                d
+            }
+        })
 }

@@ -6,7 +6,7 @@ use crate::settings::Settings;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
@@ -94,7 +94,12 @@ pub struct Humanboard {
     pub resizing_item: Option<u64>,
     pub resize_start_size: Option<(f32, f32)>,
     pub resize_start_pos: Option<Point<Pixels>>,
-    pub selected_item: Option<u64>,
+    pub selected_items: HashSet<u64>,
+
+    // Marquee selection state
+    pub marquee_start: Option<Point<Pixels>>,
+    pub marquee_current: Option<Point<Pixels>>,
+
     pub frame_times: Vec<Duration>,
     pub last_frame: Instant,
     pub frame_count: u64,
@@ -141,7 +146,9 @@ impl Humanboard {
             resizing_item: None,
             resize_start_size: None,
             resize_start_pos: None,
-            selected_item: None,
+            selected_items: HashSet::new(),
+            marquee_start: None,
+            marquee_current: None,
             frame_times: Vec::with_capacity(60),
             last_frame: Instant::now(),
             frame_count: 0,
@@ -340,7 +347,8 @@ impl Humanboard {
             board.center_on_item(item_id, screen_size);
 
             // Select the item
-            self.selected_item = Some(item_id);
+            self.selected_items.clear();
+            self.selected_items.insert(item_id);
         }
     }
 
@@ -480,7 +488,7 @@ impl Humanboard {
         self.preview = None;
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
         self.view = AppView::Landing;
-        self.selected_item = None;
+        self.selected_items.clear();
         // Reload index to get any changes
         self.board_index = BoardIndex::load();
         cx.notify();
