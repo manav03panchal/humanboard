@@ -9,9 +9,8 @@
 use crate::app::Humanboard;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{Icon, IconName, Sizable, h_flex, v_flex};
+use gpui_component::{Icon, IconName, h_flex, v_flex};
 
 /// Render the header bar with navigation and integrated command palette
 pub fn render_header_bar(

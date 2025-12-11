@@ -619,4 +619,80 @@ mod tests {
         assert_eq!(f32::from(canvas_pos.x), 100.0);
         assert_eq!(f32::from(canvas_pos.y), 50.0);
     }
+
+    #[test]
+    fn test_find_items_by_name() {
+        let mut board = Board::new_for_test();
+        board.add_item(
+            point(px(0.0), px(0.0)),
+            ItemContent::Text("Hello World".to_string()),
+        );
+        board.add_item(
+            point(px(100.0), px(0.0)),
+            ItemContent::Text("Goodbye World".to_string()),
+        );
+        board.add_item(
+            point(px(200.0), px(0.0)),
+            ItemContent::Text("Hello Again".to_string()),
+        );
+
+        let results = board.find_items("Hello");
+        assert_eq!(results.len(), 2);
+
+        let results = board.find_items("World");
+        assert_eq!(results.len(), 2);
+
+        let results = board.find_items("Goodbye");
+        assert_eq!(results.len(), 1);
+
+        let results = board.find_items("NotFound");
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_find_items_case_insensitive() {
+        let mut board = Board::new_for_test();
+        board.add_item(
+            point(px(0.0), px(0.0)),
+            ItemContent::Text("Hello World".to_string()),
+        );
+
+        let results = board.find_items("hello");
+        assert_eq!(results.len(), 1);
+
+        let results = board.find_items("HELLO");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_canvas_to_screen_conversion() {
+        let mut board = Board::new_for_test();
+        board.canvas_offset = point(px(100.0), px(50.0));
+        board.zoom = 2.0;
+
+        let canvas_pos = point(px(100.0), px(50.0));
+        let screen_pos = board.canvas_to_screen(canvas_pos);
+
+        // 100 * 2 + 100 = 300, 50 * 2 + 50 = 150
+        assert_eq!(f32::from(screen_pos.x), 300.0);
+        assert_eq!(f32::from(screen_pos.y), 150.0);
+    }
+
+    #[test]
+    fn test_zoom_bounds() {
+        let mut board = Board::new_for_test();
+        let center = point(px(500.0), px(500.0));
+
+        // Zoom in many times - should clamp at max
+        for _ in 0..50 {
+            board.zoom_in(center);
+        }
+        assert!(board.zoom <= 10.0);
+
+        // Zoom out many times - should clamp at min
+        for _ in 0..100 {
+            board.zoom_out(center);
+        }
+        assert!(board.zoom >= 0.1);
+    }
 }

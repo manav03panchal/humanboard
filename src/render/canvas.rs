@@ -276,7 +276,6 @@ pub fn render_items(
 ) -> Vec<Div> {
     let offset_x = f32::from(canvas_offset.x);
     let offset_y = f32::from(canvas_offset.y);
-    let selection_size = 20.0 * zoom;
 
     items
         .iter()
