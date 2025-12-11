@@ -343,7 +343,7 @@ impl Humanboard {
             let files_dir = crate::board_index::BoardIndex::board_files_dir(&board_id);
             let _ = std::fs::create_dir_all(&files_dir);
 
-            // Generate safe filename
+            // Generate safe filename - just use the name, add short suffix if exists
             let safe_name: String = name
                 .chars()
                 .map(|c| {
@@ -354,12 +354,19 @@ impl Humanboard {
                     }
                 })
                 .collect();
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let filename = format!("{}-{}.md", safe_name, timestamp);
-            let path = files_dir.join(&filename);
+
+            // Try just the name first, add short timestamp suffix if file exists
+            let mut filename = format!("{}.md", safe_name);
+            let mut path = files_dir.join(&filename);
+            if path.exists() {
+                let short_id = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+                    % 10000; // Last 4 digits
+                filename = format!("{}-{}.md", safe_name, short_id);
+                path = files_dir.join(&filename);
+            }
 
             // Create markdown file with title
             let initial_content = format!("# {}\n\n", name);
