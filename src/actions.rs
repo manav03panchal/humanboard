@@ -11,6 +11,8 @@ actions!(
         ZoomOut,
         ZoomReset,
         DeleteSelected,
+        DuplicateSelected,
+        SelectAll,
         Undo,
         Redo,
         ClosePreview,
@@ -29,6 +31,8 @@ actions!(
         ShowShortcuts,
         Paste,
         CommandPalette,
+        ToggleCommandPalette,
+        CloseCommandPalette,
         OpenSettings
     ]
 );
@@ -98,6 +102,55 @@ impl Humanboard {
                 board.save();
                 cx.notify();
             }
+        }
+    }
+
+    pub fn duplicate_selected(&mut self, cx: &mut Context<Self>) {
+        if let Some(selected_id) = self.selected_item {
+            if let Some(ref mut board) = self.board {
+                // Find the selected item and clone it
+                if let Some(item) = board.get_item(selected_id) {
+                    let mut new_item = item.clone();
+
+                    // Assign a new ID
+                    new_item.id = board.next_item_id;
+                    board.next_item_id += 1;
+
+                    // Offset the position by (20, 20) pixels
+                    new_item.position.0 += 20.0;
+                    new_item.position.1 += 20.0;
+
+                    // Add the new item to the board directly
+                    board.items.push(new_item.clone());
+
+                    // Select the new item
+                    self.selected_item = Some(new_item.id);
+
+                    // Save changes
+                    board.push_history();
+                    board.save();
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub fn select_all(&mut self, _cx: &mut Context<Self>) {
+        // Placeholder for future multi-select functionality
+        // Currently a no-op until multi-select is implemented
+    }
+
+    pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_palette.is_some() {
+            self.hide_command_palette(cx);
+        } else {
+            self.show_command_palette(window, cx);
+        }
+    }
+
+    pub fn close_command_palette(&mut self, cx: &mut Context<Self>) {
+        if self.command_palette.is_some() {
+            self.hide_command_palette(cx);
         }
     }
 

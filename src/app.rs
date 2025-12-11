@@ -1,5 +1,6 @@
 use crate::board::Board;
 use crate::board_index::BoardIndex;
+use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
 use crate::youtube_webview::YouTubeWebView;
@@ -117,6 +118,9 @@ pub struct Humanboard {
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
+
+    // Toast notifications
+    pub toast_manager: ToastManager,
 }
 
 impl Humanboard {
@@ -155,6 +159,7 @@ impl Humanboard {
             youtube_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
+            toast_manager: ToastManager::new(),
         }
     }
 

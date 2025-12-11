@@ -56,13 +56,15 @@ fn render_item_backgrounds(
             size: size(px(item.size.0 * zoom), px(item.size.1 * zoom)),
         };
 
+        // Use semantic colors based on content type for better theme integration
+        // Each type has a distinct hue for visual differentiation
         let bg_color = match &item.content {
-            ItemContent::Video(_) => hsla(0.15, 0.7, 0.5, 0.9),
-            ItemContent::Text(_) => hsla(0.6, 0.7, 0.5, 0.9),
-            ItemContent::Pdf { .. } => hsla(0.0, 0.7, 0.5, 0.9),
-            ItemContent::Link(_) => hsla(0.35, 0.7, 0.5, 0.9),
-            ItemContent::YouTube(_) => hsla(0.0, 0.8, 0.4, 0.9),
-            _ => hsla(0.0, 0.0, 0.5, 0.9),
+            ItemContent::Video(_) => hsla(280.0 / 360.0, 0.6, 0.45, 0.85), // Purple/magenta for media
+            ItemContent::Text(_) => hsla(210.0 / 360.0, 0.6, 0.45, 0.85),  // Blue for text
+            ItemContent::Pdf { .. } => hsla(15.0 / 360.0, 0.7, 0.5, 0.85), // Orange for documents
+            ItemContent::Link(_) => hsla(180.0 / 360.0, 0.6, 0.4, 0.85),   // Cyan for links
+            ItemContent::YouTube(_) => hsla(0.0 / 360.0, 0.75, 0.5, 0.85), // Red for YouTube
+            _ => hsla(0.0, 0.0, 0.4, 0.85),                                // Gray for unknown
         };
 
         window.paint_quad(quad(
@@ -84,7 +86,7 @@ fn render_item_content(
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
-    danger: Hsla,
+    _danger: Hsla,
 ) -> Div {
     let corner_radius = px(8.0 * zoom);
 
@@ -229,8 +231,7 @@ fn render_item_content(
                     .size_full()
                     .overflow_hidden()
                     .rounded(corner_radius)
-                    .border_4()
-                    .border_color(danger)
+                    // Removed permanent danger border - selection border is handled separately
                     .child(webview.webview().clone())
             } else {
                 div()

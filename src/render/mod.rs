@@ -21,9 +21,10 @@ pub use preview::{
 };
 
 use crate::actions::{
-    ClosePreview, CloseTab, CommandPalette, DeleteSelected, GoHome, NewBoard, NextPage, NextTab,
-    OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo,
-    ShowShortcuts, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
+    GoHome, NewBoard, NextPage, NextTab, OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut,
+    PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo,
+    ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -206,6 +207,9 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &ZoomOut, window, cx| this.zoom_out(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomReset, _, cx| this.zoom_reset(cx)))
             .on_action(cx.listener(|this, _: &DeleteSelected, _, cx| this.delete_selected(cx)))
+            .on_action(
+                cx.listener(|this, _: &DuplicateSelected, _, cx| this.duplicate_selected(cx)),
+            )
             .on_action(cx.listener(|this, _: &Undo, _, cx| this.undo(cx)))
             .on_action(cx.listener(|this, _: &Redo, _, cx| this.redo(cx)))
             .on_action(cx.listener(|this, _: &ClosePreview, _, cx| this.close_preview(cx)))
@@ -223,6 +227,12 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
             }))
+            .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
+                this.toggle_command_palette(window, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &CloseCommandPalette, _, cx| this.close_command_palette(cx)),
+            )
             .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 if let Some(first_path) = paths.paths().first() {

@@ -1,7 +1,8 @@
 use gpui::*;
 use humanboard::actions::{
-    ClosePreview, CloseTab, CommandPalette, DeleteSelected, GoHome, NewBoard, NextTab, OpenFile,
-    OpenSettings, Paste, PrevTab, Quit, Redo, ShowShortcuts, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
+    GoHome, NewBoard, NextTab, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, ShowShortcuts,
+    ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use std::borrow::Cow;
@@ -90,7 +91,10 @@ fn main() {
         cx.bind_keys([
             KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
             KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
+            KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
             KeyBinding::new("escape", ClosePreview, Some("Canvas")),
+            KeyBinding::new("escape", CloseCommandPalette, Some("Canvas")),
+            KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
             KeyBinding::new("cmd-v", Paste, Some("Canvas")), // Canvas paste (for images)
         ]);
 
