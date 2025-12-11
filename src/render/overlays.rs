@@ -736,9 +736,9 @@ pub fn render_settings_modal(
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
-    let current_theme = current_theme.to_string(); // Clone for use in closures
+    let current_theme = current_theme.to_string();
 
-    let bg = cx.theme().popover;
+    let bg = cx.theme().background;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
@@ -746,6 +746,9 @@ pub fn render_settings_modal(
     let primary = cx.theme().primary;
     let list_active = cx.theme().list_active;
     let list_hover = cx.theme().list_hover;
+
+    // Hardcoded to "Appearance" tab for now
+    let active_tab = "Appearance";
 
     deferred(
         div()
@@ -757,7 +760,6 @@ pub fn render_settings_modal(
             .flex()
             .items_center()
             .justify_center()
-            // Block all events including scroll
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
@@ -765,12 +767,11 @@ pub fn render_settings_modal(
                     cx.notify();
                 }),
             )
-            .on_scroll_wheel(cx.listener(|_, _, _, _| {
-                // Consume scroll - don't propagate to canvas
-            }))
+            .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
             .child(
-                v_flex()
-                    .w(px(520.0))
+                h_flex()
+                    .w(px(700.0))
+                    .h(px(500.0))
                     .bg(bg)
                     .border_1()
                     .border_color(border)
@@ -779,33 +780,75 @@ pub fn render_settings_modal(
                     .shadow_lg()
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .on_scroll_wheel(|_, _, _| {})
-                    // Header
-                    .child(
-                        h_flex()
-                            .px_6()
-                            .py_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(fg)
-                                    .child("Settings"),
-                            )
-                            .child(render_kbd("Cmd+,", cx)),
-                    )
-                    // Content
+                    // Left sidebar with tabs
                     .child(
                         v_flex()
-                            .p_6()
-                            .gap_6()
-                            // Appearance Section
+                            .w(px(200.0))
+                            .h_full()
+                            .bg(title_bar)
+                            .border_r_1()
+                            .border_color(border)
+                            // Header
+                            .child(
+                                div()
+                                    .px_4()
+                                    .py_4()
+                                    .border_b_1()
+                                    .border_color(border)
+                                    .child(
+                                        div()
+                                            .text_lg()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child("Settings"),
+                                    ),
+                            )
+                            // Tabs
                             .child(
                                 v_flex()
-                                    .gap_4()
+                                    .flex_1()
+                                    .pt_2()
+                                    .child(
+                                        div()
+                                            .id("tab-appearance")
+                                            .px_3()
+                                            .py_2()
+                                            .mx_2()
+                                            .rounded(px(6.0))
+                                            .cursor(CursorStyle::PointingHand)
+                                            .when(active_tab == "Appearance", |d| {
+                                                d.bg(list_active)
+                                            })
+                                            .when(active_tab != "Appearance", |d| {
+                                                d.hover(|s| s.bg(list_hover))
+                                            })
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(if active_tab == "Appearance" {
+                                                        fg
+                                                    } else {
+                                                        muted_fg
+                                                    })
+                                                    .child("Appearance"),
+                                            ),
+                                    ),
+                            ),
+                    )
+                    // Right content area
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .h_full()
+                            // Header with tab name and close button
+                            .child(
+                                h_flex()
+                                    .px_6()
+                                    .py_4()
+                                    .border_b_1()
+                                    .border_color(border)
+                                    .items_center()
+                                    .justify_between()
                                     .child(
                                         div()
                                             .text_base()
@@ -813,20 +856,31 @@ pub fn render_settings_modal(
                                             .text_color(fg)
                                             .child("Appearance"),
                                     )
+                                    .child(render_kbd("Cmd+,", cx)),
+                            )
+                            // Content
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .p_6()
+                                    .child(
+                                        v_flex()
+                                            .gap_6()
+                                    // Theme Section
                                     .child(
                                         v_flex()
                                             .gap_3()
                                             .child(
                                                 div()
                                                     .text_sm()
-                                                    .text_color(muted_fg)
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(fg)
                                                     .child("Theme"),
                                             )
                                             .child(
-                                                // Dropdown theme selector
                                                 div()
-                                                    .id("theme-dropdown")
-                                                    .max_h(px(180.0))
+                                                    .id("theme-list")
+                                                    .max_h(px(200.0))
                                                     .bg(title_bar)
                                                     .border_1()
                                                     .border_color(border)
@@ -845,9 +899,7 @@ pub fn render_settings_modal(
                                                                 .px_4()
                                                                 .py_2p5()
                                                                 .cursor(CursorStyle::PointingHand)
-                                                                .when(is_selected, |d| {
-                                                                    d.bg(list_active)
-                                                                })
+                                                                .when(is_selected, |d| d.bg(list_active))
                                                                 .when(!is_selected, |d| {
                                                                     d.hover(|s| s.bg(list_hover))
                                                                 })
@@ -887,7 +939,7 @@ pub fn render_settings_modal(
                                                         },
                                                     ))),
                                             )
-                                            // Live Preview
+                                            // Preview
                                             .child(
                                                 v_flex()
                                                     .gap_2()
@@ -899,67 +951,64 @@ pub fn render_settings_modal(
                                                     )
                                                     .child(
                                                         div()
-                                                            .h(px(70.0))
+                                                            .h(px(60.0))
                                                             .bg(title_bar)
                                                             .border_1()
                                                             .border_color(border)
                                                             .rounded(px(8.0))
                                                             .p_4()
                                                             .child(
-                                                                v_flex()
+                                                                h_flex()
                                                                     .gap_2()
+                                                                    .items_center()
                                                                     .child(
                                                                         div()
-                                                                            .text_xs()
-                                                                            .font_weight(FontWeight::SEMIBOLD)
-                                                                            .text_color(fg)
-                                                                            .child(current_theme),
+                                                                            .w(px(36.0))
+                                                                            .h(px(24.0))
+                                                                            .rounded(px(4.0))
+                                                                            .border_1()
+                                                                            .border_color(border)
+                                                                            .bg(cx.theme().background),
                                                                     )
                                                                     .child(
-                                                                        h_flex()
-                                                                            .gap_2()
-                                                                            .items_center()
-                                                                            .child(
-                                                                                div()
-                                                                                    .w(px(32.0))
-                                                                                    .h(px(20.0))
-                                                                                    .rounded(px(4.0))
-                                                                                    .border_1()
-                                                                                    .border_color(border)
-                                                                                    .bg(cx.theme().background),
-                                                                            )
-                                                                            .child(
-                                                                                div()
-                                                                                    .w(px(32.0))
-                                                                                    .h(px(20.0))
-                                                                                    .rounded(px(4.0))
-                                                                                    .border_1()
-                                                                                    .border_color(border)
-                                                                                    .bg(cx.theme().primary),
-                                                                            )
-                                                                            .child(
-                                                                                div()
-                                                                                    .w(px(32.0))
-                                                                                    .h(px(20.0))
-                                                                                    .rounded(px(4.0))
-                                                                                    .border_1()
-                                                                                    .border_color(border)
-                                                                                    .bg(cx.theme().success),
-                                                                            )
-                                                                            .child(
-                                                                                div()
-                                                                                    .w(px(32.0))
-                                                                                    .h(px(20.0))
-                                                                                    .rounded(px(4.0))
-                                                                                    .border_1()
-                                                                                    .border_color(border)
-                                                                                    .bg(cx.theme().danger),
-                                                                            ),
+                                                                        div()
+                                                                            .w(px(36.0))
+                                                                            .h(px(24.0))
+                                                                            .rounded(px(4.0))
+                                                                            .border_1()
+                                                                            .border_color(border)
+                                                                            .bg(cx.theme().primary),
+                                                                    )
+                                                                    .child(
+                                                                        div()
+                                                                            .w(px(36.0))
+                                                                            .h(px(24.0))
+                                                                            .rounded(px(4.0))
+                                                                            .border_1()
+                                                                            .border_color(border)
+                                                                            .bg(cx.theme().success),
+                                                                    )
+                                                                    .child(
+                                                                        div()
+                                                                            .w(px(36.0))
+                                                                            .h(px(24.0))
+                                                                            .rounded(px(4.0))
+                                                                            .border_1()
+                                                                            .border_color(border)
+                                                                            .bg(cx.theme().danger),
+                                                                    )
+                                                                    .child(
+                                                                        div()
+                                                                            .flex_1()
+                                                                            .text_xs()
+                                                                            .text_color(muted_fg)
+                                                                            .child(current_theme.clone()),
                                                                     ),
                                                             ),
                                                     ),
                                             ),
                                     ),
+                                        ),
                             ),
                     ),
             ),
