@@ -29,8 +29,8 @@ pub enum PreviewTab {
     Markdown {
         path: PathBuf,
         content: String,
-        edited_content: String,
-        is_editing: bool,
+        editing: bool,
+        editor: Option<Entity<InputState>>,
     },
 }
 
@@ -43,11 +43,26 @@ impl PreviewTab {
     }
 
     pub fn title(&self) -> String {
-        self.path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Untitled")
-            .to_string()
+        match self {
+            PreviewTab::Markdown { content, path, .. } => {
+                // Try to extract title from first line (# Title)
+                if let Some(first_line) = content.lines().next() {
+                    if first_line.starts_with("# ") {
+                        return first_line.trim_start_matches("# ").to_string();
+                    }
+                }
+                // Fallback to filename without extension
+                path.file_stem()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("Untitled")
+                    .to_string()
+            }
+            PreviewTab::Pdf { path, .. } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Untitled")
+                .to_string(),
+        }
     }
 }
 
@@ -90,6 +105,10 @@ pub struct Humanboard {
 
     // UI overlays
     pub show_shortcuts: bool,
+    pub command_palette: Option<Entity<InputState>>, // Command palette input
+    pub pending_command: Option<String>, // Command to execute (deferred until we have window access)
+    pub search_results: Vec<(u64, String)>, // Search results: (item_id, display_name)
+    pub selected_result: usize,          // Currently selected search result index
 
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
@@ -124,6 +143,10 @@ impl Humanboard {
             last_drop_pos: None,
             file_drop_rx: None,
             show_shortcuts: false,
+            command_palette: None,
+            pending_command: None,
+            search_results: Vec::new(),
+            selected_result: 0,
             youtube_webviews: HashMap::new(),
         }
     }
@@ -131,6 +154,232 @@ impl Humanboard {
     pub fn toggle_shortcuts(&mut self, cx: &mut Context<Self>) {
         self.show_shortcuts = !self.show_shortcuts;
         cx.notify();
+    }
+
+    pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = cx
+            .new(|cx| InputState::new(window, cx).placeholder("Type to search or use commands..."));
+
+        // Focus the input
+        input.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+
+        // Subscribe to input events
+        cx.subscribe(
+            &input,
+            |this, input, event: &gpui_component::input::InputEvent, cx| {
+                match event {
+                    gpui_component::input::InputEvent::PressEnter { .. } => {
+                        this.execute_command_from_subscription(cx);
+                    }
+                    gpui_component::input::InputEvent::Change { .. } => {
+                        // Update search results as user types
+                        let text = input.read(cx).text().to_string();
+                        this.update_search_results(&text, cx);
+                    }
+                    gpui_component::input::InputEvent::Blur => {
+                        // Close command palette when input loses focus (click outside)
+                        this.hide_command_palette(cx);
+                    }
+                    _ => {}
+                }
+            },
+        )
+        .detach();
+
+        self.command_palette = Some(input);
+        self.search_results.clear();
+        self.selected_result = 0;
+        cx.notify();
+    }
+
+    pub fn hide_command_palette(&mut self, cx: &mut Context<Self>) {
+        self.command_palette = None;
+        self.search_results.clear();
+        self.selected_result = 0;
+        cx.notify();
+    }
+
+    /// Update search results based on input text
+    fn update_search_results(&mut self, text: &str, cx: &mut Context<Self>) {
+        let text = text.trim();
+
+        // Don't search if it's a command
+        if text.starts_with("md ") || text == "md" {
+            self.search_results.clear();
+            self.selected_result = 0;
+            cx.notify();
+            return;
+        }
+
+        // Search canvas items
+        if let Some(ref board) = self.board {
+            self.search_results = board.find_items(text);
+            self.selected_result = 0;
+        } else {
+            self.search_results.clear();
+        }
+        cx.notify();
+    }
+
+    /// Navigate search results
+    pub fn select_next_result(&mut self, cx: &mut Context<Self>) {
+        if !self.search_results.is_empty() {
+            self.selected_result = (self.selected_result + 1) % self.search_results.len();
+            cx.notify();
+        }
+    }
+
+    pub fn select_prev_result(&mut self, cx: &mut Context<Self>) {
+        if !self.search_results.is_empty() {
+            self.selected_result = if self.selected_result == 0 {
+                self.search_results.len() - 1
+            } else {
+                self.selected_result - 1
+            };
+            cx.notify();
+        }
+    }
+
+    /// Called from subscription when Enter is pressed - stores command for deferred execution
+    fn execute_command_from_subscription(&mut self, cx: &mut Context<Self>) {
+        // If we have search results selected, jump to that item
+        if !self.search_results.is_empty() {
+            let (item_id, _) = self.search_results[self.selected_result];
+            self.pending_command = Some(format!("__jump:{}", item_id));
+        } else {
+            let command = self
+                .command_palette
+                .as_ref()
+                .map(|input| input.read(cx).text().to_string())
+                .unwrap_or_default();
+            self.pending_command = Some(command);
+        }
+
+        self.command_palette = None;
+        self.search_results.clear();
+        self.selected_result = 0;
+        cx.notify();
+    }
+
+    /// Process any pending command (called from render where we have window access)
+    pub fn process_pending_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(command) = self.pending_command.take() {
+            let command = command.trim();
+
+            // Handle jump command (from search result selection)
+            if command.starts_with("__jump:") {
+                if let Ok(item_id) = command
+                    .strip_prefix("__jump:")
+                    .unwrap_or("0")
+                    .parse::<u64>()
+                {
+                    self.jump_to_item(item_id, window, cx);
+                }
+            } else if command.starts_with("md ") {
+                let name = command.strip_prefix("md ").unwrap_or("Untitled");
+                self.create_markdown_note(name.to_string(), window, cx);
+            } else if command == "md" {
+                self.create_markdown_note("Untitled".to_string(), window, cx);
+            }
+        }
+    }
+
+    /// Jump to and select an item by ID
+    fn jump_to_item(&mut self, item_id: u64, window: &mut Window, _cx: &mut Context<Self>) {
+        if let Some(ref mut board) = self.board {
+            // Get window size for centering
+            let bounds = window.bounds();
+            let screen_size = bounds.size;
+
+            // Center on the item
+            board.center_on_item(item_id, screen_size);
+
+            // Select the item
+            self.selected_item = Some(item_id);
+        }
+    }
+
+    pub fn execute_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let command = self
+            .command_palette
+            .as_ref()
+            .map(|input| input.read(cx).text().to_string())
+            .unwrap_or_default();
+
+        self.command_palette = None;
+
+        // Parse command
+        let command = command.trim();
+        if command.starts_with("md ") {
+            let name = command.strip_prefix("md ").unwrap_or("Untitled");
+            self.create_markdown_note(name.to_string(), window, cx);
+        } else if command == "md" {
+            self.create_markdown_note("Untitled".to_string(), window, cx);
+        }
+        // Add more commands here as needed
+
+        cx.notify();
+    }
+
+    fn create_markdown_note(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
+        // Get board ID from current view
+        let board_id = match &self.view {
+            AppView::Board(id) => id.clone(),
+            _ => return,
+        };
+
+        // Clean up name - remove .md extension if user added it
+        let name = name.trim().trim_end_matches(".md").trim();
+        let name = if name.is_empty() {
+            "Untitled".to_string()
+        } else {
+            name.to_string()
+        };
+
+        if let Some(ref mut board) = self.board {
+            // Create markdown file in the board's files directory
+            let files_dir = crate::board_index::BoardIndex::board_files_dir(&board_id);
+            let _ = std::fs::create_dir_all(&files_dir);
+
+            // Generate safe filename
+            let safe_name: String = name
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' || c == '_' {
+                        c
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let filename = format!("{}-{}.md", safe_name, timestamp);
+            let path = files_dir.join(&filename);
+
+            // Create markdown file with title
+            let initial_content = format!("# {}\n\n", name);
+            let _ = std::fs::write(&path, &initial_content);
+
+            // Add to board at center of visible canvas (accounting for pan/zoom)
+            let center_screen = point(px(600.0), px(400.0));
+            let canvas_pos = board.screen_to_canvas(center_screen);
+            board.add_item(
+                canvas_pos,
+                crate::types::ItemContent::Markdown {
+                    path: path.clone(),
+                    title: name.clone(),
+                    content: initial_content, // Store actual content for preview
+                },
+            );
+
+            // Open in preview for editing
+            self.open_preview(path, window, cx);
+        }
     }
 
     pub fn paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -238,16 +487,16 @@ impl Humanboard {
 
     // ==================== Board Methods (existing) ====================
 
-    pub fn open_preview(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+    pub fn open_preview(&mut self, path: PathBuf, _window: &mut Window, cx: &mut Context<Self>) {
         // Determine tab type based on extension
         let tab = if path.extension().and_then(|e| e.to_str()) == Some("md") {
             // Load markdown content
             let content = std::fs::read_to_string(&path).unwrap_or_default();
             PreviewTab::Markdown {
                 path: path.clone(),
-                content: content.clone(),
-                edited_content: content,
-                is_editing: false,
+                content,
+                editing: false,
+                editor: None,
             }
         } else {
             PreviewTab::Pdf {
@@ -279,22 +528,112 @@ impl Humanboard {
 
     pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
         if let Some(ref mut preview) = self.preview {
-            // Ensure all PDF tabs have their WebViews created
-            for tab in preview.tabs.iter_mut() {
+            let active_tab = preview.active_tab;
+
+            // Ensure all PDF tabs have their WebViews created, and hide/show based on active
+            for (idx, tab) in preview.tabs.iter_mut().enumerate() {
                 if let PreviewTab::Pdf { path, webview } = tab {
                     if webview.is_none() {
                         match PdfWebView::new(path.clone(), window, cx) {
                             Ok(wv) => {
+                                // Hide if not active tab
+                                if idx != active_tab {
+                                    wv.webview().update(cx, |view, _| view.hide());
+                                }
                                 *webview = Some(wv);
                             }
                             Err(e) => {
                                 eprintln!("Failed to create PDF WebView: {}", e);
                             }
                         }
+                    } else if let Some(wv) = webview {
+                        // Show/hide existing webviews based on active tab
+                        if idx == active_tab {
+                            wv.webview().update(cx, |view, _| view.show());
+                        } else {
+                            wv.webview().update(cx, |view, _| view.hide());
+                        }
                     }
                 }
             }
         }
+    }
+
+    // Markdown editing methods
+    pub fn toggle_markdown_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
+                if let PreviewTab::Markdown {
+                    editing,
+                    content,
+                    editor,
+                    ..
+                } = tab
+                {
+                    *editing = !*editing;
+                    if *editing {
+                        if editor.is_none() {
+                            // Create editor with current content - use code_editor for multiline support
+                            let content_clone = content.clone();
+                            *editor = Some(cx.new(|cx| {
+                                InputState::new(window, cx)
+                                    .code_editor("markdown")
+                                    .soft_wrap(true)
+                                    .line_number(true)
+                                    .default_value(content_clone)
+                            }));
+                        }
+                        // Focus the editor so user can type immediately
+                        if let Some(ed) = editor {
+                            ed.update(cx, |state, cx| {
+                                state.focus(window, cx);
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    pub fn save_markdown(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
+                if let PreviewTab::Markdown {
+                    path,
+                    content,
+                    editor,
+                    editing,
+                    ..
+                } = tab
+                {
+                    if let Some(ed) = editor {
+                        let new_content = ed.read(cx).text().to_string();
+                        *content = new_content.clone();
+                        // Save to file
+                        let path_clone = path.clone();
+                        let _ = std::fs::write(&path_clone, &new_content);
+                        // Also update board item if exists
+                        if let Some(ref mut board) = self.board {
+                            for item in board.items.iter_mut() {
+                                if let crate::types::ItemContent::Markdown {
+                                    path: item_path,
+                                    content: item_content,
+                                    ..
+                                } = &mut item.content
+                                {
+                                    if *item_path == path_clone {
+                                        *item_content = new_content.clone();
+                                    }
+                                }
+                            }
+                        }
+                        *editing = false;
+                    }
+                }
+            }
+        }
+        cx.notify();
     }
 
     pub fn ensure_youtube_webviews(&mut self, window: &mut Window, cx: &mut App) {
@@ -368,6 +707,20 @@ impl Humanboard {
     pub fn switch_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
             if tab_index < preview.tabs.len() {
+                // Hide/show PDF webviews based on active tab
+                for (idx, tab) in preview.tabs.iter().enumerate() {
+                    if let PreviewTab::Pdf {
+                        webview: Some(wv), ..
+                    } = tab
+                    {
+                        if idx == tab_index {
+                            wv.webview().update(cx, |view, _| view.show());
+                        } else {
+                            wv.webview().update(cx, |view, _| view.hide());
+                        }
+                    }
+                }
+
                 preview.active_tab = tab_index;
                 cx.notify();
             }
@@ -410,40 +763,6 @@ impl Humanboard {
                 SplitDirection::Horizontal => SplitDirection::Vertical,
             };
             cx.notify();
-        }
-    }
-
-    pub fn toggle_markdown_edit(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref mut preview) = self.preview {
-            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
-                if let PreviewTab::Markdown { is_editing, .. } = tab {
-                    *is_editing = !*is_editing;
-                    cx.notify();
-                }
-            }
-        }
-    }
-
-    pub fn save_markdown(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        if let Some(ref mut preview) = self.preview {
-            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
-                if let PreviewTab::Markdown {
-                    path: tab_path,
-                    content,
-                    edited_content,
-                    ..
-                } = tab
-                {
-                    if tab_path == &path {
-                        // Save to disk
-                        if std::fs::write(&path, &edited_content).is_ok() {
-                            // Update content to match edited_content
-                            *content = edited_content.clone();
-                            cx.notify();
-                        }
-                    }
-                }
-            }
         }
     }
 

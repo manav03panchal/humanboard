@@ -4,6 +4,7 @@ pub mod board;
 pub mod board_index;
 pub mod input;
 pub mod landing;
+pub mod markdown_card;
 pub mod pdf_thumbnail;
 pub mod pdf_webview;
 pub mod render;

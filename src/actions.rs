@@ -27,7 +27,8 @@ actions!(
         GoHome,
         NewBoard,
         ShowShortcuts,
-        Paste
+        Paste,
+        CommandPalette
     ]
 );
 

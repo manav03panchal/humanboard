@@ -14,6 +14,8 @@ wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = "0.6"
 pdfium-render = { version = "0.8", features = ["image"] }
 tiny_http = "0.12"
+pulldown-cmark = "0.10"
+base64 = "0.22"
 
 [profile.release]
 opt-level = 3

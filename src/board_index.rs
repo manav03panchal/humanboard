@@ -111,9 +111,9 @@ impl BoardIndex {
         self.boards.retain(|b| b.id != id);
 
         if self.boards.len() != initial_len {
-            // Also delete the board file
-            let board_path = Self::board_path(id);
-            let _ = fs::remove_file(board_path);
+            // Delete the entire board directory (includes board.json and files/)
+            let board_dir = Self::board_dir(id);
+            let _ = fs::remove_dir_all(board_dir);
             self.save();
             true
         } else {
@@ -150,8 +150,18 @@ impl BoardIndex {
             .join("boards")
     }
 
+    /// Get the directory for a specific board (contains board.json and files/)
+    pub fn board_dir(id: &str) -> PathBuf {
+        Self::boards_dir().join(id)
+    }
+
     pub fn board_path(id: &str) -> PathBuf {
-        Self::boards_dir().join(format!("{}.json", id))
+        Self::board_dir(id).join("board.json")
+    }
+
+    /// Get the files directory for a specific board (for markdown notes, etc.)
+    pub fn board_files_dir(id: &str) -> PathBuf {
+        Self::board_dir(id).join("files")
     }
 
     fn legacy_board_path() -> PathBuf {

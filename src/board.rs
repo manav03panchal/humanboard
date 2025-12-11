@@ -1,6 +1,6 @@
 use crate::board_index::BoardIndex;
 use crate::types::{CanvasItem, ItemContent};
-use gpui::{Pixels, Point, point, px};
+use gpui::{Pixels, Point, Size, point, px};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -254,6 +254,42 @@ impl Board {
     pub fn zoom_reset(&mut self) {
         self.zoom = 1.0;
         self.mark_dirty();
+    }
+
+    /// Center the viewport on an item by its ID
+    /// screen_size is the visible canvas area size
+    pub fn center_on_item(&mut self, item_id: u64, screen_size: Size<Pixels>) {
+        if let Some(item) = self.items.iter().find(|i| i.id == item_id) {
+            // Calculate the center of the item in canvas coordinates
+            let item_center_x = item.position.0 + item.size.0 / 2.0;
+            let item_center_y = item.position.1 + item.size.1 / 2.0;
+
+            // Calculate offset to center item on screen
+            let screen_center_x = f32::from(screen_size.width) / 2.0;
+            let screen_center_y = f32::from(screen_size.height) / 2.0;
+
+            self.canvas_offset = point(
+                px(screen_center_x - item_center_x * self.zoom),
+                px(screen_center_y - item_center_y * self.zoom),
+            );
+
+            self.mark_dirty();
+        }
+    }
+
+    /// Find items matching a search query (searches display names)
+    pub fn find_items(&self, query: &str) -> Vec<(u64, String)> {
+        let query_lower = query.to_lowercase();
+        self.items
+            .iter()
+            .filter(|item| {
+                item.content
+                    .display_name()
+                    .to_lowercase()
+                    .contains(&query_lower)
+            })
+            .map(|item| (item.id, item.content.display_name()))
+            .collect()
     }
 
     /// Mark the board as dirty (needing save)

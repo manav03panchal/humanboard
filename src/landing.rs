@@ -2,24 +2,23 @@ use crate::board_index::{BoardIndex, BoardMetadata};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::Sizable;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
+use gpui_component::{Icon, IconName, h_flex, v_flex};
 
 /// Render the landing page header bar
 pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
-    div()
+    h_flex()
         .w_full()
         .h(px(64.0))
         .bg(rgb(0x0a0a0a))
         .border_b_1()
         .border_color(rgb(0x222222))
-        .flex()
         .items_center()
         .justify_between()
         .px_6()
         .child(
-            div()
-                .flex()
-                .items_center()
+            h_flex()
                 .gap_3()
                 .child(
                     div()
@@ -36,23 +35,13 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 ),
         )
         .child(
-            div()
-                .px_4()
-                .py_2()
-                .bg(rgb(0x2563eb))
-                .hover(|s| s.bg(rgb(0x3b82f6)))
-                .rounded(px(6.0))
-                .cursor_pointer()
-                .text_sm()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(0xffffff))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        this.create_new_board(cx);
-                    }),
-                )
-                .child("+ New Board"),
+            Button::new("new-board")
+                .primary()
+                .icon(Icon::new(IconName::Plus))
+                .label("New Board")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.create_new_board(cx);
+                })),
         )
 }
 
@@ -67,7 +56,7 @@ pub fn render_board_card(
     let board_id_for_edit = metadata.id.clone();
     let board_id_for_delete = metadata.id.clone();
 
-    div()
+    v_flex()
         .w(px(240.0))
         .bg(rgb(0x141414))
         .border_1()
@@ -97,59 +86,36 @@ pub fn render_board_card(
         )
         .child(
             // Info area
-            div()
+            v_flex()
                 .p_3()
-                .flex()
-                .flex_col()
                 .gap_2()
                 .child(
                     // Board name (editable)
                     if is_editing {
                         if let Some(input_state) = edit_input {
-                            div()
-                                .flex()
-                                .flex_col()
+                            v_flex()
                                 .gap_2()
                                 .child(Input::new(input_state).small().w_full())
                                 .child(
-                                    div()
-                                        .flex()
+                                    h_flex()
                                         .gap_2()
                                         .child(
-                                            div()
-                                                .px_2()
-                                                .py_1()
-                                                .bg(rgb(0x2563eb))
-                                                .hover(|s| s.bg(rgb(0x3b82f6)))
-                                                .rounded(px(4.0))
-                                                .text_xs()
-                                                .text_color(rgb(0xffffff))
-                                                .cursor_pointer()
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    cx.listener(|this, _, _, cx| {
-                                                        this.finish_editing_board(cx);
-                                                    }),
-                                                )
-                                                .child("Save"),
+                                            Button::new("save-board")
+                                                .primary()
+                                                .small()
+                                                .label("Save")
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.finish_editing_board(cx);
+                                                })),
                                         )
                                         .child(
-                                            div()
-                                                .px_2()
-                                                .py_1()
-                                                .bg(rgb(0x333333))
-                                                .hover(|s| s.bg(rgb(0x444444)))
-                                                .rounded(px(4.0))
-                                                .text_xs()
-                                                .text_color(rgb(0xffffff))
-                                                .cursor_pointer()
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    cx.listener(|this, _, _, cx| {
-                                                        this.cancel_editing(cx);
-                                                    }),
-                                                )
-                                                .child("Cancel"),
+                                            Button::new("cancel-edit")
+                                                .ghost()
+                                                .small()
+                                                .label("Cancel")
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.cancel_editing(cx);
+                                                })),
                                         ),
                                 )
                         } else {
@@ -167,8 +133,7 @@ pub fn render_board_card(
                 .when(!is_editing, |d| {
                     d.child(
                         // Date and actions row
-                        div()
-                            .flex()
+                        h_flex()
                             .items_center()
                             .justify_between()
                             .child(
@@ -178,53 +143,44 @@ pub fn render_board_card(
                                     .child(metadata.formatted_date()),
                             )
                             .child(
-                                div()
-                                    .flex()
+                                h_flex()
                                     .gap_1()
                                     .child(
-                                        // Edit button
-                                        div()
-                                            .px_2()
-                                            .py_1()
-                                            .rounded(px(4.0))
-                                            .text_xs()
-                                            .text_color(rgb(0x888888))
-                                            .hover(|s| {
-                                                s.bg(rgb(0x2a2a2a)).text_color(rgb(0xffffff))
-                                            })
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(move |this, _, window, cx| {
-                                                    this.start_editing_board(
-                                                        board_id_for_edit.clone(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                }),
-                                            )
-                                            .child("Edit"),
+                                        Button::new(SharedString::from(format!(
+                                            "edit-{}",
+                                            board_id_for_edit
+                                        )))
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(Icon::new(IconName::Settings).size(px(12.0)))
+                                        .label("Edit")
+                                        .on_click(
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.start_editing_board(
+                                                    board_id_for_edit.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            }),
+                                        ),
                                     )
                                     .child(
-                                        // Delete button
-                                        div()
-                                            .px_2()
-                                            .py_1()
-                                            .rounded(px(4.0))
-                                            .text_xs()
-                                            .text_color(rgb(0x888888))
-                                            .hover(|s| {
-                                                s.bg(rgb(0x3a2a2a)).text_color(rgb(0xff6b6b))
-                                            })
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(move |this, _, _, cx| {
-                                                    this.confirm_delete_board(
-                                                        board_id_for_delete.clone(),
-                                                        cx,
-                                                    );
-                                                }),
-                                            )
-                                            .child("Delete"),
+                                        Button::new(SharedString::from(format!(
+                                            "delete-{}",
+                                            board_id_for_delete
+                                        )))
+                                        .danger()
+                                        .xsmall()
+                                        .icon(Icon::new(IconName::Delete).size(px(12.0)))
+                                        .label("Delete")
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.confirm_delete_board(
+                                                    board_id_for_delete.clone(),
+                                                    cx,
+                                                );
+                                            }),
+                                        ),
                                     ),
                             ),
                     )
@@ -234,18 +190,14 @@ pub fn render_board_card(
 
 /// Render the empty state when no boards exist
 pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
-    div()
+    v_flex()
         .flex_1()
-        .flex()
-        .flex_col()
         .items_center()
         .justify_center()
         .gap_6()
         .child(div().text_2xl().text_color(rgb(0x333333)).child("▦"))
         .child(
-            div()
-                .flex()
-                .flex_col()
+            v_flex()
                 .items_center()
                 .gap_2()
                 .child(
@@ -263,24 +215,13 @@ pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 ),
         )
         .child(
-            div()
-                .mt_4()
-                .px_6()
-                .py_3()
-                .bg(rgb(0x2563eb))
-                .hover(|s| s.bg(rgb(0x3b82f6)))
-                .rounded(px(8.0))
-                .cursor_pointer()
-                .text_base()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(0xffffff))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        this.create_new_board(cx);
-                    }),
-                )
-                .child("+ Create Board"),
+            Button::new("create-first-board")
+                .primary()
+                .icon(Icon::new(IconName::Plus))
+                .label("Create Board")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.create_new_board(cx);
+                })),
         )
 }
 
@@ -316,6 +257,7 @@ pub fn render_delete_dialog(
 ) -> Div {
     let board_id_confirm = board_id.to_string();
 
+    // Modal backdrop
     div()
         .absolute()
         .inset_0()
@@ -323,78 +265,56 @@ pub fn render_delete_dialog(
         .flex()
         .items_center()
         .justify_center()
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(|this, _, _, cx| {
-                this.cancel_delete(cx);
-            }),
-        )
         .child(
-            div()
+            v_flex()
+                .id("delete-dialog")
                 .w(px(400.0))
                 .bg(rgb(0x1a1a1a))
                 .border_1()
                 .border_color(rgb(0x333333))
                 .rounded(px(12.0))
                 .p_6()
-                .flex()
-                .flex_col()
                 .gap_4()
-                .on_mouse_down(MouseButton::Left, |_, _, _| {
-                    // Dialog area - clicking here doesn't close
-                })
                 .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(0xffffff))
-                        .child("Delete Board?"),
+                    h_flex()
+                        .gap_3()
+                        .child(
+                            Icon::new(IconName::TriangleAlert)
+                                .size(px(24.0))
+                                .text_color(rgb(0xef4444)),
+                        )
+                        .child(
+                            div()
+                                .text_lg()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(0xffffff))
+                                .child("Delete Board?"),
+                        ),
                 )
                 .child(div().text_sm().text_color(rgb(0xaaaaaa)).child(format!(
                     "Are you sure you want to delete \"{}\"? This action cannot be undone.",
                     board_name
                 )))
                 .child(
-                    div()
-                        .flex()
+                    h_flex()
                         .justify_end()
                         .gap_3()
                         .mt_2()
                         .child(
-                            div()
-                                .px_4()
-                                .py_2()
-                                .bg(rgb(0x2a2a2a))
-                                .hover(|s| s.bg(rgb(0x3a3a3a)))
-                                .rounded(px(6.0))
-                                .cursor_pointer()
-                                .text_sm()
-                                .text_color(rgb(0xffffff))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.cancel_delete(cx);
-                                    }),
-                                )
-                                .child("Cancel"),
+                            Button::new("cancel-delete")
+                                .ghost()
+                                .label("Cancel")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.cancel_delete(cx);
+                                })),
                         )
                         .child(
-                            div()
-                                .px_4()
-                                .py_2()
-                                .bg(rgb(0xdc2626))
-                                .hover(|s| s.bg(rgb(0xef4444)))
-                                .rounded(px(6.0))
-                                .cursor_pointer()
-                                .text_sm()
-                                .text_color(rgb(0xffffff))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.delete_board(board_id_confirm.clone(), cx);
-                                    }),
-                                )
-                                .child("Delete"),
+                            Button::new("confirm-delete")
+                                .danger()
+                                .label("Delete")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.delete_board(board_id_confirm.clone(), cx);
+                                })),
                         ),
                 ),
         )

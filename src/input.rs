@@ -38,13 +38,16 @@ impl Humanboard {
 
         // Check if clicking on an item (in reverse order so top items are checked first)
         // Extract only the ID to avoid cloning the entire item
+        // Account for 40px header offset
+        let header_offset = 40.0;
         let clicked_item_id = board
             .items
             .iter()
             .rev()
             .find(|item| {
                 let scaled_x = item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
-                let scaled_y = item.position.1 * board.zoom + f32::from(board.canvas_offset.y);
+                let scaled_y =
+                    item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
                 let scaled_width = item.size.0 * board.zoom;
                 let scaled_height = item.size.1 * board.zoom;
 
@@ -69,7 +72,7 @@ impl Humanboard {
                     });
 
                 if let Some(path) = content_path {
-                    self.open_preview(path, cx);
+                    self.open_preview(path, window, cx);
                     return;
                 }
             }
@@ -82,7 +85,8 @@ impl Humanboard {
 
             if let Some((position, size)) = item_info {
                 let scaled_x = position.0 * board.zoom + f32::from(board.canvas_offset.x);
-                let scaled_y = position.1 * board.zoom + f32::from(board.canvas_offset.y);
+                let scaled_y =
+                    position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
                 let scaled_width = size.0 * board.zoom;
                 let scaled_height = size.1 * board.zoom;
 
@@ -205,8 +209,11 @@ impl Humanboard {
                 let zoom = board.zoom;
                 let canvas_offset_x = f32::from(board.canvas_offset.x);
                 let canvas_offset_y = f32::from(board.canvas_offset.y);
+                let header_offset = 40.0; // Account for header bar
                 let new_x = (f32::from(event.position.x - offset.x) - canvas_offset_x) / zoom;
-                let new_y = (f32::from(event.position.y - offset.y) - canvas_offset_y) / zoom;
+                let new_y =
+                    (f32::from(event.position.y - offset.y) - canvas_offset_y - header_offset)
+                        / zoom;
 
                 // Use get_item_mut for O(1) lookup
                 if let Some(item) = board.get_item_mut(item_id) {
@@ -231,9 +238,27 @@ impl Humanboard {
     pub fn handle_scroll(
         &mut self,
         event: &ScrollWheelEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Check if scrolling over preview panel - if so, let it handle its own scroll
+        if let Some(ref preview) = self.preview {
+            let bounds = window.bounds();
+            let in_preview = match preview.split {
+                crate::app::SplitDirection::Vertical => {
+                    let preview_start = f32::from(bounds.size.width) * (1.0 - preview.size);
+                    f32::from(event.position.x) > preview_start
+                }
+                crate::app::SplitDirection::Horizontal => {
+                    let preview_start = f32::from(bounds.size.height) * (1.0 - preview.size);
+                    f32::from(event.position.y) > preview_start
+                }
+            };
+            if in_preview {
+                return; // Let the preview panel handle scrolling
+            }
+        }
+
         let Some(ref mut board) = self.board else {
             return;
         };

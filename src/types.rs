@@ -25,6 +25,7 @@ pub enum ItemContent {
     Markdown {
         path: PathBuf,
         title: String,
+        content: String, // Store content for preview
     },
 }
 
@@ -93,7 +94,7 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
-            ItemContent::Markdown { .. } => (200.0, 60.0), // Collapsed card
+            ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
         }
     }
 
@@ -148,9 +149,11 @@ impl ItemContent {
                         .and_then(|s| s.to_str())
                         .unwrap_or("Untitled")
                         .to_string();
+                    let content = std::fs::read_to_string(path).unwrap_or_default();
                     ItemContent::Markdown {
                         path: path.clone(),
                         title,
+                        content,
                     }
                 }
                 "txt" | "rs" | "js" | "json" | "html" | "css" => {
