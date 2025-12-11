@@ -13,6 +13,7 @@ gpui-component = { version = "0.5", features = ["webview"] }
 wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = "0.6"
 pdfium-render = { version = "0.8", features = ["image"] }
+tiny_http = "0.12"
 
 [profile.release]
 opt-level = 3

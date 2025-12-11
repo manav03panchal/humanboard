@@ -1,13 +1,15 @@
 use gpui::*;
 use humanboard::actions::{
-    ClosePreview, CloseTab, DeleteSelected, NextPage, NextTab, OpenFile, PdfZoomIn, PdfZoomOut,
-    PdfZoomReset, PrevPage, PrevTab, Quit, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    ClosePreview, CloseTab, DeleteSelected, GoHome, NewBoard, NextPage, NextTab, OpenFile, Paste,
+    PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Quit, Redo, ShowShortcuts, ToggleSplit,
+    Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.activate(true);
+        gpui_component::init(cx);
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
@@ -33,6 +35,10 @@ fn main() {
             KeyBinding::new("cmd-shift-]", NextTab, None),
             KeyBinding::new("cmd-shift-[", PrevTab, None),
             KeyBinding::new("cmd-w", CloseTab, None),
+            KeyBinding::new("cmd-n", NewBoard, None),
+            KeyBinding::new("cmd-h", GoHome, None),
+            KeyBinding::new("cmd-/", ShowShortcuts, None),
+            KeyBinding::new("cmd-v", Paste, None),
         ]);
 
         cx.open_window(
@@ -51,7 +57,10 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(Humanboard::new),
+            |window, cx| {
+                let app_view = cx.new(Humanboard::new);
+                cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
+            },
         )
         .unwrap();
     });

@@ -23,20 +23,26 @@ actions!(
         NextTab,
         PrevTab,
         CloseTab,
-        OpenFile
+        OpenFile,
+        GoHome,
+        NewBoard,
+        ShowShortcuts,
+        Paste
     ]
 );
 
 impl Humanboard {
     pub fn zoom_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ref mut board) = self.board else {
+            return;
+        };
+
         let bounds = window.bounds();
         let window_size = bounds.size;
 
-        // Calculate center point based on canvas area (accounting for preview panel if open)
         let (center_x, center_y) = if let Some(ref preview) = self.preview {
             match preview.split {
                 crate::app::SplitDirection::Vertical => {
-                    // Canvas is on the left side
                     let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
                     (
                         px(canvas_width / 2.0),
@@ -44,7 +50,6 @@ impl Humanboard {
                     )
                 }
                 crate::app::SplitDirection::Horizontal => {
-                    // Canvas is on the top
                     let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
                     (
                         px(f32::from(window_size.width) / 2.0),
@@ -53,36 +58,37 @@ impl Humanboard {
                 }
             }
         } else {
-            // No preview panel, use full window center
             (
                 px(f32::from(window_size.width) / 2.0),
                 px(f32::from(window_size.height) / 2.0),
             )
         };
 
-        let old_zoom = self.board.zoom;
-        self.board.zoom = (self.board.zoom * 1.2).clamp(0.1, 10.0);
+        let old_zoom = board.zoom;
+        board.zoom = (board.zoom * 1.2).clamp(0.1, 10.0);
 
-        let zoom_factor = self.board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - self.board.canvas_offset.x;
-        let mouse_canvas_y = center_y - self.board.canvas_offset.y;
+        let zoom_factor = board.zoom / old_zoom;
+        let mouse_canvas_x = center_x - board.canvas_offset.x;
+        let mouse_canvas_y = center_y - board.canvas_offset.y;
 
-        self.board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        self.board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
+        board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
+        board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
 
-        self.board.save();
+        board.save();
         cx.notify();
     }
 
     pub fn zoom_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ref mut board) = self.board else {
+            return;
+        };
+
         let bounds = window.bounds();
         let window_size = bounds.size;
 
-        // Calculate center point based on canvas area (accounting for preview panel if open)
         let (center_x, center_y) = if let Some(ref preview) = self.preview {
             match preview.split {
                 crate::app::SplitDirection::Vertical => {
-                    // Canvas is on the left side
                     let canvas_width = f32::from(window_size.width) * (1.0 - preview.size);
                     (
                         px(canvas_width / 2.0),
@@ -90,7 +96,6 @@ impl Humanboard {
                     )
                 }
                 crate::app::SplitDirection::Horizontal => {
-                    // Canvas is on the top
                     let canvas_height = f32::from(window_size.height) * (1.0 - preview.size);
                     (
                         px(f32::from(window_size.width) / 2.0),
@@ -99,54 +104,61 @@ impl Humanboard {
                 }
             }
         } else {
-            // No preview panel, use full window center
             (
                 px(f32::from(window_size.width) / 2.0),
                 px(f32::from(window_size.height) / 2.0),
             )
         };
 
-        let old_zoom = self.board.zoom;
-        self.board.zoom = (self.board.zoom / 1.2).clamp(0.1, 10.0);
+        let old_zoom = board.zoom;
+        board.zoom = (board.zoom / 1.2).clamp(0.1, 10.0);
 
-        let zoom_factor = self.board.zoom / old_zoom;
-        let mouse_canvas_x = center_x - self.board.canvas_offset.x;
-        let mouse_canvas_y = center_y - self.board.canvas_offset.y;
+        let zoom_factor = board.zoom / old_zoom;
+        let mouse_canvas_x = center_x - board.canvas_offset.x;
+        let mouse_canvas_y = center_y - board.canvas_offset.y;
 
-        self.board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
-        self.board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
+        board.canvas_offset.x = center_x - mouse_canvas_x * zoom_factor;
+        board.canvas_offset.y = center_y - mouse_canvas_y * zoom_factor;
 
-        self.board.save();
+        board.save();
         cx.notify();
     }
 
     pub fn zoom_reset(&mut self, cx: &mut Context<Self>) {
-        self.board.zoom = 1.0;
-        self.board.save();
-        cx.notify();
+        if let Some(ref mut board) = self.board {
+            board.zoom = 1.0;
+            board.save();
+            cx.notify();
+        }
     }
 
     pub fn delete_selected(&mut self, cx: &mut Context<Self>) {
         if let Some(selected_id) = self.selected_item {
-            self.board.items.retain(|item| item.id != selected_id);
-            self.selected_item = None;
-            self.board.push_history();
-            self.board.save();
-            cx.notify();
+            if let Some(ref mut board) = self.board {
+                board.items.retain(|item| item.id != selected_id);
+                self.selected_item = None;
+                board.push_history();
+                board.save();
+                cx.notify();
+            }
         }
     }
 
     pub fn undo(&mut self, cx: &mut Context<Self>) {
-        if self.board.undo() {
-            self.selected_item = None;
-            cx.notify();
+        if let Some(ref mut board) = self.board {
+            if board.undo() {
+                self.selected_item = None;
+                cx.notify();
+            }
         }
     }
 
     pub fn redo(&mut self, cx: &mut Context<Self>) {
-        if self.board.redo() {
-            self.selected_item = None;
-            cx.notify();
+        if let Some(ref mut board) = self.board {
+            if board.redo() {
+                self.selected_item = None;
+                cx.notify();
+            }
         }
     }
 

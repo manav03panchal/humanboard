@@ -1,3 +1,4 @@
+use crate::board_index::BoardIndex;
 use crate::types::{CanvasItem, ItemContent};
 use gpui::{Pixels, Point, point, px};
 use serde::{Deserialize, Serialize};
@@ -13,37 +14,26 @@ pub struct BoardState {
 }
 
 impl BoardState {
-    pub fn save(&self) {
+    pub fn save_to_path(&self, path: &PathBuf) {
         if let Ok(json) = serde_json::to_string_pretty(&self) {
-            let save_path = Self::save_path();
-
-            if let Some(parent) = save_path.parent() {
+            if let Some(parent) = path.parent() {
                 let _ = fs::create_dir_all(parent);
             }
-
-            let _ = fs::write(&save_path, json);
+            let _ = fs::write(path, json);
         }
     }
 
-    pub fn load() -> Option<Self> {
-        let save_path = Self::save_path();
-
-        if let Ok(json) = fs::read_to_string(&save_path) {
+    pub fn load_from_path(path: &PathBuf) -> Option<Self> {
+        if let Ok(json) = fs::read_to_string(path) {
             serde_json::from_str(&json).ok()
         } else {
             None
         }
     }
-
-    fn save_path() -> PathBuf {
-        dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("humanboard")
-            .join("board.json")
-    }
 }
 
 pub struct Board {
+    pub id: String,
     pub canvas_offset: Point<Pixels>,
     pub zoom: f32,
     pub items: Vec<CanvasItem>,
@@ -53,10 +43,14 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new() -> Self {
-        if let Some(state) = BoardState::load() {
+    /// Load a board by ID, or create a new empty one
+    pub fn load(id: String) -> Self {
+        let board_path = BoardIndex::board_path(&id);
+
+        if let Some(state) = BoardState::load_from_path(&board_path) {
             let initial_state = state.clone();
             Self {
+                id,
                 canvas_offset: point(px(state.canvas_offset.0), px(state.canvas_offset.1)),
                 zoom: state.zoom,
                 items: state.items,
@@ -65,20 +59,26 @@ impl Board {
                 history_index: 0,
             }
         } else {
-            let initial_state = BoardState {
-                canvas_offset: (0.0, 0.0),
-                zoom: 1.0,
-                items: Vec::new(),
-                next_item_id: 0,
-            };
-            Self {
-                canvas_offset: point(px(0.0), px(0.0)),
-                zoom: 1.0,
-                items: Vec::new(),
-                next_item_id: 0,
-                history: vec![initial_state],
-                history_index: 0,
-            }
+            Self::new_empty(id)
+        }
+    }
+
+    /// Create a new empty board with the given ID
+    pub fn new_empty(id: String) -> Self {
+        let initial_state = BoardState {
+            canvas_offset: (0.0, 0.0),
+            zoom: 1.0,
+            items: Vec::new(),
+            next_item_id: 0,
+        };
+        Self {
+            id,
+            canvas_offset: point(px(0.0), px(0.0)),
+            zoom: 1.0,
+            items: Vec::new(),
+            next_item_id: 0,
+            history: vec![initial_state],
+            history_index: 0,
         }
     }
 
@@ -108,6 +108,22 @@ impl Board {
         }
     }
 
+    pub fn add_url(&mut self, url: &str, position: Point<Pixels>) {
+        use crate::types::extract_youtube_id;
+
+        let content = if let Some(video_id) = extract_youtube_id(url) {
+            ItemContent::YouTube(video_id)
+        } else {
+            ItemContent::Link(url.to_string())
+        };
+
+        let canvas_pos = point(
+            px((f32::from(position.x) - f32::from(self.canvas_offset.x)) / self.zoom),
+            px((f32::from(position.y) - f32::from(self.canvas_offset.y)) / self.zoom),
+        );
+        self.add_item(canvas_pos, content);
+    }
+
     pub fn save(&self) {
         let state = BoardState {
             canvas_offset: (
@@ -118,7 +134,8 @@ impl Board {
             items: self.items.clone(),
             next_item_id: self.next_item_id,
         };
-        state.save();
+        let board_path = BoardIndex::board_path(&self.id);
+        state.save_to_path(&board_path);
     }
 
     pub fn push_history(&mut self) {
@@ -177,21 +194,8 @@ impl Board {
 
     /// Create a fresh board for testing (doesn't load from disk)
     #[cfg(test)]
-    pub fn new_empty() -> Self {
-        let initial_state = BoardState {
-            canvas_offset: (0.0, 0.0),
-            zoom: 1.0,
-            items: Vec::new(),
-            next_item_id: 0,
-        };
-        Self {
-            canvas_offset: point(px(0.0), px(0.0)),
-            zoom: 1.0,
-            items: Vec::new(),
-            next_item_id: 0,
-            history: vec![initial_state],
-            history_index: 0,
-        }
+    pub fn new_for_test() -> Self {
+        Self::new_empty("test-board".to_string())
     }
 }
 
@@ -201,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_board_new_empty() {
-        let board = Board::new_empty();
+        let board = Board::new_for_test();
         assert_eq!(board.zoom, 1.0);
         assert!(board.items.is_empty());
         assert_eq!(board.next_item_id, 0);
@@ -209,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_add_item() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
         let pos = point(px(100.0), px(200.0));
         board.add_item(pos, ItemContent::Text("Test".to_string()));
 
@@ -220,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_add_multiple_items() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
 
         board.add_item(
             point(px(0.0), px(0.0)),
@@ -244,19 +248,19 @@ mod tests {
 
     #[test]
     fn test_undo_empty() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
         assert!(!board.undo()); // Can't undo with no history
     }
 
     #[test]
     fn test_redo_empty() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
         assert!(!board.redo()); // Can't redo with no history
     }
 
     #[test]
     fn test_undo_after_add() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
         board.add_item(
             point(px(0.0), px(0.0)),
             ItemContent::Text("Test".to_string()),
@@ -269,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_redo_after_undo() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
         board.add_item(
             point(px(0.0), px(0.0)),
             ItemContent::Text("Test".to_string()),
@@ -284,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_undo_redo_multiple() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
 
         board.add_item(
             point(px(0.0), px(0.0)),
@@ -312,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_undo_then_add_clears_redo() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
 
         board.add_item(
             point(px(0.0), px(0.0)),
@@ -360,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_history_limit() {
-        let mut board = Board::new_empty();
+        let mut board = Board::new_for_test();
 
         // Add 60 items (exceeds 50 limit)
         for i in 0..60 {

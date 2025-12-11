@@ -21,6 +21,39 @@ pub enum ItemContent {
         thumbnail: Option<PathBuf>,
     },
     Link(String),
+    YouTube(String), // Video ID
+}
+
+/// Extract YouTube video ID from various URL formats
+pub fn extract_youtube_id(url: &str) -> Option<String> {
+    // Handle youtu.be/VIDEO_ID
+    if url.contains("youtu.be/") {
+        return url
+            .split("youtu.be/")
+            .nth(1)
+            .and_then(|s| s.split(['?', '&', '#']).next())
+            .map(|s| s.to_string());
+    }
+
+    // Handle youtube.com/watch?v=VIDEO_ID
+    if url.contains("youtube.com/watch") {
+        return url
+            .split("v=")
+            .nth(1)
+            .and_then(|s| s.split(['&', '#']).next())
+            .map(|s| s.to_string());
+    }
+
+    // Handle youtube.com/embed/VIDEO_ID
+    if url.contains("youtube.com/embed/") {
+        return url
+            .split("youtube.com/embed/")
+            .nth(1)
+            .and_then(|s| s.split(['?', '&', '#']).next())
+            .map(|s| s.to_string());
+    }
+
+    None
 }
 
 impl ItemContent {
@@ -55,6 +88,7 @@ impl ItemContent {
             ItemContent::Video(_) => (400.0, 300.0),
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
+            ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
         }
     }
 
@@ -72,6 +106,7 @@ impl ItemContent {
                 .to_string(),
             ItemContent::Text(text) => text.clone(),
             ItemContent::Link(url) => url.clone(),
+            ItemContent::YouTube(id) => format!("YouTube: {}", id),
         }
     }
 
@@ -82,6 +117,7 @@ impl ItemContent {
             ItemContent::Pdf { .. } => "PDF",
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
+            ItemContent::YouTube(_) => "YOUTUBE",
         }
     }
 

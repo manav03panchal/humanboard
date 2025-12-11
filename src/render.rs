@@ -1,12 +1,18 @@
 use crate::actions::{
-    ClosePreview, CloseTab, DeleteSelected, NextPage, NextTab, OpenFile, PdfZoomIn, PdfZoomOut,
-    PdfZoomReset, PrevPage, PrevTab, Redo, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    ClosePreview, CloseTab, DeleteSelected, GoHome, NewBoard, NextPage, NextTab, OpenFile, Paste,
+    PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts, ToggleSplit, Undo,
+    ZoomIn, ZoomOut, ZoomReset,
 };
-use crate::app::{Humanboard, PdfTab, SplitDirection};
+use crate::app::{AppView, Humanboard, PdfTab, SplitDirection};
+use crate::landing::render_landing_page;
 use crate::types::{CanvasItem, ItemContent};
+use crate::youtube_webview::YouTubeWebView;
 use gpui::DefiniteLength::Fraction;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use std::collections::HashMap;
+
+const UI_FONT: &str = "Iosevka Nerd Font";
 
 // Render helper functions
 pub fn render_canvas(
@@ -49,6 +55,7 @@ fn render_item_backgrounds(
             ItemContent::Text(_) => hsla(0.6, 0.7, 0.5, 0.9),
             ItemContent::Pdf { .. } => hsla(0.0, 0.7, 0.5, 0.9),
             ItemContent::Link(_) => hsla(0.35, 0.7, 0.5, 0.9),
+            ItemContent::YouTube(_) => hsla(0.0, 0.8, 0.4, 0.9), // Red for YouTube
             _ => hsla(0.0, 0.0, 0.5, 0.9),
         };
 
@@ -68,6 +75,8 @@ pub fn render_items(
     canvas_offset: Point<Pixels>,
     zoom: f32,
     selected_item_id: Option<u64>,
+    youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    active_youtube_id: Option<u64>,
 ) -> Vec<Div> {
     items
         .iter()
@@ -116,6 +125,122 @@ pub fn render_items(
                             } else {
                                 d
                             }
+                        })
+                        .when(matches!(&item.content, ItemContent::YouTube(_)), |d| {
+                            let is_active = active_youtube_id == Some(item.id);
+                            let title_bar_height = 32.0 * zoom;
+                            let border_width = 3.0 * zoom;
+
+                            if is_active {
+                                // Show WebView with title bar overlay for dragging
+                                d.border(px(border_width))
+                                    .border_color(rgb(0x444444))
+                                    .rounded(px(8.0 * zoom))
+                                    // WebView fills the container
+                                    .when_some(youtube_webviews.get(&item.id), |d, yt_webview| {
+                                        d.child(yt_webview.webview())
+                                    })
+                                    // Title bar overlay at top for dragging
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top_0()
+                                            .left_0()
+                                            .right_0()
+                                            .h(px(title_bar_height))
+                                            .bg(hsla(0.0, 0.0, 0.0, 0.85))
+                                            .flex()
+                                            .items_center()
+                                            .justify_between()
+                                            .px(px(10.0 * zoom))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(6.0 * zoom))
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .text_color(rgb(0xff0000))
+                                                            .child("▶"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(rgb(0xaaaaaa))
+                                                            .child("YouTube — drag to move"),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(rgb(0x666666))
+                                                    .child("dbl-click to close"),
+                                            ),
+                                    )
+                            } else {
+                                // Show thumbnail/placeholder for inactive YouTube
+                                if let ItemContent::YouTube(video_id) = &item.content {
+                                    d.bg(rgb(0x0f0f0f))
+                                        .cursor(CursorStyle::PointingHand)
+                                        .child(
+                                            // YouTube thumbnail
+                                            img(format!(
+                                                "https://img.youtube.com/vi/{}/hqdefault.jpg",
+                                                video_id
+                                            ))
+                                            .size_full()
+                                            .object_fit(ObjectFit::Cover),
+                                        )
+                                        // Play button overlay
+                                        .child(
+                                            div()
+                                                .absolute()
+                                                .inset_0()
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(
+                                                    div()
+                                                        .w(px(68.0 * zoom))
+                                                        .h(px(48.0 * zoom))
+                                                        .bg(hsla(0.0, 0.0, 0.0, 0.8))
+                                                        .rounded(px(12.0 * zoom))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .child(
+                                                            div()
+                                                                .text_2xl()
+                                                                .text_color(rgb(0xff0000))
+                                                                .child("▶"),
+                                                        ),
+                                                ),
+                                        )
+                                        // "Double-click to play" hint
+                                        .child(
+                                            div()
+                                                .absolute()
+                                                .bottom(px(8.0 * zoom))
+                                                .left_0()
+                                                .right_0()
+                                                .flex()
+                                                .justify_center()
+                                                .child(
+                                                    div()
+                                                        .px(px(8.0 * zoom))
+                                                        .py(px(4.0 * zoom))
+                                                        .bg(hsla(0.0, 0.0, 0.0, 0.7))
+                                                        .rounded(px(4.0 * zoom))
+                                                        .text_xs()
+                                                        .text_color(rgb(0xaaaaaa))
+                                                        .child("Double-click to play"),
+                                                ),
+                                        )
+                                } else {
+                                    d
+                                }
+                            }
                         }),
                 )
                 .when(is_selected, |parent| {
@@ -143,6 +268,7 @@ pub fn render_footer_bar(
     zoom: f32,
     canvas_offset: Point<Pixels>,
     selected_item_name: Option<String>,
+    board_name: Option<String>,
 ) -> Div {
     div()
         .absolute()
@@ -168,7 +294,7 @@ pub fn render_footer_bar(
                     div()
                         .font_weight(FontWeight::BOLD)
                         .text_color(rgb(0xffffff))
-                        .child("Humanboard"),
+                        .child(board_name.unwrap_or_else(|| "Humanboard".to_string())),
                 )
                 .child(div().child(format!("Items: {}", item_count)))
                 .child(div().child(format!("Zoom: {:.2}x", zoom)))
@@ -190,7 +316,158 @@ pub fn render_stats_overlay(
     zoom: f32,
     canvas_offset: Point<Pixels>,
 ) -> Div {
-    render_footer_bar(fps, frame_count, item_count, zoom, canvas_offset, None)
+    render_footer_bar(
+        fps,
+        frame_count,
+        item_count,
+        zoom,
+        canvas_offset,
+        None,
+        None,
+    )
+}
+
+fn render_shortcut_row(key: &str, description: &str) -> Div {
+    div()
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .child(
+            div()
+                .text_sm()
+                .text_color(rgb(0xcccccc))
+                .child(description.to_string()),
+        )
+        .child(
+            div()
+                .px(px(8.0))
+                .py(px(4.0))
+                .bg(rgb(0x2a2a2a))
+                .border_1()
+                .border_color(rgb(0x3a3a3a))
+                .rounded(px(6.0))
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgb(0x999999))
+                .child(key.to_string()),
+        )
+}
+
+fn render_shortcut_section(title: &str, shortcuts: Vec<(&str, &str)>) -> Div {
+    let mut section = div().flex().flex_col().gap_1().child(
+        div()
+            .text_xs()
+            .font_weight(FontWeight::BOLD)
+            .text_color(rgb(0x666666))
+            .mb_1()
+            .child(title.to_string().to_uppercase()),
+    );
+
+    for (key, desc) in shortcuts {
+        section = section.child(render_shortcut_row(key, desc));
+    }
+
+    section
+}
+
+pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElement {
+    deferred(
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .bg(hsla(0.0, 0.0, 0.0, 0.8))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.show_shortcuts = false;
+                    cx.notify();
+                }),
+            )
+            .child(
+                div()
+                    .w(px(420.0))
+                    .bg(rgb(0x141414))
+                    .border_1()
+                    .border_color(rgb(0x2a2a2a))
+                    .rounded(px(16.0))
+                    .overflow_hidden()
+                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    // Header
+                    .child(
+                        div()
+                            .px_5()
+                            .py_4()
+                            .border_b_1()
+                            .border_color(rgb(0x2a2a2a))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_base()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(rgb(0xffffff))
+                                    .child("Keyboard Shortcuts"),
+                            )
+                            .child(
+                                div()
+                                    .px(px(8.0))
+                                    .py(px(4.0))
+                                    .bg(rgb(0x2a2a2a))
+                                    .rounded(px(6.0))
+                                    .text_xs()
+                                    .text_color(rgb(0x666666))
+                                    .child("Cmd+/"),
+                            ),
+                    )
+                    // Content
+                    .child(
+                        div()
+                            .p_5()
+                            .flex()
+                            .flex_col()
+                            .gap_5()
+                            .child(render_shortcut_section(
+                                "General",
+                                vec![
+                                    ("Cmd+N", "New board"),
+                                    ("Cmd+H", "Go home"),
+                                    ("Cmd+O", "Open file"),
+                                    ("Cmd+Q", "Quit"),
+                                ],
+                            ))
+                            .child(render_shortcut_section(
+                                "Canvas",
+                                vec![
+                                    ("Cmd+=", "Zoom in"),
+                                    ("Cmd+-", "Zoom out"),
+                                    ("Cmd+0", "Reset zoom"),
+                                    ("Del", "Delete selected"),
+                                    ("Cmd+Z", "Undo"),
+                                    ("Cmd+Shift+Z", "Redo"),
+                                ],
+                            ))
+                            .child(render_shortcut_section(
+                                "PDF Preview",
+                                vec![
+                                    ("T", "Toggle split"),
+                                    ("←  →", "Prev / Next page"),
+                                    ("+ - 0", "Zoom PDF"),
+                                    ("Cmd+]  [", "Next / Prev tab"),
+                                    ("Cmd+W", "Close tab"),
+                                    ("Esc", "Close preview"),
+                                ],
+                            )),
+                    ),
+            ),
+    )
+    .with_priority(1000)
 }
 
 pub fn render_selected_item_label(_name: String) -> Div {
@@ -395,7 +672,7 @@ pub fn render_preview_panel(
         )
 }
 
-pub fn render_splitter(direction: SplitDirection) -> Div {
+pub fn render_splitter(direction: SplitDirection, cx: &mut Context<Humanboard>) -> Div {
     match direction {
         SplitDirection::Vertical => div()
             .w(px(16.0))
@@ -403,6 +680,14 @@ pub fn render_splitter(direction: SplitDirection) -> Div {
             .bg(rgb(0x000000))
             .hover(|s| s.bg(rgb(0x1a1a1a)))
             .cursor(CursorStyle::ResizeLeftRight)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                    this.dragging_splitter = true;
+                    this.splitter_drag_start = Some(event.position);
+                    cx.notify();
+                }),
+            )
             .flex()
             .items_center()
             .justify_center()
@@ -414,11 +699,19 @@ pub fn render_splitter(direction: SplitDirection) -> Div {
                     .rounded(px(1.0)),
             ),
         SplitDirection::Horizontal => div()
-            .h(px(16.0))
+            .h(px(24.0))
             .w_full()
             .bg(rgb(0x000000))
             .hover(|s| s.bg(rgb(0x1a1a1a)))
             .cursor(CursorStyle::ResizeUpDown)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                    this.dragging_splitter = true;
+                    this.splitter_drag_start = Some(event.position);
+                    cx.notify();
+                }),
+            )
             .flex()
             .items_center()
             .justify_center()
@@ -439,6 +732,8 @@ fn render_canvas_area(
     items: Vec<CanvasItem>,
     items_for_render: Vec<CanvasItem>,
     selected_item_id: Option<u64>,
+    youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    active_youtube_id: Option<u64>,
 ) -> Div {
     div()
         .size_full()
@@ -451,6 +746,8 @@ fn render_canvas_area(
             canvas_offset,
             zoom,
             selected_item_id,
+            youtube_webviews,
+            active_youtube_id,
         ))
 }
 
@@ -459,11 +756,65 @@ impl Render for Humanboard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_fps();
 
+        // Route based on current view
+        let content = match &self.view {
+            AppView::Landing => self.render_landing_view(cx),
+            AppView::Board(_) => self.render_board_view(window, cx),
+        };
+
+        // Wrap everything in a container with the shortcuts overlay on top
+        div()
+            .size_full()
+            .font_family(UI_FONT)
+            .relative()
+            .child(content)
+            .when(self.show_shortcuts, |d| {
+                d.child(render_shortcuts_overlay(cx))
+            })
+    }
+}
+
+impl Humanboard {
+    fn render_landing_view(&mut self, cx: &mut Context<Self>) -> Div {
+        let deleting_board = self.deleting_board_id.as_ref().and_then(|id| {
+            self.board_index
+                .get_board(id)
+                .map(|meta| (id.as_str(), meta.name.as_str()))
+        });
+
+        let is_editing = self.editing_board_id.is_some();
+
+        div()
+            .size_full()
+            .track_focus(&self.focus_handle)
+            // Only steal focus when not editing (so Input can receive focus)
+            .when(!is_editing, |d| {
+                d.on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, window, _| {
+                        this.focus_handle.focus(window);
+                    }),
+                )
+            })
+            .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
+            .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
+            .child(render_landing_page(
+                &self.board_index,
+                self.editing_board_id.as_deref(),
+                self.edit_input.as_ref(),
+                deleting_board,
+                cx,
+            ))
+    }
+
+    fn render_board_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         // Poll for file picker results (from Cmd+O)
         if let Some(rx) = &self.file_drop_rx {
             if let Ok((pos, paths)) = rx.try_recv() {
-                self.board.handle_file_drop(pos, paths);
-                self.file_drop_rx = None; // Clear the receiver after processing
+                if let Some(ref mut board) = self.board {
+                    board.handle_file_drop(pos, paths);
+                }
+                self.file_drop_rx = None;
                 cx.notify();
             }
         }
@@ -473,25 +824,40 @@ impl Render for Humanboard {
             self.ensure_pdf_webview(window, cx);
         }
 
-        cx.notify();
+        // Ensure YouTube WebViews are created for any YouTube items
+        self.ensure_youtube_webviews(window, cx);
 
-        let canvas_offset = self.board.canvas_offset;
-        let zoom = self.board.zoom;
+        // Get board data (with fallback defaults if somehow no board)
+        let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
+            (
+                board.canvas_offset,
+                board.zoom,
+                board.items.clone(),
+                board.items.len(),
+            )
+        } else {
+            (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0)
+        };
+
         let fps = self.calculate_fps();
         let frame_count = self.frame_count;
-        let items = self.board.items.clone();
-        let items_for_render = self.board.items.clone();
-        let item_count = items.len();
+        let items_for_render = items.clone();
         let selected_item_id = self.selected_item;
         let selected_item_name = self.selected_item.and_then(|id| {
             self.board
-                .items
-                .iter()
-                .find(|i| i.id == id)
+                .as_ref()
+                .and_then(|b| b.items.iter().find(|i| i.id == id))
                 .map(|i| i.content.display_name())
         });
 
-        // Extract preview info including WebView entities for rendering
+        // Get board name from index
+        let board_name = if let AppView::Board(ref id) = self.view {
+            self.board_index.get_board(id).map(|m| m.name.clone())
+        } else {
+            None
+        };
+
+        // Extract preview info
         let preview_info = self
             .preview
             .as_ref()
@@ -510,6 +876,7 @@ impl Render for Humanboard {
             .on_mouse_up(MouseButton::Left, cx.listener(Humanboard::handle_mouse_up))
             .on_mouse_move(cx.listener(Humanboard::handle_mouse_move))
             .on_scroll_wheel(cx.listener(Humanboard::handle_scroll))
+            .on_action(cx.listener(|this, _: &GoHome, _, cx| this.go_home(cx)))
             .on_action(cx.listener(|this, _: &OpenFile, window, cx| this.open_file(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| this.zoom_in(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomOut, window, cx| this.zoom_out(window, cx)))
@@ -527,152 +894,152 @@ impl Render for Humanboard {
             .on_action(cx.listener(|this, _: &NextTab, _, cx| this.next_tab(cx)))
             .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.prev_tab(cx)))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.close_current_tab(cx)))
+            .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
+            .on_action(cx.listener(|this, _: &Paste, window, cx| this.paste(window, cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 if let Some(first_path) = paths.paths().first() {
-                    // Use tracked mouse position, or fall back to canvas center
                     let drop_pos = if let Some(pos) = this.last_drop_pos {
                         pos
                     } else {
-                        // Fallback: drop at canvas center
                         let bounds = window.bounds();
                         let window_size = bounds.size;
 
-                        let (canvas_center_x, canvas_center_y) = if let Some(ref preview) = this.preview
-                        {
-                            match preview.split {
-                                SplitDirection::Vertical => {
-                                    let canvas_width =
-                                        f32::from(window_size.width) * (1.0 - preview.size);
-                                    (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
+                        let (canvas_center_x, canvas_center_y) =
+                            if let Some(ref preview) = this.preview {
+                                match preview.split {
+                                    SplitDirection::Vertical => {
+                                        let canvas_width =
+                                            f32::from(window_size.width) * (1.0 - preview.size);
+                                        (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
+                                    }
+                                    SplitDirection::Horizontal => {
+                                        let canvas_height =
+                                            f32::from(window_size.height) * (1.0 - preview.size);
+                                        (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
+                                    }
                                 }
-                                SplitDirection::Horizontal => {
-                                    let canvas_height =
-                                        f32::from(window_size.height) * (1.0 - preview.size);
-                                    (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
-                                }
-                            }
-                        } else {
-                            (
-                                f32::from(window_size.width) / 2.0,
-                                f32::from(window_size.height) / 2.0,
-                            )
-                        };
+                            } else {
+                                (
+                                    f32::from(window_size.width) / 2.0,
+                                    f32::from(window_size.height) / 2.0,
+                                )
+                            };
 
                         point(px(canvas_center_x), px(canvas_center_y))
                     };
 
-                    this.board
-                        .handle_file_drop(drop_pos, vec![first_path.clone()]);
+                    if let Some(ref mut board) = this.board {
+                        board.handle_file_drop(drop_pos, vec![first_path.clone()]);
+                    }
                     cx.notify();
                 }
             }));
 
-        match preview_info {
+        let content = match preview_info {
             Some((split, size, tabs, active_tab)) => {
                 let canvas_size = 1.0 - size;
                 let preview_size = size;
 
                 match split {
-                    SplitDirection::Vertical => {
-                        // Horizontal layout: canvas | splitter | PDF WebView
-                        base.flex()
-                            .flex_row()
-                            .pb(px(28.0))
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .w(Fraction(canvas_size))
-                                    .h_full()
-                                    .child(render_canvas_area(
-                                        canvas_offset,
-                                        zoom,
-                                        items.clone(),
-                                        items_for_render.clone(),
-                                        selected_item_id,
-                                    )),
-                            )
-                            .child(render_splitter(SplitDirection::Vertical))
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .w(Fraction(preview_size))
-                                    .h_full()
-                                    .bg(rgb(0x000000))
-                                    .flex()
-                                    .flex_col()
-                                    .overflow_hidden()
-                                    .child(render_tab_bar(tabs, active_tab, cx))
-                                    .child(div().flex_1().relative().overflow_hidden().children(
-                                        tabs.iter().enumerate().map(|(index, tab)| {
-                                            let is_active = index == active_tab;
-                                            div()
-                                                .absolute()
-                                                .when(is_active, |d| d.size_full())
-                                                .when(!is_active, |d| d.size_0())
-                                                .when_some(
-                                                    tab.webview.as_ref().map(|wv| wv.webview()),
-                                                    |d, wv| d.child(wv),
-                                                )
-                                        }),
-                                    )),
-                            )
-                    }
-                    SplitDirection::Horizontal => {
-                        // Vertical layout: canvas / splitter / PDF WebView
-                        base.flex()
-                            .flex_col()
-                            .pb(px(28.0))
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .h(Fraction(canvas_size))
-                                    .w_full()
-                                    .child(render_canvas_area(
-                                        canvas_offset,
-                                        zoom,
-                                        items.clone(),
-                                        items_for_render.clone(),
-                                        selected_item_id,
-                                    )),
-                            )
-                            .child(render_splitter(SplitDirection::Horizontal))
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .h(Fraction(preview_size))
-                                    .w_full()
-                                    .bg(rgb(0x000000))
-                                    .flex()
-                                    .flex_col()
-                                    .overflow_hidden()
-                                    .child(render_tab_bar(tabs, active_tab, cx))
-                                    .child(div().flex_1().relative().overflow_hidden().children(
-                                        tabs.iter().enumerate().map(|(index, tab)| {
-                                            let is_active = index == active_tab;
-                                            div()
-                                                .absolute()
-                                                .when(is_active, |d| d.size_full())
-                                                .when(!is_active, |d| d.size_0())
-                                                .when_some(
-                                                    tab.webview.as_ref().map(|wv| wv.webview()),
-                                                    |d, wv| d.child(wv),
-                                                )
-                                        }),
-                                    )),
-                            )
-                    }
+                    SplitDirection::Vertical => base
+                        .flex()
+                        .flex_row()
+                        .pb(px(28.0))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .w(Fraction(canvas_size))
+                                .h_full()
+                                .child(render_canvas_area(
+                                    canvas_offset,
+                                    zoom,
+                                    items.clone(),
+                                    items_for_render.clone(),
+                                    selected_item_id,
+                                    &self.youtube_webviews,
+                                    self.active_youtube_id,
+                                )),
+                        )
+                        .child(render_splitter(SplitDirection::Vertical, cx))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .w(Fraction(preview_size))
+                                .h_full()
+                                .bg(rgb(0x000000))
+                                .flex()
+                                .flex_col()
+                                .overflow_hidden()
+                                .child(render_tab_bar(tabs, active_tab, cx))
+                                .child(div().flex_1().relative().overflow_hidden().children(
+                                    tabs.iter().enumerate().map(|(index, tab)| {
+                                        let is_active = index == active_tab;
+                                        div()
+                                            .absolute()
+                                            .when(is_active, |d| d.size_full())
+                                            .when(!is_active, |d| d.size_0())
+                                            .when_some(
+                                                tab.webview.as_ref().map(|wv| wv.webview()),
+                                                |d, wv| d.child(wv),
+                                            )
+                                    }),
+                                )),
+                        ),
+                    SplitDirection::Horizontal => base
+                        .flex()
+                        .flex_col()
+                        .pb(px(28.0))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .h(Fraction(canvas_size))
+                                .w_full()
+                                .child(render_canvas_area(
+                                    canvas_offset,
+                                    zoom,
+                                    items.clone(),
+                                    items_for_render.clone(),
+                                    selected_item_id,
+                                    &self.youtube_webviews,
+                                    self.active_youtube_id,
+                                )),
+                        )
+                        .child(render_splitter(SplitDirection::Horizontal, cx))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .h(Fraction(preview_size))
+                                .w_full()
+                                .bg(rgb(0x000000))
+                                .flex()
+                                .flex_col()
+                                .overflow_hidden()
+                                .child(render_tab_bar(tabs, active_tab, cx))
+                                .child(div().flex_1().relative().overflow_hidden().children(
+                                    tabs.iter().enumerate().map(|(index, tab)| {
+                                        let is_active = index == active_tab;
+                                        div()
+                                            .absolute()
+                                            .when(is_active, |d| d.size_full())
+                                            .when(!is_active, |d| d.size_0())
+                                            .when_some(
+                                                tab.webview.as_ref().map(|wv| wv.webview()),
+                                                |d, wv| d.child(wv),
+                                            )
+                                    }),
+                                )),
+                        ),
                 }
             }
-            None => {
-                // No preview - just show canvas
-                base.pb(px(28.0)).child(render_canvas_area(
-                    canvas_offset,
-                    zoom,
-                    items.clone(),
-                    items_for_render.clone(),
-                    selected_item_id,
-                ))
-            }
+            None => base.pb(px(28.0)).child(render_canvas_area(
+                canvas_offset,
+                zoom,
+                items.clone(),
+                items_for_render.clone(),
+                selected_item_id,
+                &self.youtube_webviews,
+                self.active_youtube_id,
+            )),
         }
         .child(render_footer_bar(
             fps,
@@ -681,6 +1048,9 @@ impl Render for Humanboard {
             zoom,
             canvas_offset,
             selected_item_name,
-        ))
+            board_name,
+        ));
+
+        content
     }
 }
