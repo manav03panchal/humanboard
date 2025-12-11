@@ -377,8 +377,9 @@ impl Humanboard {
                 },
             );
 
-            // Open in preview for editing
+            // Open in preview and immediately switch to edit mode
             self.open_preview(path, window, cx);
+            self.toggle_markdown_edit(window, cx);
         }
     }
 
