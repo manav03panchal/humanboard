@@ -133,7 +133,7 @@ pub fn render_tab_content(
                         .bg(bg)
                         .when(!is_editing, |d| {
                             // Preview mode - show rendered markdown (scrollable)
-                            d.child(crate::markdown_card::render_markdown_content(content, 1.0))
+                            d.child(crate::markdown_card::render_markdown_content(content, 1.0, cx))
                         })
                         .when(is_editing, |d| {
                             // Edit mode - code editor with markdown syntax highlighting

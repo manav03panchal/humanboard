@@ -220,12 +220,21 @@ impl TextSegment {
 }
 
 /// Render a paragraph with mixed inline styles
-fn render_styled_paragraph(segments: Vec<TextSegment>, zoom: f32) -> Div {
+fn render_styled_paragraph(
+    segments: Vec<TextSegment>,
+    zoom: f32,
+    text_color: Hsla,
+    text_bold: Hsla,
+    text_italic: Hsla,
+    text_muted: Hsla,
+    code_bg: Hsla,
+    code_text: Hsla,
+) -> Div {
     // For simple paragraphs without mixed styles, just render as text
     if segments.len() == 1 && !segments[0].code && !segments[0].bold && !segments[0].italic {
         return div()
             .text_size(px(13.0 * zoom))
-            .text_color(rgb(0xbbbbbb))
+            .text_color(text_color)
             .line_height(relative(1.6))
             .child(segments[0].text.clone());
     }
@@ -244,7 +253,7 @@ fn render_styled_paragraph(segments: Vec<TextSegment>, zoom: f32) -> Div {
 
     if all_plain {
         let combined: String = segments.iter().map(|s| s.text.as_str()).collect();
-        return container.text_color(rgb(0xbbbbbb)).child(combined);
+        return container.text_color(text_color).child(combined);
     }
 
     // For mixed formatting, use inline-flex with wrapping
@@ -266,22 +275,22 @@ fn render_styled_paragraph(segments: Vec<TextSegment>, zoom: f32) -> Div {
                 .flex_shrink_0()
                 .px(px(4.0 * zoom))
                 .py(px(1.0 * zoom))
-                .bg(rgb(0x2a2a2a))
+                .bg(code_bg)
                 .rounded(px(3.0 * zoom))
                 .text_size(px(12.0 * zoom))
                 .font_family("Iosevka Nerd Font")
-                .text_color(rgb(0xe06c75))
+                .text_color(code_text)
                 .child(text)
         } else {
-            let mut span = div().text_color(rgb(0xbbbbbb));
+            let mut span = div().text_color(text_color);
             if segment.bold {
-                span = span.font_weight(FontWeight::BOLD).text_color(rgb(0xffffff));
+                span = span.font_weight(FontWeight::BOLD).text_color(text_bold);
             }
             if segment.italic {
-                span = span.italic().text_color(rgb(0xcccccc));
+                span = span.italic().text_color(text_italic);
             }
             if segment.strikethrough {
-                span = span.text_color(rgb(0x666666));
+                span = span.text_color(text_muted);
             }
             span.child(text)
         };
@@ -292,7 +301,37 @@ fn render_styled_paragraph(segments: Vec<TextSegment>, zoom: f32) -> Div {
 }
 
 /// Render parsed markdown with rich styling
-pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
+pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Context<V>) -> Div {
+    use gpui_component::ActiveTheme as _;
+
+    // Get theme-aware colors
+    let is_dark = cx.theme().mode.is_dark();
+
+    // Text colors based on theme mode
+    let heading_1: Hsla = if is_dark { rgb(0xffffff).into() } else { rgb(0x1a1a1a).into() };
+    let heading_2: Hsla = if is_dark { rgb(0xf0f0f0).into() } else { rgb(0x2a2a2a).into() };
+    let heading_3: Hsla = if is_dark { rgb(0xe0e0e0).into() } else { rgb(0x3a3a3a).into() };
+    let heading_4: Hsla = if is_dark { rgb(0xd0d0d0).into() } else { rgb(0x4a4a4a).into() };
+    let heading_5: Hsla = if is_dark { rgb(0xc0c0c0).into() } else { rgb(0x5a5a5a).into() };
+    let text_color: Hsla = if is_dark { rgb(0xbbbbbb).into() } else { rgb(0x333333).into() };
+    let text_bold: Hsla = if is_dark { rgb(0xffffff).into() } else { rgb(0x000000).into() };
+    let text_italic: Hsla = if is_dark { rgb(0xcccccc).into() } else { rgb(0x444444).into() };
+    let text_muted: Hsla = if is_dark { rgb(0x666666).into() } else { rgb(0x999999).into() };
+    let text_quote: Hsla = if is_dark { rgb(0x888888).into() } else { rgb(0x666666).into() };
+
+    // Background and border colors
+    let code_bg: Hsla = if is_dark { rgb(0x2a2a2a).into() } else { rgb(0xf5f5f5).into() };
+    let code_border: Hsla = if is_dark { rgb(0x252525).into() } else { rgb(0xe0e0e0).into() };
+    let code_block_bg: Hsla = if is_dark { rgb(0x0d0d0d).into() } else { rgb(0xfafafa).into() };
+    let code_text: Hsla = if is_dark { rgb(0xe06c75).into() } else { rgb(0xd73a49).into() };
+    let code_block_color: Hsla = if is_dark { rgb(0x98c379).into() } else { rgb(0x22863a).into() };
+    let border_color: Hsla = if is_dark { rgb(0x333333).into() } else { rgb(0xd1d5da).into() };
+    let quote_border: Hsla = if is_dark { rgb(0x4a4a4a).into() } else { rgb(0xdfe2e5).into() };
+    let table_bg_header: Hsla = if is_dark { rgb(0x1a1a1a).into() } else { rgb(0xf6f8fa).into() };
+    let table_bg_alt: Hsla = if is_dark { rgb(0x0f0f0f).into() } else { rgb(0xffffff).into() };
+    let table_text: Hsla = if is_dark { rgb(0xaaaaaa).into() } else { rgb(0x444444).into() };
+    let table_text_header: Hsla = if is_dark { rgb(0xdddddd).into() } else { rgb(0x24292e).into() };
+    let hr_color: Hsla = if is_dark { rgb(0x333333).into() } else { rgb(0xe1e4e8).into() };
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
@@ -360,34 +399,34 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                     1 => div()
                         .text_size(px(26.0 * zoom))
                         .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0xffffff))
+                        .text_color(heading_1)
                         .pb(px(8.0 * zoom))
                         .mb(px(4.0 * zoom))
                         .border_b(px(1.0 * zoom))
-                        .border_color(rgb(0x333333))
+                        .border_color(border_color)
                         .child(text),
                     2 => div()
                         .text_size(px(22.0 * zoom))
                         .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0xf0f0f0))
+                        .text_color(heading_2)
                         .pt(px(8.0 * zoom))
                         .pb(px(4.0 * zoom))
                         .child(text),
                     3 => div()
                         .text_size(px(18.0 * zoom))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(0xe0e0e0))
+                        .text_color(heading_3)
                         .pt(px(6.0 * zoom))
                         .child(text),
                     4 => div()
                         .text_size(px(16.0 * zoom))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(0xd0d0d0))
+                        .text_color(heading_4)
                         .child(text),
                     _ => div()
                         .text_size(px(14.0 * zoom))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(0xc0c0c0))
+                        .text_color(heading_5)
                         .child(text),
                 };
                 container = container.child(heading);
@@ -411,7 +450,9 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                         blockquote_segments.append(&mut paragraph_segments);
                     } else {
                         let segments = std::mem::take(&mut paragraph_segments);
-                        container = container.child(render_styled_paragraph(segments, zoom));
+                        container = container.child(render_styled_paragraph(
+                            segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
+                        ));
                     }
                 }
             }
@@ -509,16 +550,16 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                 let text = std::mem::take(&mut code_block_text);
                 container = container.child(
                     div()
-                        .bg(rgb(0x0d0d0d))
+                        .bg(code_block_bg)
                         .rounded(px(6.0 * zoom))
                         .p(px(12.0 * zoom))
                         .border(px(1.0 * zoom))
-                        .border_color(rgb(0x252525))
+                        .border_color(code_border)
                         .overflow_x_hidden()
                         .child(
                             div()
                                 .text_size(px(12.0 * zoom))
-                                .text_color(rgb(0x98c379))
+                                .text_color(code_block_color)
                                 .font_family("Iosevka Nerd Font")
                                 .line_height(relative(1.5))
                                 .whitespace_nowrap()
@@ -539,10 +580,11 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                     div()
                         .pl(px(12.0 * zoom))
                         .border_l(px(3.0 * zoom))
-                        .border_color(rgb(0x4a4a4a))
+                        .border_color(quote_border)
                         .child(
-                            render_styled_paragraph(segments, zoom)
-                                .text_color(rgb(0x888888))
+                            render_styled_paragraph(
+                                segments, zoom, text_quote, text_bold, text_italic, text_muted, code_bg, code_text
+                            )
                                 .italic(),
                         ),
                 );
@@ -592,13 +634,15 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                             div()
                                 .w(px(20.0 * zoom))
                                 .text_size(px(13.0 * zoom))
-                                .text_color(rgb(0x666666))
+                                .text_color(text_muted)
                                 .child(bullet),
                         )
                         .child(
                             div()
                                 .flex_1()
-                                .child(render_styled_paragraph(segments, zoom)),
+                                .child(render_styled_paragraph(
+                                    segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
+                                )),
                         ),
                 );
             }
@@ -623,7 +667,7 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                         .flex()
                         .flex_col()
                         .border(px(1.0 * zoom))
-                        .border_color(rgb(0x333333))
+                        .border_color(border_color)
                         .rounded(px(4.0 * zoom))
                         .overflow_hidden();
 
@@ -632,9 +676,9 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                         let mut row_div = div()
                             .flex()
                             .when(is_header, |d| {
-                                d.bg(rgb(0x1a1a1a)).font_weight(FontWeight::SEMIBOLD)
+                                d.bg(table_bg_header).font_weight(FontWeight::SEMIBOLD)
                             })
-                            .when(!is_header && row_idx % 2 == 0, |d| d.bg(rgb(0x0f0f0f)));
+                            .when(!is_header && row_idx % 2 == 0, |d| d.bg(table_bg_alt));
 
                         for cell in row {
                             row_div = row_div.child(
@@ -643,12 +687,12 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                                     .px(px(12.0 * zoom))
                                     .py(px(8.0 * zoom))
                                     .border_r(px(1.0 * zoom))
-                                    .border_color(rgb(0x333333))
+                                    .border_color(border_color)
                                     .text_size(px(12.0 * zoom))
                                     .text_color(if is_header {
-                                        rgb(0xdddddd)
+                                        table_text_header
                                     } else {
-                                        rgb(0xaaaaaa)
+                                        table_text
                                     })
                                     .child(cell.clone()),
                             );
@@ -689,7 +733,7 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
                         .h(px(1.0 * zoom))
                         .w_full()
                         .my(px(16.0 * zoom))
-                        .bg(rgb(0x333333)),
+                        .bg(hr_color),
                 );
             }
 
@@ -763,7 +807,9 @@ pub fn render_markdown_content(content: &str, zoom: f32) -> Div {
         in_strikethrough,
     );
     if !paragraph_segments.is_empty() {
-        container = container.child(render_styled_paragraph(paragraph_segments, zoom));
+        container = container.child(render_styled_paragraph(
+            paragraph_segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
+        ));
     }
 
     container

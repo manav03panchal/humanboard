@@ -21,7 +21,8 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
         .border_color(border)
         .items_center()
         .justify_between()
-        .px_6()
+        .pl(px(80.0))
+        .pr_6()
         .child(
             h_flex()
                 .gap_3()

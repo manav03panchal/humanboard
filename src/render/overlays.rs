@@ -47,7 +47,8 @@ pub fn render_header_bar(
         .border_color(border)
         .items_center()
         .justify_between()
-        .px_4()
+        .pl(px(80.0))
+        .pr_4()
         // Left side - board name and home button
         .child(
             h_flex()

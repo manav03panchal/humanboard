@@ -53,8 +53,11 @@ impl Render for Humanboard {
         };
 
         // Wrap everything in a container with overlays on top
+        let bg = cx.theme().background;
+
         div()
             .size_full()
+            .bg(bg)
             .font_family(UI_FONT)
             .relative()
             .child(content)
