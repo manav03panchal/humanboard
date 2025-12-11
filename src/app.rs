@@ -21,13 +21,38 @@ pub enum SplitDirection {
     Horizontal, // Panel on the bottom
 }
 
-pub struct PdfTab {
-    pub path: PathBuf,
-    pub webview: Option<PdfWebView>,
+pub enum PreviewTab {
+    Pdf {
+        path: PathBuf,
+        webview: Option<PdfWebView>,
+    },
+    Markdown {
+        path: PathBuf,
+        content: String,
+        edited_content: String,
+        is_editing: bool,
+    },
+}
+
+impl PreviewTab {
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            PreviewTab::Pdf { path, .. } => path,
+            PreviewTab::Markdown { path, .. } => path,
+        }
+    }
+
+    pub fn title(&self) -> String {
+        self.path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Untitled")
+            .to_string()
+    }
 }
 
 pub struct PreviewPanel {
-    pub tabs: Vec<PdfTab>,
+    pub tabs: Vec<PreviewTab>,
     pub active_tab: usize,
     pub split: SplitDirection,
     pub size: f32, // 0.0 to 1.0, percentage of window
@@ -214,25 +239,36 @@ impl Humanboard {
     // ==================== Board Methods (existing) ====================
 
     pub fn open_preview(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        // Determine tab type based on extension
+        let tab = if path.extension().and_then(|e| e.to_str()) == Some("md") {
+            // Load markdown content
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            PreviewTab::Markdown {
+                path: path.clone(),
+                content: content.clone(),
+                edited_content: content,
+                is_editing: false,
+            }
+        } else {
+            PreviewTab::Pdf {
+                path: path.clone(),
+                webview: None,
+            }
+        };
+
         if let Some(ref mut preview) = self.preview {
-            // Check if PDF is already open in a tab
-            if let Some(index) = preview.tabs.iter().position(|tab| tab.path == path) {
+            // Check if file is already open in a tab
+            if let Some(index) = preview.tabs.iter().position(|t| t.path() == &path) {
                 preview.active_tab = index;
             } else {
                 // Add new tab
-                preview.tabs.push(PdfTab {
-                    path,
-                    webview: None,
-                });
+                preview.tabs.push(tab);
                 preview.active_tab = preview.tabs.len() - 1;
             }
         } else {
             // Create new preview panel with first tab
             self.preview = Some(PreviewPanel {
-                tabs: vec![PdfTab {
-                    path,
-                    webview: None,
-                }],
+                tabs: vec![tab],
                 active_tab: 0,
                 split: SplitDirection::Vertical,
                 size: 0.4,
@@ -243,15 +279,17 @@ impl Humanboard {
 
     pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
         if let Some(ref mut preview) = self.preview {
-            // Ensure all tabs have their WebViews created
+            // Ensure all PDF tabs have their WebViews created
             for tab in preview.tabs.iter_mut() {
-                if tab.webview.is_none() {
-                    match PdfWebView::new(tab.path.clone(), window, cx) {
-                        Ok(webview) => {
-                            tab.webview = Some(webview);
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to create PDF WebView: {}", e);
+                if let PreviewTab::Pdf { path, webview } = tab {
+                    if webview.is_none() {
+                        match PdfWebView::new(path.clone(), window, cx) {
+                            Ok(wv) => {
+                                *webview = Some(wv);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to create PDF WebView: {}", e);
+                            }
                         }
                     }
                 }
@@ -372,6 +410,40 @@ impl Humanboard {
                 SplitDirection::Horizontal => SplitDirection::Vertical,
             };
             cx.notify();
+        }
+    }
+
+    pub fn toggle_markdown_edit(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
+                if let PreviewTab::Markdown { is_editing, .. } = tab {
+                    *is_editing = !*is_editing;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub fn save_markdown(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
+                if let PreviewTab::Markdown {
+                    path: tab_path,
+                    content,
+                    edited_content,
+                    ..
+                } = tab
+                {
+                    if tab_path == &path {
+                        // Save to disk
+                        if std::fs::write(&path, &edited_content).is_ok() {
+                            // Update content to match edited_content
+                            *content = edited_content.clone();
+                            cx.notify();
+                        }
+                    }
+                }
+            }
         }
     }
 

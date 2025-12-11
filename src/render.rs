@@ -3,7 +3,7 @@ use crate::actions::{
     PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts, ToggleSplit, Undo,
     ZoomIn, ZoomOut, ZoomReset,
 };
-use crate::app::{AppView, Humanboard, PdfTab, SplitDirection};
+use crate::app::{AppView, Humanboard, PreviewTab, SplitDirection};
 use crate::landing::render_landing_page;
 use crate::types::{CanvasItem, ItemContent};
 use crate::youtube_webview::YouTubeWebView;
@@ -56,6 +56,7 @@ fn render_item_backgrounds(
             ItemContent::Pdf { .. } => hsla(0.0, 0.7, 0.5, 0.9),
             ItemContent::Link(_) => hsla(0.35, 0.7, 0.5, 0.9),
             ItemContent::YouTube(_) => hsla(0.0, 0.8, 0.4, 0.9), // Red for YouTube
+            ItemContent::Markdown { .. } => hsla(0.55, 0.6, 0.4, 0.9), // Purple for Markdown
             _ => hsla(0.0, 0.0, 0.5, 0.9),
         };
 
@@ -138,6 +139,31 @@ pub fn render_items(
                                         |d, yt_webview| d.child(yt_webview.webview()),
                                     ),
                                 )
+                        })
+                        .when(matches!(&item.content, ItemContent::Markdown { .. }), |d| {
+                            if let ItemContent::Markdown { title, .. } = &item.content {
+                                // Collapsed markdown card
+                                d.bg(rgb(0x1e1e2e))
+                                    .rounded(px(6.0 * zoom))
+                                    .border(px(1.0 * zoom))
+                                    .border_color(rgb(0x444466))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0 * zoom))
+                                    .px(px(12.0 * zoom))
+                                    .cursor(CursorStyle::PointingHand)
+                                    .child(div().text_base().text_color(rgb(0x8888ff)).child("📝"))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .text_sm()
+                                            .text_color(rgb(0xcccccc))
+                                            .overflow_hidden()
+                                            .child(title.clone()),
+                                    )
+                            } else {
+                                d
+                            }
                         }),
                 )
                 .when(is_selected, |parent| {
@@ -371,7 +397,11 @@ pub fn render_selected_item_label(_name: String) -> Div {
     div().size_0()
 }
 
-pub fn render_tab_bar(tabs: &Vec<PdfTab>, active_tab: usize, cx: &mut Context<Humanboard>) -> Div {
+pub fn render_tab_bar(
+    tabs: &Vec<PreviewTab>,
+    active_tab: usize,
+    cx: &mut Context<Humanboard>,
+) -> Div {
     div()
         .h(px(36.0))
         .w_full()
@@ -383,12 +413,8 @@ pub fn render_tab_bar(tabs: &Vec<PdfTab>, active_tab: usize, cx: &mut Context<Hu
         .overflow_x_hidden()
         .children(tabs.iter().enumerate().map(|(index, tab)| {
             let is_active = index == active_tab;
-            let filename = tab
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Unknown")
-                .to_string();
+            let filename = tab.title();
+            let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
 
             let display_name = if filename.len() > 20 {
                 format!("{}...", &filename[..17])
@@ -418,6 +444,17 @@ pub fn render_tab_bar(tabs: &Vec<PdfTab>, active_tab: usize, cx: &mut Context<Hu
                     cx.listener(move |this, _event, _window, cx| {
                         this.switch_tab(tab_index, cx);
                     }),
+                )
+                // Icon based on type
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(if is_markdown {
+                            rgb(0x8888ff)
+                        } else {
+                            rgb(0xff6666)
+                        })
+                        .child(if is_markdown { "📝" } else { "📄" }),
                 )
                 .child(
                     div()
@@ -453,6 +490,107 @@ pub fn render_tab_bar(tabs: &Vec<PdfTab>, active_tab: usize, cx: &mut Context<Hu
                         .child("×"),
                 )
         }))
+}
+
+pub fn render_tab_content(tab: &PreviewTab, is_active: bool, cx: &mut Context<Humanboard>) -> Div {
+    let base = div()
+        .absolute()
+        .when(is_active, |d| d.size_full())
+        .when(!is_active, |d| d.size_0());
+
+    match tab {
+        PreviewTab::Pdf { webview, .. } => {
+            base.when_some(webview.as_ref().map(|wv| wv.webview()), |d, wv| d.child(wv))
+        }
+        PreviewTab::Markdown {
+            content,
+            edited_content,
+            is_editing,
+            path,
+            ..
+        } => {
+            let content_clone = if *is_editing {
+                edited_content.clone()
+            } else {
+                content.clone()
+            };
+            let is_editing = *is_editing;
+            let path_clone = path.clone();
+            let has_changes = content != edited_content;
+
+            base.bg(rgb(0x1a1a1a))
+                .flex()
+                .flex_col()
+                .child(
+                    // Toolbar
+                    div()
+                        .h(px(36.0))
+                        .w_full()
+                        .bg(rgb(0x0d0d0d))
+                        .border_b_1()
+                        .border_color(rgb(0x333333))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px_3()
+                        .child(
+                            div().flex().gap_2().child(
+                                div()
+                                    .px_3()
+                                    .py_1()
+                                    .rounded(px(4.0))
+                                    .bg(if is_editing {
+                                        rgb(0x333333)
+                                    } else {
+                                        rgb(0x4444aa)
+                                    })
+                                    .text_xs()
+                                    .text_color(rgb(0xffffff))
+                                    .cursor(CursorStyle::PointingHand)
+                                    .hover(|s| s.bg(rgb(0x5555bb)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.toggle_markdown_edit(cx);
+                                        }),
+                                    )
+                                    .child(if is_editing { "Preview" } else { "Edit" }),
+                            ),
+                        )
+                        .child(div().flex().gap_2().when(has_changes, |d| {
+                            let path_for_save = path_clone.clone();
+                            d.child(
+                                div()
+                                    .px_3()
+                                    .py_1()
+                                    .rounded(px(4.0))
+                                    .bg(rgb(0x44aa44))
+                                    .text_xs()
+                                    .text_color(rgb(0xffffff))
+                                    .cursor(CursorStyle::PointingHand)
+                                    .hover(|s| s.bg(rgb(0x55bb55)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.save_markdown(path_for_save.clone(), cx);
+                                        }),
+                                    )
+                                    .child("Save"),
+                            )
+                        })),
+                )
+                .child(
+                    // Content area
+                    div().flex_1().overflow_y_hidden().p_4().child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(0xcccccc))
+                            .whitespace_nowrap()
+                            .child(content_clone),
+                    ),
+                )
+        }
+    }
 }
 
 pub fn render_preview_panel(
@@ -868,14 +1006,29 @@ impl Humanboard {
                                 .child(div().flex_1().relative().overflow_hidden().children(
                                     tabs.iter().enumerate().map(|(index, tab)| {
                                         let is_active = index == active_tab;
-                                        div()
-                                            .absolute()
-                                            .when(is_active, |d| d.size_full())
-                                            .when(!is_active, |d| d.size_0())
-                                            .when_some(
-                                                tab.webview.as_ref().map(|wv| wv.webview()),
-                                                |d, wv| d.child(wv),
-                                            )
+                                        match tab {
+                                            PreviewTab::Pdf { webview, .. } => div()
+                                                .absolute()
+                                                .when(is_active, |d| d.size_full())
+                                                .when(!is_active, |d| d.size_0())
+                                                .when_some(
+                                                    webview.as_ref().map(|wv| wv.webview()),
+                                                    |d, wv| d.child(wv),
+                                                ),
+                                            PreviewTab::Markdown { content, .. } => div()
+                                                .absolute()
+                                                .when(is_active, |d| d.size_full())
+                                                .when(!is_active, |d| d.size_0())
+                                                .bg(rgb(0x1a1a1a))
+                                                .p_4()
+                                                .overflow_hidden()
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .text_color(rgb(0xcccccc))
+                                                        .child(content.clone()),
+                                                ),
+                                        }
                                     }),
                                 )),
                         ),
@@ -911,14 +1064,29 @@ impl Humanboard {
                                 .child(div().flex_1().relative().overflow_hidden().children(
                                     tabs.iter().enumerate().map(|(index, tab)| {
                                         let is_active = index == active_tab;
-                                        div()
-                                            .absolute()
-                                            .when(is_active, |d| d.size_full())
-                                            .when(!is_active, |d| d.size_0())
-                                            .when_some(
-                                                tab.webview.as_ref().map(|wv| wv.webview()),
-                                                |d, wv| d.child(wv),
-                                            )
+                                        match tab {
+                                            PreviewTab::Pdf { webview, .. } => div()
+                                                .absolute()
+                                                .when(is_active, |d| d.size_full())
+                                                .when(!is_active, |d| d.size_0())
+                                                .when_some(
+                                                    webview.as_ref().map(|wv| wv.webview()),
+                                                    |d, wv| d.child(wv),
+                                                ),
+                                            PreviewTab::Markdown { content, .. } => div()
+                                                .absolute()
+                                                .when(is_active, |d| d.size_full())
+                                                .when(!is_active, |d| d.size_0())
+                                                .bg(rgb(0x1a1a1a))
+                                                .p_4()
+                                                .overflow_hidden()
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .text_color(rgb(0xcccccc))
+                                                        .child(content.clone()),
+                                                ),
+                                        }
                                     }),
                                 )),
                         ),

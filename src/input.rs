@@ -58,17 +58,17 @@ impl Humanboard {
         if let Some(item_id) = clicked_item_id {
             self.selected_item = Some(item_id);
 
-            // Handle double-click for PDF preview
+            // Handle double-click for PDF/Markdown preview
             if event.click_count == 2 {
-                let pdf_path = board.get_item(item_id).and_then(|item| {
-                    if let ItemContent::Pdf { path, .. } = &item.content {
-                        Some(path.clone())
-                    } else {
-                        None
-                    }
-                });
+                let content_path = board
+                    .get_item(item_id)
+                    .and_then(|item| match &item.content {
+                        ItemContent::Pdf { path, .. } => Some(path.clone()),
+                        ItemContent::Markdown { path, .. } => Some(path.clone()),
+                        _ => None,
+                    });
 
-                if let Some(path) = pdf_path {
+                if let Some(path) = content_path {
                     self.open_preview(path, cx);
                     return;
                 }

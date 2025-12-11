@@ -22,6 +22,10 @@ pub enum ItemContent {
     },
     Link(String),
     YouTube(String), // Video ID
+    Markdown {
+        path: PathBuf,
+        title: String,
+    },
 }
 
 /// Extract YouTube video ID from various URL formats
@@ -89,6 +93,7 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
+            ItemContent::Markdown { .. } => (200.0, 60.0), // Collapsed card
         }
     }
 
@@ -107,6 +112,7 @@ impl ItemContent {
             ItemContent::Text(text) => text.clone(),
             ItemContent::Link(url) => url.clone(),
             ItemContent::YouTube(id) => format!("YouTube: {}", id),
+            ItemContent::Markdown { title, .. } => title.clone(),
         }
     }
 
@@ -118,6 +124,7 @@ impl ItemContent {
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
             ItemContent::YouTube(_) => "YOUTUBE",
+            ItemContent::Markdown { .. } => "MARKDOWN",
         }
     }
 
@@ -135,7 +142,18 @@ impl ItemContent {
                         thumbnail,
                     }
                 }
-                "txt" | "md" | "rs" | "js" | "json" | "html" | "css" => {
+                "md" => {
+                    let title = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Untitled")
+                        .to_string();
+                    ItemContent::Markdown {
+                        path: path.clone(),
+                        title,
+                    }
+                }
+                "txt" | "rs" | "js" | "json" | "html" | "css" => {
                     ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy()))
                 }
                 _ => ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy())),
