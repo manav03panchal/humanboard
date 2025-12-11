@@ -736,12 +736,13 @@ pub fn render_settings_modal(
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
+    let current_theme = current_theme.to_string(); // Clone for use in closures
 
     let bg = cx.theme().popover;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
-    let muted = cx.theme().muted;
+    let title_bar = cx.theme().title_bar;
     let primary = cx.theme().primary;
     let list_active = cx.theme().list_active;
     let list_hover = cx.theme().list_hover;
@@ -756,6 +757,7 @@ pub fn render_settings_modal(
             .flex()
             .items_center()
             .justify_center()
+            // Block all events including scroll
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
@@ -763,19 +765,24 @@ pub fn render_settings_modal(
                     cx.notify();
                 }),
             )
+            .on_scroll_wheel(cx.listener(|_, _, _, _| {
+                // Consume scroll - don't propagate to canvas
+            }))
             .child(
                 v_flex()
-                    .w(px(400.0))
+                    .w(px(520.0))
                     .bg(bg)
                     .border_1()
                     .border_color(border)
-                    .rounded(px(16.0))
+                    .rounded(px(12.0))
                     .overflow_hidden()
+                    .shadow_lg()
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    .on_scroll_wheel(|_, _, _| {})
                     // Header
                     .child(
                         h_flex()
-                            .px_5()
+                            .px_6()
                             .py_4()
                             .border_b_1()
                             .border_color(border)
@@ -783,7 +790,7 @@ pub fn render_settings_modal(
                             .justify_between()
                             .child(
                                 div()
-                                    .text_base()
+                                    .text_lg()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(fg)
                                     .child("Settings"),
@@ -792,108 +799,167 @@ pub fn render_settings_modal(
                     )
                     // Content
                     .child(
-                        v_flex().p_5().gap_4().child(
-                            v_flex()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(muted_fg)
-                                        .child("THEME"),
-                                )
-                                .child(
-                                    div()
-                                        .id("theme-list")
-                                        .max_h(px(300.0))
-                                        .overflow_y_scroll()
-                                        .child(v_flex().gap_1().children(themes.into_iter().map(
-                                            |theme_name| {
-                                                let is_selected = theme_name == current_theme;
-                                                let theme_name_clone = theme_name.clone();
-                                                let theme_name_clone2 = theme_name.clone();
-
+                        v_flex()
+                            .p_6()
+                            .gap_6()
+                            // Appearance Section
+                            .child(
+                                v_flex()
+                                    .gap_4()
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child("Appearance"),
+                                    )
+                                    .child(
+                                        v_flex()
+                                            .gap_3()
+                                            .child(
                                                 div()
-                                                    .id(ElementId::Name(
-                                                        format!("theme-btn-{}", theme_name).into(),
-                                                    ))
-                                                    .w_full()
-                                                    .px_3()
-                                                    .py_2()
-                                                    .rounded(px(6.0))
-                                                    .cursor(CursorStyle::PointingHand)
-                                                    .when(is_selected, |d| {
-                                                        d.bg(list_active)
-                                                            .border_1()
-                                                            .border_color(primary)
-                                                    })
-                                                    .when(!is_selected, |d| {
-                                                        d.hover(|s| s.bg(list_hover))
-                                                    })
-                                                    .on_mouse_down(
-                                                        MouseButton::Left,
-                                                        cx.listener(move |this, _, _, cx| {
-                                                            eprintln!(
-                                                                "Theme clicked: {}",
-                                                                theme_name_clone
-                                                            );
-                                                            this.set_theme(
-                                                                theme_name_clone.clone(),
-                                                                cx,
-                                                            );
-                                                        }),
+                                                    .text_sm()
+                                                    .text_color(muted_fg)
+                                                    .child("Theme"),
+                                            )
+                                            .child(
+                                                // Dropdown theme selector
+                                                div()
+                                                    .id("theme-dropdown")
+                                                    .max_h(px(180.0))
+                                                    .bg(title_bar)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(8.0))
+                                                    .overflow_y_scroll()
+                                                    .child(v_flex().children(themes.into_iter().map(
+                                                        |theme_name| {
+                                                            let is_selected = theme_name == current_theme;
+                                                            let theme_name_clone = theme_name.clone();
+
+                                                            div()
+                                                                .id(ElementId::Name(
+                                                                    format!("theme-{}", theme_name).into(),
+                                                                ))
+                                                                .w_full()
+                                                                .px_4()
+                                                                .py_2p5()
+                                                                .cursor(CursorStyle::PointingHand)
+                                                                .when(is_selected, |d| {
+                                                                    d.bg(list_active)
+                                                                })
+                                                                .when(!is_selected, |d| {
+                                                                    d.hover(|s| s.bg(list_hover))
+                                                                })
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    cx.listener(move |this, _, _, cx| {
+                                                                        this.set_theme(
+                                                                            theme_name_clone.clone(),
+                                                                            cx,
+                                                                        );
+                                                                    }),
+                                                                )
+                                                                .child(
+                                                                    h_flex()
+                                                                        .items_center()
+                                                                        .justify_between()
+                                                                        .child(
+                                                                            div()
+                                                                                .text_sm()
+                                                                                .text_color(
+                                                                                    if is_selected {
+                                                                                        fg
+                                                                                    } else {
+                                                                                        muted_fg
+                                                                                    },
+                                                                                )
+                                                                                .child(theme_name),
+                                                                        )
+                                                                        .when(is_selected, |d| {
+                                                                            d.child(
+                                                                                Icon::new(IconName::Check)
+                                                                                    .size(px(16.0))
+                                                                                    .text_color(primary),
+                                                                            )
+                                                                        }),
+                                                                )
+                                                        },
+                                                    ))),
+                                            )
+                                            // Live Preview
+                                            .child(
+                                                v_flex()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(muted_fg)
+                                                            .child("Preview"),
                                                     )
                                                     .child(
-                                                        h_flex()
-                                                            .w_full()
-                                                            .justify_between()
+                                                        div()
+                                                            .h(px(70.0))
+                                                            .bg(title_bar)
+                                                            .border_1()
+                                                            .border_color(border)
+                                                            .rounded(px(8.0))
+                                                            .p_4()
                                                             .child(
-                                                                div()
-                                                                    .text_sm()
-                                                                    .text_color(if is_selected {
-                                                                        fg
-                                                                    } else {
-                                                                        muted_fg
-                                                                    })
-                                                                    .child(theme_name_clone2),
-                                                            )
-                                                            .when(is_selected, |d| {
-                                                                d.child(
-                                                                    Icon::new(IconName::Check)
-                                                                        .size(px(14.0))
-                                                                        .text_color(primary),
-                                                                )
-                                                            }),
-                                                    )
-                                            },
-                                        ))),
-                                ),
-                        ),
-                    )
-                    // Footer
-                    .child(
-                        h_flex()
-                            .px_5()
-                            .py_3()
-                            .border_t_1()
-                            .border_color(border)
-                            .justify_end()
-                            .child(
-                                div()
-                                    .id("settings-close-btn")
-                                    .px_4()
-                                    .py_2()
-                                    .bg(muted)
-                                    .rounded(px(6.0))
-                                    .cursor(CursorStyle::PointingHand)
-                                    .hover(|s| s.bg(list_hover))
-                                    .text_sm()
-                                    .text_color(fg)
-                                    .child("Close")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.show_settings = false;
-                                        cx.notify();
-                                    })),
+                                                                v_flex()
+                                                                    .gap_2()
+                                                                    .child(
+                                                                        div()
+                                                                            .text_xs()
+                                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                                            .text_color(fg)
+                                                                            .child(current_theme),
+                                                                    )
+                                                                    .child(
+                                                                        h_flex()
+                                                                            .gap_2()
+                                                                            .items_center()
+                                                                            .child(
+                                                                                div()
+                                                                                    .w(px(32.0))
+                                                                                    .h(px(20.0))
+                                                                                    .rounded(px(4.0))
+                                                                                    .border_1()
+                                                                                    .border_color(border)
+                                                                                    .bg(cx.theme().background),
+                                                                            )
+                                                                            .child(
+                                                                                div()
+                                                                                    .w(px(32.0))
+                                                                                    .h(px(20.0))
+                                                                                    .rounded(px(4.0))
+                                                                                    .border_1()
+                                                                                    .border_color(border)
+                                                                                    .bg(cx.theme().primary),
+                                                                            )
+                                                                            .child(
+                                                                                div()
+                                                                                    .w(px(32.0))
+                                                                                    .h(px(20.0))
+                                                                                    .rounded(px(4.0))
+                                                                                    .border_1()
+                                                                                    .border_color(border)
+                                                                                    .bg(cx.theme().success),
+                                                                            )
+                                                                            .child(
+                                                                                div()
+                                                                                    .w(px(32.0))
+                                                                                    .h(px(20.0))
+                                                                                    .rounded(px(4.0))
+                                                                                    .border_1()
+                                                                                    .border_color(border)
+                                                                                    .bg(cx.theme().danger),
+                                                                            ),
+                                                                    ),
+                                                            ),
+                                                    ),
+                                            ),
+                                    ),
                             ),
                     ),
             ),
