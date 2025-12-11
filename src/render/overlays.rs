@@ -29,6 +29,7 @@ pub fn render_header_bar(
     let bg = cx.theme().title_bar;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
+    let muted = cx.theme().muted;
     let muted_fg = cx.theme().muted_foreground;
     let input_bg = cx.theme().input;
     let popover_bg = cx.theme().popover;
@@ -142,23 +143,36 @@ pub fn render_header_bar(
                     d.child(
                         v_flex()
                             .absolute()
-                            .top(px(32.0))
+                            .top(px(36.0))
                             .left_0()
                             .w_full()
-                            .max_h(px(300.0))
+                            .max_h(px(280.0))
                             .bg(popover_bg)
                             .border_1()
                             .border_color(border)
-                            .rounded(px(8.0))
+                            .rounded(px(6.0))
                             .shadow_lg()
                             .overflow_hidden()
-                            .child(
-                                div()
-                                    .id("cmd-dropdown-results")
-                                    .max_h(px(250.0))
-                                    .overflow_y_scroll()
-                                    .when(has_results, |d| {
-                                        d.child(v_flex().py_1().children(
+                            // Items section
+                            .when(has_results, |d| {
+                                d.child(
+                                    div()
+                                        .px_2()
+                                        .pt_2()
+                                        .pb_1()
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(muted_fg)
+                                        .child("Items"),
+                                )
+                                .child(
+                                    div()
+                                        .id("cmd-dropdown-results")
+                                        .max_h(px(200.0))
+                                        .overflow_y_scroll()
+                                        .px_1()
+                                        .pb_1()
+                                        .child(v_flex().gap(px(2.0)).children(
                                             search_results.iter().enumerate().map(
                                                 |(idx, (item_id, name))| {
                                                     let is_selected = idx == selected_result;
@@ -169,12 +183,15 @@ pub fn render_header_bar(
                                                             format!("hdr-result-{}", item_id)
                                                                 .into(),
                                                         ))
-                                                        .px_3()
-                                                        .py_1p5()
+                                                        .px_2()
+                                                        .py_1()
                                                         .gap_2()
+                                                        .rounded(px(4.0))
                                                         .cursor(CursorStyle::PointingHand)
                                                         .when(is_selected, |d| d.bg(list_active))
-                                                        .hover(|s| s.bg(list_hover))
+                                                        .when(!is_selected, |d| {
+                                                            d.hover(|s| s.bg(list_hover))
+                                                        })
                                                         .on_click(cx.listener(
                                                             move |this, _, _, cx| {
                                                                 this.pending_command = Some(
@@ -187,7 +204,7 @@ pub fn render_header_bar(
                                                         ))
                                                         .child(
                                                             Icon::new(IconName::File)
-                                                                .size(px(14.0))
+                                                                .size(px(12.0))
                                                                 .text_color(if is_selected {
                                                                     primary
                                                                 } else {
@@ -201,7 +218,7 @@ pub fn render_header_bar(
                                                                 .text_color(if is_selected {
                                                                     fg
                                                                 } else {
-                                                                    muted_fg
+                                                                    fg
                                                                 })
                                                                 .overflow_hidden()
                                                                 .whitespace_nowrap()
@@ -210,6 +227,10 @@ pub fn render_header_bar(
                                                         .when(is_selected, |d| {
                                                             d.child(
                                                                 div()
+                                                                    .px_1()
+                                                                    .py(px(2.0))
+                                                                    .bg(muted)
+                                                                    .rounded(px(3.0))
                                                                     .text_xs()
                                                                     .text_color(muted_fg)
                                                                     .child("↵"),
@@ -217,60 +238,110 @@ pub fn render_header_bar(
                                                         })
                                                 },
                                             ),
-                                        ))
-                                    })
-                                    .when(!has_results, |d| {
-                                        d.child(
-                                            v_flex()
-                                                .py_2()
-                                                .child(
-                                                    div()
-                                                        .px_3()
-                                                        .py_1()
-                                                        .text_xs()
-                                                        .text_color(muted_fg)
-                                                        .child("COMMANDS"),
-                                                )
-                                                .child(
-                                                    h_flex()
-                                                        .px_3()
-                                                        .py_1p5()
-                                                        .gap_2()
-                                                        .child(
-                                                            Icon::new(IconName::File)
-                                                                .size(px(14.0))
-                                                                .text_color(cx.theme().success),
-                                                        )
-                                                        .child(
-                                                            h_flex().gap_1().child(
-                                                                div()
-                                                                    .text_sm()
-                                                                    .text_color(fg)
-                                                                    .child("md <name>"),
-                                                            ),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .ml_auto()
-                                                                .text_xs()
-                                                                .text_color(muted_fg)
-                                                                .child("create note"),
-                                                        ),
-                                                ),
-                                        )
-                                    }),
+                                        )),
+                                )
+                            })
+                            // Commands section (when no results or showing hint)
+                            .child(
+                                v_flex()
+                                    .border_t_1()
+                                    .border_color(border)
+                                    .child(
+                                        div()
+                                            .px_2()
+                                            .pt_2()
+                                            .pb_1()
+                                            .text_xs()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(muted_fg)
+                                            .child("Commands"),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .px_2()
+                                            .py_1()
+                                            .mx_1()
+                                            .mb_1()
+                                            .gap_2()
+                                            .rounded(px(4.0))
+                                            .hover(|s| s.bg(list_hover))
+                                            .cursor(CursorStyle::PointingHand)
+                                            .child(
+                                                div()
+                                                    .px(px(6.0))
+                                                    .py(px(2.0))
+                                                    .bg(cx.theme().success.opacity(0.15))
+                                                    .rounded(px(3.0))
+                                                    .text_xs()
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(cx.theme().success)
+                                                    .child("md"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(muted_fg)
+                                                    .child("<name>"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .ml_auto()
+                                                    .text_xs()
+                                                    .text_color(muted_fg)
+                                                    .child("Create markdown note"),
+                                            ),
+                                    ),
                             )
+                            // Footer
                             .child(
                                 h_flex()
-                                    .px_3()
-                                    .py_1p5()
+                                    .px_2()
+                                    .py_1()
                                     .gap_3()
                                     .border_t_1()
                                     .border_color(border)
+                                    .bg(cx.theme().title_bar)
                                     .text_xs()
                                     .text_color(muted_fg)
-                                    .child(h_flex().gap_1().child("↑↓").child("nav"))
-                                    .child(h_flex().gap_1().child("↵").child("go")),
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .px(px(4.0))
+                                                    .py(px(1.0))
+                                                    .bg(muted)
+                                                    .rounded(px(2.0))
+                                                    .child("↑↓"),
+                                            )
+                                            .child("navigate"),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .px(px(4.0))
+                                                    .py(px(1.0))
+                                                    .bg(muted)
+                                                    .rounded(px(2.0))
+                                                    .child("↵"),
+                                            )
+                                            .child("select"),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .px(px(4.0))
+                                                    .py(px(1.0))
+                                                    .bg(muted)
+                                                    .rounded(px(2.0))
+                                                    .child("esc"),
+                                            )
+                                            .child("close"),
+                                    ),
                             ),
                     )
                 }),
