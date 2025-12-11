@@ -6,12 +6,13 @@
 //! - Individual item content rendering
 //! - Item selection and resize handles
 
+use crate::app::Humanboard;
 use crate::markdown_card::render_collapsed_markdown;
 use crate::types::{CanvasItem, ItemContent};
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::{h_flex, v_flex};
+use gpui_component::{ActiveTheme as _, h_flex, v_flex};
 use std::collections::HashMap;
 
 /// Render the main canvas with item backgrounds
@@ -80,6 +81,10 @@ fn render_item_content(
     item: &CanvasItem,
     zoom: f32,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    fg: Hsla,
+    muted_fg: Hsla,
+    muted_bg: Hsla,
+    danger: Hsla,
 ) -> Div {
     let corner_radius = px(8.0 * zoom);
 
@@ -110,7 +115,7 @@ fn render_item_content(
             .child(
                 div()
                     .text_size(px(12.0 * zoom))
-                    .text_color(hsla(0.0, 0.0, 1.0, 0.9))
+                    .text_color(fg)
                     .font_weight(FontWeight::MEDIUM)
                     .child("PDF Document"),
             ),
@@ -126,7 +131,7 @@ fn render_item_content(
                 div()
                     .w(px(80.0 * zoom))
                     .h(px(100.0 * zoom))
-                    .bg(hsla(0.0, 0.0, 0.2, 1.0))
+                    .bg(muted_bg)
                     .rounded(px(4.0 * zoom))
                     .flex()
                     .items_center()
@@ -134,14 +139,14 @@ fn render_item_content(
                     .child(
                         div()
                             .text_size(px(24.0 * zoom))
-                            .text_color(hsla(0.0, 0.0, 1.0, 0.6))
+                            .text_color(muted_fg)
                             .child("PDF"),
                     ),
             )
             .child(
                 div()
                     .text_size(px(10.0 * zoom))
-                    .text_color(hsla(0.0, 0.0, 1.0, 0.7))
+                    .text_color(muted_fg)
                     .max_w(px(200.0 * zoom))
                     .overflow_hidden()
                     .child(
@@ -161,16 +166,11 @@ fn render_item_content(
                 v_flex()
                     .items_center()
                     .gap(px(8.0 * zoom))
-                    .child(
-                        div()
-                            .text_size(px(48.0 * zoom))
-                            .text_color(hsla(0.0, 0.0, 1.0, 0.9))
-                            .child("🎬"),
-                    )
+                    .child(div().text_size(px(48.0 * zoom)).text_color(fg).child("🎬"))
                     .child(
                         div()
                             .text_size(px(12.0 * zoom))
-                            .text_color(hsla(0.0, 0.0, 1.0, 0.7))
+                            .text_color(muted_fg)
                             .max_w(px(180.0 * zoom))
                             .overflow_hidden()
                             .child(
@@ -191,7 +191,7 @@ fn render_item_content(
             .child(
                 div()
                     .text_size(px(14.0 * zoom))
-                    .text_color(hsla(0.0, 0.0, 1.0, 0.9))
+                    .text_color(fg)
                     .font_weight(FontWeight::MEDIUM)
                     .child(text.clone()),
             ),
@@ -205,16 +205,11 @@ fn render_item_content(
             .child(
                 h_flex()
                     .gap(px(8.0 * zoom))
-                    .child(
-                        div()
-                            .text_size(px(24.0 * zoom))
-                            .text_color(hsla(0.0, 0.0, 1.0, 0.9))
-                            .child("🔗"),
-                    )
+                    .child(div().text_size(px(24.0 * zoom)).text_color(fg).child("🔗"))
                     .child(
                         div()
                             .text_size(px(12.0 * zoom))
-                            .text_color(hsla(0.0, 0.0, 1.0, 0.9))
+                            .text_color(fg)
                             .font_weight(FontWeight::BOLD)
                             .child("Link"),
                     ),
@@ -222,7 +217,7 @@ fn render_item_content(
             .child(
                 div()
                     .text_size(px(10.0 * zoom))
-                    .text_color(hsla(0.0, 0.0, 1.0, 0.7))
+                    .text_color(muted_fg)
                     .overflow_hidden()
                     .child(url.clone()),
             ),
@@ -235,7 +230,7 @@ fn render_item_content(
                     .overflow_hidden()
                     .rounded(corner_radius)
                     .border_4()
-                    .border_color(rgb(0xFF0000))
+                    .border_color(danger)
                     .child(webview.webview().clone())
             } else {
                 div()
@@ -243,7 +238,7 @@ fn render_item_content(
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(rgb(0x282828))
+                    .bg(muted_bg)
                     .rounded(corner_radius)
                     .child(
                         v_flex()
@@ -253,7 +248,7 @@ fn render_item_content(
                             .child(
                                 div()
                                     .text_size(px(12.0 * zoom))
-                                    .text_color(rgb(0xaaaaaa))
+                                    .text_color(muted_fg)
                                     .child(format!("YouTube: {}", video_id)),
                             ),
                     )
@@ -273,9 +268,16 @@ pub fn render_items(
     zoom: f32,
     selected_item_id: Option<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     let offset_x = f32::from(canvas_offset.x);
     let offset_y = f32::from(canvas_offset.y);
+
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let muted_bg = cx.theme().muted;
+    let danger = cx.theme().danger;
+    let primary = cx.theme().primary;
 
     items
         .iter()
@@ -292,12 +294,20 @@ pub fn render_items(
                 .top(px(y))
                 .w(px(w))
                 .h(px(h))
-                .child(render_item_content(item, zoom, youtube_webviews))
+                .child(render_item_content(
+                    item,
+                    zoom,
+                    youtube_webviews,
+                    fg,
+                    muted_fg,
+                    muted_bg,
+                    danger,
+                ))
                 .when(is_selected, |d| {
                     d
                         // Selection border
                         .border_2()
-                        .border_color(rgb(0x6688ff))
+                        .border_color(primary)
                         .rounded(px(8.0 * zoom))
                         .child(
                             // Resize handle - small corner indicator
@@ -307,7 +317,7 @@ pub fn render_items(
                                 .bottom(px(-2.0))
                                 .w(px(10.0 * zoom))
                                 .h(px(10.0 * zoom))
-                                .bg(rgb(0x6688ff))
+                                .bg(primary)
                                 .rounded(px(2.0 * zoom))
                                 .cursor(CursorStyle::ResizeUpLeftDownRight),
                         )
@@ -323,10 +333,13 @@ pub fn render_canvas_area(
     items: &[CanvasItem],
     selected_item_id: Option<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    cx: &Context<Humanboard>,
 ) -> Div {
+    let bg = cx.theme().background;
+
     div()
         .size_full()
-        .bg(rgb(0x000000))
+        .bg(bg)
         .overflow_hidden()
         .relative()
         .child(render_canvas(canvas_offset, zoom, items.to_vec()))
@@ -336,5 +349,6 @@ pub fn render_canvas_area(
             zoom,
             selected_item_id,
             youtube_webviews,
+            cx,
         ))
 }

@@ -13,7 +13,7 @@ pub mod preview;
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use overlays::{
     render_command_palette, render_footer_bar, render_header_bar, render_settings_modal,
-    render_shortcuts_overlay, render_stats_overlay,
+    render_shortcuts_overlay,
 };
 pub use preview::{
     render_preview_panel, render_selected_item_label, render_splitter, render_tab_bar,
@@ -30,6 +30,7 @@ use crate::landing::render_landing_page;
 use gpui::DefiniteLength::Fraction;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::ActiveTheme as _;
 
 /// UI Font used throughout the application
 pub const UI_FONT: &str = "Iosevka Nerd Font";
@@ -281,15 +282,17 @@ impl Humanboard {
                                     &items,
                                     selected_item_id,
                                     &self.youtube_webviews,
+                                    cx,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Vertical, cx))
-                        .child(
+                        .child({
+                            let bg = cx.theme().background;
                             div()
                                 .flex_shrink_0()
                                 .w(Fraction(preview_size))
                                 .h_full()
-                                .bg(rgb(0x000000))
+                                .bg(bg)
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
@@ -304,8 +307,8 @@ impl Humanboard {
                                         .when_some(tabs.get(active_tab), |d, tab| {
                                             d.child(render_tab_content(tab, true, active_tab, cx))
                                         }),
-                                ),
-                        ),
+                                )
+                        }),
                     SplitDirection::Horizontal => base
                         .flex()
                         .flex_col()
@@ -322,15 +325,17 @@ impl Humanboard {
                                     &items,
                                     selected_item_id,
                                     &self.youtube_webviews,
+                                    cx,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Horizontal, cx))
-                        .child(
+                        .child({
+                            let bg = cx.theme().background;
                             div()
                                 .flex_shrink_0()
                                 .h(Fraction(preview_size))
                                 .w_full()
-                                .bg(rgb(0x000000))
+                                .bg(bg)
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
@@ -345,8 +350,8 @@ impl Humanboard {
                                         .when_some(tabs.get(active_tab), |d, tab| {
                                             d.child(render_tab_content(tab, true, active_tab, cx))
                                         }),
-                                ),
-                        ),
+                                )
+                        }),
                 }
             }
             None => base.pt(px(40.0)).pb(px(28.0)).child(render_canvas_area(
@@ -355,6 +360,7 @@ impl Humanboard {
                 &items,
                 selected_item_id,
                 &self.youtube_webviews,
+                cx,
             )),
         }
         .child(render_footer_bar(
@@ -365,6 +371,7 @@ impl Humanboard {
             canvas_offset,
             selected_item_name,
             None,
+            cx,
         ))
         .child(render_header_bar(
             board_name,

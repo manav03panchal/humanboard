@@ -164,9 +164,28 @@ impl Humanboard {
     }
 
     pub fn set_theme(&mut self, theme_name: String, cx: &mut Context<Self>) {
-        self.settings.theme = theme_name;
+        eprintln!("set_theme called with: {}", theme_name);
+        self.settings.theme = theme_name.clone();
         self.settings.save();
-        self.settings.apply_theme(cx);
+
+        // Apply theme using the App context
+        let theme_name = gpui::SharedString::from(theme_name);
+        let config = gpui_component::theme::ThemeRegistry::global(cx)
+            .themes()
+            .get(&theme_name)
+            .cloned();
+
+        if let Some(config) = config {
+            let mode = config.mode;
+            if mode.is_dark() {
+                gpui_component::theme::Theme::global_mut(cx).dark_theme = config.clone();
+            } else {
+                gpui_component::theme::Theme::global_mut(cx).light_theme = config.clone();
+            }
+            gpui_component::theme::Theme::global_mut(cx).mode = mode;
+            gpui_component::theme::Theme::global_mut(cx).apply_config(&config);
+        }
+
         cx.notify();
     }
 

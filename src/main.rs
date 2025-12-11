@@ -62,9 +62,8 @@ fn main() {
         cx.activate(true);
         gpui_component::init(cx);
 
-        // Apply saved theme on startup
-        let settings = humanboard::settings::Settings::load();
-        settings.apply_theme(cx);
+        // Initialize themes from themes directory
+        humanboard::settings::init_themes(cx);
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         // Global shortcuts (always active)
@@ -106,7 +105,7 @@ fn main() {
                 })),
                 titlebar: Some(TitlebarOptions {
                     title: Some("Humanboard".into()),
-                    appears_transparent: false,
+                    appears_transparent: true,
                     ..Default::default()
                 }),
                 ..Default::default()

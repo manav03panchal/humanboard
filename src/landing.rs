@@ -4,16 +4,21 @@ use gpui::*;
 use gpui_component::Sizable;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{Icon, IconName, h_flex, v_flex};
+use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 
 /// Render the landing page header bar
 pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
+    let bg = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
     h_flex()
         .w_full()
         .h(px(64.0))
-        .bg(rgb(0x0a0a0a))
+        .bg(bg)
         .border_b_1()
-        .border_color(rgb(0x222222))
+        .border_color(border)
         .items_center()
         .justify_between()
         .px_6()
@@ -24,15 +29,10 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
                     div()
                         .text_xl()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .child("Humanboard"),
                 )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(0x666666))
-                        .child("Your boards"),
-                ),
+                .child(div().text_sm().text_color(muted_fg).child("Your boards")),
         )
         .child(
             Button::new("new-board")
@@ -56,21 +56,28 @@ pub fn render_board_card(
     let board_id_for_edit = metadata.id.clone();
     let board_id_for_delete = metadata.id.clone();
 
+    let bg = cx.theme().popover;
+    let border = cx.theme().border;
+    let list_hover = cx.theme().list_hover;
+    let muted = cx.theme().muted;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
     v_flex()
         .w(px(240.0))
-        .bg(rgb(0x141414))
+        .bg(bg)
         .border_1()
-        .border_color(rgb(0x2a2a2a))
+        .border_color(border)
         .rounded(px(12.0))
         .overflow_hidden()
-        .hover(|s| s.border_color(rgb(0x3a3a3a)).bg(rgb(0x1a1a1a)))
+        .hover(|s| s.border_color(list_hover).bg(list_hover))
         .when(!is_editing, |d| d.cursor_pointer())
         .child(
             // Thumbnail area (clickable to open board)
             div()
                 .h(px(140.0))
                 .w_full()
-                .bg(rgb(0x1a1a1a))
+                .bg(muted)
                 .flex()
                 .items_center()
                 .justify_center()
@@ -82,7 +89,7 @@ pub fn render_board_card(
                         }),
                     )
                 })
-                .child(div().text_2xl().text_color(rgb(0x333333)).child("▦")),
+                .child(div().text_2xl().text_color(muted_fg).child("▦")),
         )
         .child(
             // Info area
@@ -125,7 +132,7 @@ pub fn render_board_card(
                         div()
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgb(0xffffff))
+                            .text_color(fg)
                             .overflow_hidden()
                             .child(metadata.name.clone())
                     },
@@ -139,7 +146,7 @@ pub fn render_board_card(
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x666666))
+                                    .text_color(muted_fg)
                                     .child(metadata.formatted_date()),
                             )
                             .child(
@@ -190,12 +197,15 @@ pub fn render_board_card(
 
 /// Render the empty state when no boards exist
 pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
     v_flex()
         .flex_1()
         .items_center()
         .justify_center()
         .gap_6()
-        .child(div().text_2xl().text_color(rgb(0x333333)).child("▦"))
+        .child(div().text_2xl().text_color(muted_fg).child("▦"))
         .child(
             v_flex()
                 .items_center()
@@ -204,13 +214,13 @@ pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
                     div()
                         .text_xl()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .child("No boards yet"),
                 )
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(0x666666))
+                        .text_color(muted_fg)
                         .child("Create your first board to get started"),
                 ),
         )
@@ -257,6 +267,12 @@ pub fn render_delete_dialog(
 ) -> Div {
     let board_id_confirm = board_id.to_string();
 
+    let popover = cx.theme().popover;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let danger = cx.theme().danger;
+
     // Modal backdrop
     div()
         .absolute()
@@ -269,9 +285,9 @@ pub fn render_delete_dialog(
             v_flex()
                 .id("delete-dialog")
                 .w(px(400.0))
-                .bg(rgb(0x1a1a1a))
+                .bg(popover)
                 .border_1()
-                .border_color(rgb(0x333333))
+                .border_color(border)
                 .rounded(px(12.0))
                 .p_6()
                 .gap_4()
@@ -281,17 +297,17 @@ pub fn render_delete_dialog(
                         .child(
                             Icon::new(IconName::TriangleAlert)
                                 .size(px(24.0))
-                                .text_color(rgb(0xef4444)),
+                                .text_color(danger),
                         )
                         .child(
                             div()
                                 .text_lg()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(0xffffff))
+                                .text_color(fg)
                                 .child("Delete Board?"),
                         ),
                 )
-                .child(div().text_sm().text_color(rgb(0xaaaaaa)).child(format!(
+                .child(div().text_sm().text_color(muted_fg).child(format!(
                     "Are you sure you want to delete \"{}\"? This action cannot be undone.",
                     board_name
                 )))
@@ -328,9 +344,11 @@ pub fn render_landing_page(
     deleting_board: Option<(&str, &str)>, // (id, name)
     cx: &mut Context<crate::app::Humanboard>,
 ) -> Div {
+    let bg = cx.theme().background;
+
     let base = div()
         .size_full()
-        .bg(rgb(0x0a0a0a))
+        .bg(bg)
         .flex()
         .flex_col()
         .child(render_landing_header(cx));
