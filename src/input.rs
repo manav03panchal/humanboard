@@ -58,9 +58,8 @@ impl Humanboard {
         if let Some(item_id) = clicked_item_id {
             self.selected_item = Some(item_id);
 
-            // Handle double-click for PDF preview or YouTube activation
+            // Handle double-click for PDF preview
             if event.click_count == 2 {
-                // Extract content info without holding borrow
                 let pdf_path = board.get_item(item_id).and_then(|item| {
                     if let ItemContent::Pdf { path, .. } = &item.content {
                         Some(path.clone())
@@ -68,22 +67,9 @@ impl Humanboard {
                         None
                     }
                 });
-                let is_youtube = board
-                    .get_item(item_id)
-                    .map(|item| matches!(item.content, ItemContent::YouTube(_)))
-                    .unwrap_or(false);
 
                 if let Some(path) = pdf_path {
                     self.open_preview(path, cx);
-                    return;
-                }
-                if is_youtube {
-                    // Toggle YouTube activation
-                    if self.active_youtube_id == Some(item_id) {
-                        self.deactivate_youtube(cx);
-                    } else {
-                        self.activate_youtube(item_id, cx);
-                    }
                     return;
                 }
             }

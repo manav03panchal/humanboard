@@ -68,8 +68,6 @@ pub struct Humanboard {
 
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
-    // Which YouTube item is currently active (showing WebView vs thumbnail)
-    pub active_youtube_id: Option<u64>,
 }
 
 impl Humanboard {
@@ -102,7 +100,6 @@ impl Humanboard {
             file_drop_rx: None,
             show_shortcuts: false,
             youtube_webviews: HashMap::new(),
-            active_youtube_id: None,
         }
     }
 
@@ -157,7 +154,6 @@ impl Humanboard {
         self.board = None;
         self.preview = None;
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
-        self.active_youtube_id = None;
         self.view = AppView::Landing;
         self.selected_item = None;
         // Reload index to get any changes
@@ -266,44 +262,43 @@ impl Humanboard {
     pub fn ensure_youtube_webviews(&mut self, window: &mut Window, cx: &mut App) {
         use crate::types::ItemContent;
 
-        // Only create WebView for the active YouTube item
-        if let Some(active_id) = self.active_youtube_id {
-            if let Some(ref board) = self.board {
-                // Find the active YouTube item
-                if let Some(item) = board.items.iter().find(|i| i.id == active_id) {
-                    if let ItemContent::YouTube(video_id) = &item.content {
-                        // Create WebView if it doesn't exist
-                        if !self.youtube_webviews.contains_key(&active_id) {
-                            match YouTubeWebView::new(video_id.clone(), window, cx) {
-                                Ok(webview) => {
-                                    self.youtube_webviews.insert(active_id, webview);
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to create YouTube WebView: {}", e);
-                                }
-                            }
-                        }
+        let Some(ref board) = self.board else {
+            self.youtube_webviews.clear();
+            return;
+        };
+
+        // Collect YouTube item IDs and video IDs
+        let youtube_items: Vec<(u64, String)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let ItemContent::YouTube(video_id) = &item.content {
+                    Some((item.id, video_id.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create WebViews for new YouTube items
+        for (item_id, video_id) in &youtube_items {
+            if !self.youtube_webviews.contains_key(item_id) {
+                match YouTubeWebView::new(video_id.clone(), window, cx) {
+                    Ok(webview) => {
+                        self.youtube_webviews.insert(*item_id, webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create YouTube WebView: {}", e);
                     }
                 }
             }
-
-            // Remove WebViews for non-active items (keep only the active one)
-            self.youtube_webviews.retain(|id, _| *id == active_id);
-        } else {
-            // No active YouTube, clear all WebViews
-            self.youtube_webviews.clear();
         }
-    }
 
-    pub fn activate_youtube(&mut self, item_id: u64, cx: &mut Context<Self>) {
-        self.active_youtube_id = Some(item_id);
-        cx.notify();
-    }
-
-    pub fn deactivate_youtube(&mut self, cx: &mut Context<Self>) {
-        self.active_youtube_id = None;
-        self.youtube_webviews.clear();
-        cx.notify();
+        // Remove WebViews for deleted items
+        let youtube_ids: std::collections::HashSet<u64> =
+            youtube_items.iter().map(|(id, _)| *id).collect();
+        self.youtube_webviews
+            .retain(|id, _| youtube_ids.contains(id));
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {

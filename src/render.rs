@@ -76,7 +76,6 @@ pub fn render_items(
     zoom: f32,
     selected_item_id: Option<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
-    active_youtube_id: Option<u64>,
 ) -> Vec<Div> {
     items
         .iter()
@@ -127,120 +126,56 @@ pub fn render_items(
                             }
                         })
                         .when(matches!(&item.content, ItemContent::YouTube(_)), |d| {
-                            let is_active = active_youtube_id == Some(item.id);
-                            let title_bar_height = 32.0 * zoom;
-                            let border_width = 3.0 * zoom;
+                            let title_bar_height = 28.0 * zoom;
+                            let border_width = 4.0 * zoom;
 
-                            if is_active {
-                                // Show WebView with title bar overlay for dragging
-                                d.border(px(border_width))
-                                    .border_color(rgb(0x444444))
-                                    .rounded(px(8.0 * zoom))
-                                    // WebView fills the container
-                                    .when_some(youtube_webviews.get(&item.id), |d, yt_webview| {
-                                        d.child(yt_webview.webview())
-                                    })
-                                    // Title bar overlay at top for dragging
-                                    .child(
-                                        div()
-                                            .absolute()
-                                            .top_0()
-                                            .left_0()
-                                            .right_0()
-                                            .h(px(title_bar_height))
-                                            .bg(hsla(0.0, 0.0, 0.0, 0.85))
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .px(px(10.0 * zoom))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(6.0 * zoom))
-                                                    .child(
-                                                        div()
-                                                            .text_sm()
-                                                            .text_color(rgb(0xff0000))
-                                                            .child("▶"),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_xs()
-                                                            .text_color(rgb(0xaaaaaa))
-                                                            .child("YouTube — drag to move"),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(rgb(0x666666))
-                                                    .child("dbl-click to close"),
-                                            ),
-                                    )
-                            } else {
-                                // Show thumbnail/placeholder for inactive YouTube
-                                if let ItemContent::YouTube(video_id) = &item.content {
-                                    d.bg(rgb(0x0f0f0f))
-                                        .cursor(CursorStyle::PointingHand)
-                                        .child(
-                                            // YouTube thumbnail
-                                            img(format!(
-                                                "https://img.youtube.com/vi/{}/hqdefault.jpg",
-                                                video_id
-                                            ))
-                                            .size_full()
-                                            .object_fit(ObjectFit::Cover),
-                                        )
-                                        // Play button overlay
+                            // Always show WebView with border for easy moving/resizing
+                            d.border(px(border_width))
+                                .border_color(rgb(0x333333))
+                                .rounded(px(8.0 * zoom))
+                                .bg(rgb(0x0f0f0f))
+                                // WebView fills the container
+                                .when_some(youtube_webviews.get(&item.id), |d, yt_webview| {
+                                    d.child(yt_webview.webview())
+                                })
+                                // Title bar overlay at top for dragging
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .top_0()
+                                        .left_0()
+                                        .right_0()
+                                        .h(px(title_bar_height))
+                                        .bg(hsla(0.0, 0.0, 0.0, 0.9))
+                                        .flex()
+                                        .items_center()
+                                        .justify_between()
+                                        .px(px(8.0 * zoom))
                                         .child(
                                             div()
-                                                .absolute()
-                                                .inset_0()
                                                 .flex()
                                                 .items_center()
-                                                .justify_center()
+                                                .gap(px(6.0 * zoom))
                                                 .child(
                                                     div()
-                                                        .w(px(68.0 * zoom))
-                                                        .h(px(48.0 * zoom))
-                                                        .bg(hsla(0.0, 0.0, 0.0, 0.8))
-                                                        .rounded(px(12.0 * zoom))
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .child(
-                                                            div()
-                                                                .text_2xl()
-                                                                .text_color(rgb(0xff0000))
-                                                                .child("▶"),
-                                                        ),
+                                                        .text_sm()
+                                                        .text_color(rgb(0xff0000))
+                                                        .child("▶"),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(0x888888))
+                                                        .child("YouTube"),
                                                 ),
                                         )
-                                        // "Double-click to play" hint
                                         .child(
                                             div()
-                                                .absolute()
-                                                .bottom(px(8.0 * zoom))
-                                                .left_0()
-                                                .right_0()
-                                                .flex()
-                                                .justify_center()
-                                                .child(
-                                                    div()
-                                                        .px(px(8.0 * zoom))
-                                                        .py(px(4.0 * zoom))
-                                                        .bg(hsla(0.0, 0.0, 0.0, 0.7))
-                                                        .rounded(px(4.0 * zoom))
-                                                        .text_xs()
-                                                        .text_color(rgb(0xaaaaaa))
-                                                        .child("Double-click to play"),
-                                                ),
-                                        )
-                                } else {
-                                    d
-                                }
-                            }
+                                                .text_xs()
+                                                .text_color(rgb(0x555555))
+                                                .child("drag to move"),
+                                        ),
+                                )
                         }),
                 )
                 .when(is_selected, |parent| {
@@ -733,7 +668,6 @@ fn render_canvas_area(
     items_for_render: Vec<CanvasItem>,
     selected_item_id: Option<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
-    active_youtube_id: Option<u64>,
 ) -> Div {
     div()
         .size_full()
@@ -747,7 +681,6 @@ fn render_canvas_area(
             zoom,
             selected_item_id,
             youtube_webviews,
-            active_youtube_id,
         ))
 }
 
@@ -957,7 +890,6 @@ impl Humanboard {
                                     items_for_render.clone(),
                                     selected_item_id,
                                     &self.youtube_webviews,
-                                    self.active_youtube_id,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Vertical, cx))
@@ -1001,7 +933,6 @@ impl Humanboard {
                                     items_for_render.clone(),
                                     selected_item_id,
                                     &self.youtube_webviews,
-                                    self.active_youtube_id,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Horizontal, cx))
@@ -1038,7 +969,6 @@ impl Humanboard {
                 items_for_render.clone(),
                 selected_item_id,
                 &self.youtube_webviews,
-                self.active_youtube_id,
             )),
         }
         .child(render_footer_bar(
