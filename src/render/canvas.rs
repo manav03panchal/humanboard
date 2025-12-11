@@ -231,8 +231,28 @@ fn render_item_content(
                     .size_full()
                     .overflow_hidden()
                     .rounded(corner_radius)
-                    // Removed permanent danger border - selection border is handled separately
+                    .relative()
                     .child(webview.webview().clone())
+                    // Add a transparent drag handle at the top of the video
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(32.0 * zoom))
+                            .cursor(CursorStyle::PointingHand)
+                            .bg(hsla(0.0, 0.0, 0.0, 0.01)) // Nearly invisible but captures events
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(hsla(0.0, 0.0, 1.0, 0.5))
+                                    .child("⋮⋮ drag here"),
+                            ),
+                    )
             } else {
                 div()
                     .size_full()

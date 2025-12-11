@@ -773,17 +773,20 @@ pub fn render_settings_modal(
             )
             .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
             .child(
-                h_flex()
-                    .w(px(700.0))
-                    .h(px(500.0))
-                    .bg(bg)
-                    .border_1()
-                    .border_color(border)
-                    .rounded(px(12.0))
-                    .overflow_hidden()
-                    .shadow_lg()
-                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                    .on_scroll_wheel(|_, _, _| {})
+                div()
+                    .p_4() // Add padding around modal to prevent shadow/border clipping
+                    .child(
+                        h_flex()
+                            .w(px(700.0))
+                            .h(px(500.0))
+                            .bg(bg)
+                            .border_1()
+                            .border_color(border)
+                            .rounded(px(12.0))
+                            .overflow_hidden()
+                            .shadow_lg()
+                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                            .on_scroll_wheel(|_, _, _| {})
                     // Left sidebar with tabs
                     .child(
                         v_flex()
@@ -947,6 +950,7 @@ pub fn render_settings_modal(
                                         ),
                             ),
                     ),
+                ), // Close wrapper div
             ),
     )
     .with_priority(1500)

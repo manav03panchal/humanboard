@@ -246,7 +246,6 @@ pub fn render_board_grid(
     div()
         .flex_1()
         .p_6()
-        .overflow_hidden()
         .child(
             div()
                 .flex()
