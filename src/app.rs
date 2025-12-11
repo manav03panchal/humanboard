@@ -1,6 +1,7 @@
 use crate::board::Board;
 use crate::board_index::BoardIndex;
 use crate::pdf_webview::PdfWebView;
+use crate::settings::Settings;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
@@ -112,6 +113,10 @@ pub struct Humanboard {
 
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
+
+    // Settings
+    pub settings: Settings,
+    pub show_settings: bool,
 }
 
 impl Humanboard {
@@ -148,7 +153,40 @@ impl Humanboard {
             search_results: Vec::new(),
             selected_result: 0,
             youtube_webviews: HashMap::new(),
+            settings: Settings::load(),
+            show_settings: false,
         }
+    }
+
+    pub fn toggle_settings(&mut self, cx: &mut Context<Self>) {
+        self.show_settings = !self.show_settings;
+        cx.notify();
+    }
+
+    pub fn set_theme(&mut self, theme_name: String, cx: &mut Context<Self>) {
+        eprintln!("set_theme called with: {}", theme_name);
+        self.settings.theme = theme_name.clone();
+        self.settings.save();
+
+        // Apply theme using the App context
+        let theme_name = gpui::SharedString::from(theme_name);
+        let config = gpui_component::theme::ThemeRegistry::global(cx)
+            .themes()
+            .get(&theme_name)
+            .cloned();
+
+        if let Some(config) = config {
+            let mode = config.mode;
+            if mode.is_dark() {
+                gpui_component::theme::Theme::global_mut(cx).dark_theme = config.clone();
+            } else {
+                gpui_component::theme::Theme::global_mut(cx).light_theme = config.clone();
+            }
+            gpui_component::theme::Theme::global_mut(cx).mode = mode;
+            gpui_component::theme::Theme::global_mut(cx).apply_config(&config);
+        }
+
+        cx.notify();
     }
 
     pub fn toggle_shortcuts(&mut self, cx: &mut Context<Self>) {

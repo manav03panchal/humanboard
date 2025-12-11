@@ -1,16 +1,18 @@
-//! UI Overlays - header bar, footer, shortcuts modal, command palette
+//! UI Overlays - header bar, footer, shortcuts modal, command palette, settings
 //!
 //! This module contains all overlay UI elements that appear on top of the canvas:
 //! - Header bar with navigation and command palette
 //! - Footer bar with status info
 //! - Keyboard shortcuts modal
 //! - Command palette popup
+//! - Settings modal
 
 use crate::app::Humanboard;
+use crate::settings::Settings;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputState};
-use gpui_component::{Icon, IconName, h_flex, v_flex};
+use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 
 /// Render the header bar with navigation and integrated command palette
 pub fn render_header_bar(
@@ -23,18 +25,30 @@ pub fn render_header_bar(
     let has_results = !search_results.is_empty();
     let is_open = command_palette.is_some();
 
+    // Get theme colors
+    let bg = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let input_bg = cx.theme().input;
+    let popover_bg = cx.theme().popover;
+    let primary = cx.theme().primary;
+    let list_active = cx.theme().list_active;
+    let list_hover = cx.theme().list_hover;
+
     h_flex()
         .absolute()
         .top_0()
         .left_0()
         .right_0()
         .h(px(40.0))
-        .bg(rgb(0x0a0a0a))
+        .bg(bg)
         .border_b_1()
-        .border_color(rgb(0x222222))
+        .border_color(border)
         .items_center()
         .justify_between()
-        .px_4()
+        .pl(px(80.0))
+        .pr_4()
         // Left side - board name and home button
         .child(
             h_flex()
@@ -47,9 +61,9 @@ pub fn render_header_bar(
                         .py_1()
                         .rounded(px(4.0))
                         .cursor(CursorStyle::PointingHand)
-                        .hover(|s| s.bg(rgb(0x333333)))
+                        .hover(|s| s.bg(list_hover))
                         .text_sm()
-                        .text_color(rgb(0xaaaaaa))
+                        .text_color(muted_fg)
                         .child("←")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.go_home(cx);
@@ -59,7 +73,7 @@ pub fn render_header_bar(
                     div()
                         .text_sm()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .child(board_name.unwrap_or_else(|| "Humanboard".to_string())),
                 ),
         )
@@ -84,13 +98,9 @@ pub fn render_header_bar(
                         .id("cmd-palette-trigger")
                         .w_full()
                         .h(px(28.0))
-                        .bg(rgb(0x1a1a1a))
+                        .bg(input_bg)
                         .border_1()
-                        .border_color(if is_open {
-                            rgb(0x444488)
-                        } else {
-                            rgb(0x2a2a2a)
-                        })
+                        .border_color(if is_open { primary } else { border })
                         .rounded(px(6.0))
                         .px_3()
                         .flex()
@@ -99,7 +109,7 @@ pub fn render_header_bar(
                         .child(
                             Icon::new(IconName::Search)
                                 .size(px(14.0))
-                                .text_color(rgb(0x666666)),
+                                .text_color(muted_fg),
                         )
                         .when(is_open, |d| {
                             if let Some(input) = command_palette {
@@ -121,16 +131,10 @@ pub fn render_header_bar(
                                 .child(
                                     div()
                                         .text_sm()
-                                        .text_color(rgb(0x666666))
+                                        .text_color(muted_fg)
                                         .child("Search items or type command..."),
                                 )
-                                .child(
-                                    div()
-                                        .ml_auto()
-                                        .text_xs()
-                                        .text_color(rgb(0x555555))
-                                        .child(":"),
-                                )
+                                .child(div().ml_auto().text_xs().text_color(muted_fg).child(":"))
                         }),
                 )
                 // Dropdown results
@@ -142,9 +146,9 @@ pub fn render_header_bar(
                             .left_0()
                             .w_full()
                             .max_h(px(300.0))
-                            .bg(rgb(0x1a1a1a))
+                            .bg(popover_bg)
                             .border_1()
-                            .border_color(rgb(0x333333))
+                            .border_color(border)
                             .rounded(px(8.0))
                             .shadow_lg()
                             .overflow_hidden()
@@ -153,7 +157,6 @@ pub fn render_header_bar(
                                     .id("cmd-dropdown-results")
                                     .max_h(px(250.0))
                                     .overflow_y_scroll()
-                                    // Search results
                                     .when(has_results, |d| {
                                         d.child(v_flex().py_1().children(
                                             search_results.iter().enumerate().map(
@@ -170,8 +173,8 @@ pub fn render_header_bar(
                                                         .py_1p5()
                                                         .gap_2()
                                                         .cursor(CursorStyle::PointingHand)
-                                                        .when(is_selected, |d| d.bg(rgb(0x2a2a4a)))
-                                                        .hover(|s| s.bg(rgb(0x252535)))
+                                                        .when(is_selected, |d| d.bg(list_active))
+                                                        .hover(|s| s.bg(list_hover))
                                                         .on_click(cx.listener(
                                                             move |this, _, _, cx| {
                                                                 this.pending_command = Some(
@@ -186,9 +189,9 @@ pub fn render_header_bar(
                                                             Icon::new(IconName::File)
                                                                 .size(px(14.0))
                                                                 .text_color(if is_selected {
-                                                                    rgb(0x88aaff)
+                                                                    primary
                                                                 } else {
-                                                                    rgb(0x666666)
+                                                                    muted_fg
                                                                 }),
                                                         )
                                                         .child(
@@ -196,9 +199,9 @@ pub fn render_header_bar(
                                                                 .flex_1()
                                                                 .text_sm()
                                                                 .text_color(if is_selected {
-                                                                    rgb(0xffffff)
+                                                                    fg
                                                                 } else {
-                                                                    rgb(0xcccccc)
+                                                                    muted_fg
                                                                 })
                                                                 .overflow_hidden()
                                                                 .whitespace_nowrap()
@@ -208,7 +211,7 @@ pub fn render_header_bar(
                                                             d.child(
                                                                 div()
                                                                     .text_xs()
-                                                                    .text_color(rgb(0x888888))
+                                                                    .text_color(muted_fg)
                                                                     .child("↵"),
                                                             )
                                                         })
@@ -216,7 +219,6 @@ pub fn render_header_bar(
                                             ),
                                         ))
                                     })
-                                    // Command hint
                                     .when(!has_results, |d| {
                                         d.child(
                                             v_flex()
@@ -226,7 +228,7 @@ pub fn render_header_bar(
                                                         .px_3()
                                                         .py_1()
                                                         .text_xs()
-                                                        .text_color(rgb(0x555555))
+                                                        .text_color(muted_fg)
                                                         .child("COMMANDS"),
                                                 )
                                                 .child(
@@ -237,13 +239,13 @@ pub fn render_header_bar(
                                                         .child(
                                                             Icon::new(IconName::File)
                                                                 .size(px(14.0))
-                                                                .text_color(rgb(0x88ff88)),
+                                                                .text_color(cx.theme().success),
                                                         )
                                                         .child(
                                                             h_flex().gap_1().child(
                                                                 div()
                                                                     .text_sm()
-                                                                    .text_color(rgb(0xcccccc))
+                                                                    .text_color(fg)
                                                                     .child("md <name>"),
                                                             ),
                                                         )
@@ -251,23 +253,22 @@ pub fn render_header_bar(
                                                             div()
                                                                 .ml_auto()
                                                                 .text_xs()
-                                                                .text_color(rgb(0x666666))
+                                                                .text_color(muted_fg)
                                                                 .child("create note"),
                                                         ),
                                                 ),
                                         )
                                     }),
                             )
-                            // Footer hints
                             .child(
                                 h_flex()
                                     .px_3()
                                     .py_1p5()
                                     .gap_3()
                                     .border_t_1()
-                                    .border_color(rgb(0x2a2a2a))
+                                    .border_color(border)
                                     .text_xs()
-                                    .text_color(rgb(0x555555))
+                                    .text_color(muted_fg)
                                     .child(h_flex().gap_1().child("↑↓").child("nav"))
                                     .child(h_flex().gap_1().child("↵").child("go")),
                             ),
@@ -283,9 +284,9 @@ pub fn render_header_bar(
                     .py_1()
                     .rounded(px(4.0))
                     .cursor(CursorStyle::PointingHand)
-                    .hover(|s| s.bg(rgb(0x333333)))
+                    .hover(|s| s.bg(list_hover))
                     .text_sm()
-                    .text_color(rgb(0xaaaaaa))
+                    .text_color(muted_fg)
                     .child("?")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_shortcuts(cx);
@@ -303,29 +304,35 @@ pub fn render_footer_bar(
     canvas_offset: Point<Pixels>,
     selected_item_name: Option<String>,
     board_name: Option<String>,
+    cx: &Context<Humanboard>,
 ) -> Div {
+    let bg = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
     h_flex()
         .absolute()
         .bottom_0()
         .left_0()
         .right_0()
         .h(px(28.0))
-        .bg(hsla(0.0, 0.0, 0.0, 0.95))
+        .bg(bg)
         .border_t_1()
-        .border_color(hsla(0.0, 0.0, 0.3, 1.0))
+        .border_color(border)
         .items_center()
         .justify_between()
         .px_4()
         .gap_6()
         .text_xs()
-        .text_color(rgb(0xaaaaaa))
+        .text_color(muted_fg)
         .child(
             h_flex()
                 .gap_6()
                 .child(
                     div()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .child(board_name.unwrap_or_else(|| "Humanboard".to_string())),
                 )
                 .child(div().child(format!("Items: {}", item_count)))
@@ -337,46 +344,33 @@ pub fn render_footer_bar(
                 ))),
         )
         .when_some(selected_item_name, |d, name| {
-            d.child(div().text_color(rgb(0xffffff)).child(name))
+            d.child(div().text_color(fg).child(name))
         })
 }
 
-/// Render the stats overlay (wrapper around footer_bar)
-pub fn render_stats_overlay(
-    fps: f32,
-    frame_count: u64,
-    item_count: usize,
-    zoom: f32,
-    canvas_offset: Point<Pixels>,
-) -> Div {
-    render_footer_bar(
-        fps,
-        frame_count,
-        item_count,
-        zoom,
-        canvas_offset,
-        None,
-        None,
-    )
-}
-
 /// Render a keyboard key badge
-fn render_kbd(key: &str) -> Div {
+fn render_kbd(key: &str, cx: &Context<Humanboard>) -> Div {
+    let muted = cx.theme().muted;
+    let border = cx.theme().border;
+    let muted_fg = cx.theme().muted_foreground;
+
     div()
         .px(px(8.0))
         .py(px(4.0))
-        .bg(rgb(0x2a2a2a))
+        .bg(muted)
         .border_1()
-        .border_color(rgb(0x3a3a3a))
+        .border_color(border)
         .rounded(px(6.0))
         .text_xs()
         .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(0x999999))
+        .text_color(muted_fg)
         .child(key.to_string())
 }
 
 /// Render a shortcut row with key and description
-fn render_shortcut_row(key: &str, description: &str) -> Div {
+fn render_shortcut_row(key: &str, description: &str, cx: &Context<Humanboard>) -> Div {
+    let fg = cx.theme().foreground;
+
     h_flex()
         .h(px(28.0))
         .items_center()
@@ -384,25 +378,31 @@ fn render_shortcut_row(key: &str, description: &str) -> Div {
         .child(
             div()
                 .text_sm()
-                .text_color(rgb(0xcccccc))
+                .text_color(fg)
                 .child(description.to_string()),
         )
-        .child(render_kbd(key))
+        .child(render_kbd(key, cx))
 }
 
 /// Render a section of shortcuts with title
-fn render_shortcut_section(title: &str, shortcuts: Vec<(&str, &str)>) -> Div {
+fn render_shortcut_section(
+    title: &str,
+    shortcuts: Vec<(&str, &str)>,
+    cx: &Context<Humanboard>,
+) -> Div {
+    let muted_fg = cx.theme().muted_foreground;
+
     let mut section = v_flex().gap_1().child(
         div()
             .text_xs()
             .font_weight(FontWeight::BOLD)
-            .text_color(rgb(0x666666))
+            .text_color(muted_fg)
             .mb_1()
             .child(title.to_string().to_uppercase()),
     );
 
     for (key, desc) in shortcuts {
-        section = section.child(render_shortcut_row(key, desc));
+        section = section.child(render_shortcut_row(key, desc, cx));
     }
 
     section
@@ -410,6 +410,10 @@ fn render_shortcut_section(title: &str, shortcuts: Vec<(&str, &str)>) -> Div {
 
 /// Render the keyboard shortcuts overlay modal
 pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElement {
+    let bg = cx.theme().popover;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+
     deferred(
         div()
             .absolute()
@@ -430,9 +434,9 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
             .child(
                 v_flex()
                     .w(px(420.0))
-                    .bg(rgb(0x141414))
+                    .bg(bg)
                     .border_1()
-                    .border_color(rgb(0x2a2a2a))
+                    .border_color(border)
                     .rounded(px(16.0))
                     .overflow_hidden()
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
@@ -442,17 +446,17 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                             .px_5()
                             .py_4()
                             .border_b_1()
-                            .border_color(rgb(0x2a2a2a))
+                            .border_color(border)
                             .items_center()
                             .justify_between()
                             .child(
                                 div()
                                     .text_base()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(0xffffff))
+                                    .text_color(fg)
                                     .child("Keyboard Shortcuts"),
                             )
-                            .child(render_kbd("Cmd+/")),
+                            .child(render_kbd("Cmd+/", cx)),
                     )
                     // Content
                     .child(
@@ -466,8 +470,10 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                                     ("Cmd+N", "New board"),
                                     ("Cmd+H", "Go home"),
                                     ("Cmd+O", "Open file"),
+                                    ("Cmd+,", "Settings"),
                                     ("Cmd+Q", "Quit"),
                                 ],
+                                cx,
                             ))
                             .child(render_shortcut_section(
                                 "Canvas",
@@ -479,6 +485,7 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                                     ("Cmd+Z", "Undo"),
                                     ("Cmd+Shift+Z", "Redo"),
                                 ],
+                                cx,
                             ))
                             .child(render_shortcut_section(
                                 "PDF Preview",
@@ -490,6 +497,7 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                                     ("Cmd+W", "Close tab"),
                                     ("Esc", "Close preview"),
                                 ],
+                                cx,
                             )),
                     ),
             ),
@@ -506,11 +514,18 @@ pub fn render_command_palette(
 ) -> impl IntoElement {
     let current_text = input.read(cx).text().to_string();
     let has_results = !search_results.is_empty();
-
-    // Show command hints when input is empty or matches command prefix
     let show_md_hint = current_text.is_empty()
         || "md".starts_with(&current_text.to_lowercase())
         || current_text.to_lowercase().starts_with("md");
+
+    let bg = cx.theme().popover;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
+    let list_active = cx.theme().list_active;
+    let list_hover = cx.theme().list_hover;
+    let success = cx.theme().success;
 
     deferred(
         v_flex()
@@ -521,9 +536,7 @@ pub fn render_command_palette(
             .pt(px(120.0))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.hide_command_palette(cx);
-                }),
+                cx.listener(|this, _, _, cx| this.hide_command_palette(cx)),
             )
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 match event.keystroke.key.as_str() {
@@ -537,25 +550,24 @@ pub fn render_command_palette(
                     .w(px(500.0))
                     .max_h(px(400.0))
                     .flex_shrink_0()
-                    .bg(rgb(0x1a1a1a))
+                    .bg(bg)
                     .border_1()
-                    .border_color(rgb(0x333333))
+                    .border_color(border)
                     .rounded(px(12.0))
                     .shadow_lg()
                     .overflow_hidden()
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                    // Search input
                     .child(
                         h_flex()
                             .px_4()
                             .py_3()
                             .gap_3()
                             .border_b_1()
-                            .border_color(rgb(0x2a2a2a))
+                            .border_color(border)
                             .child(
                                 Icon::new(IconName::Search)
                                     .size(px(18.0))
-                                    .text_color(rgb(0x666666)),
+                                    .text_color(muted_fg),
                             )
                             .child(
                                 Input::new(input)
@@ -566,17 +578,15 @@ pub fn render_command_palette(
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x555555))
+                                    .text_color(muted_fg)
                                     .child("click outside to close"),
                             ),
                     )
-                    // Results section
                     .child(
                         div()
                             .id("command-palette-results")
                             .flex_1()
                             .overflow_y_scroll()
-                            // Search results
                             .when(has_results, |d| {
                                 d.child(v_flex().py_2().children(
                                     search_results.iter().enumerate().map(
@@ -592,8 +602,8 @@ pub fn render_command_palette(
                                                 .py_2()
                                                 .gap_3()
                                                 .cursor(CursorStyle::PointingHand)
-                                                .when(is_selected, |d| d.bg(rgb(0x2a2a4a)))
-                                                .hover(|s| s.bg(rgb(0x252535)))
+                                                .when(is_selected, |d| d.bg(list_active))
+                                                .hover(|s| s.bg(list_hover))
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     this.pending_command =
                                                         Some(format!("__jump:{}", item_id));
@@ -605,9 +615,9 @@ pub fn render_command_palette(
                                                     Icon::new(IconName::File)
                                                         .size(px(16.0))
                                                         .text_color(if is_selected {
-                                                            rgb(0x88aaff)
+                                                            primary
                                                         } else {
-                                                            rgb(0x666666)
+                                                            muted_fg
                                                         }),
                                                 )
                                                 .child(
@@ -615,9 +625,9 @@ pub fn render_command_palette(
                                                         .flex_1()
                                                         .text_sm()
                                                         .text_color(if is_selected {
-                                                            rgb(0xffffff)
+                                                            fg
                                                         } else {
-                                                            rgb(0xcccccc)
+                                                            muted_fg
                                                         })
                                                         .overflow_hidden()
                                                         .whitespace_nowrap()
@@ -627,7 +637,7 @@ pub fn render_command_palette(
                                                     d.child(
                                                         div()
                                                             .text_xs()
-                                                            .text_color(rgb(0x888888))
+                                                            .text_color(muted_fg)
                                                             .child("↵ jump"),
                                                     )
                                                 })
@@ -635,7 +645,6 @@ pub fn render_command_palette(
                                     ),
                                 ))
                             })
-                            // Command hints when no results
                             .when(!has_results && show_md_hint, |d| {
                                 d.child(
                                     v_flex()
@@ -645,7 +654,7 @@ pub fn render_command_palette(
                                                 .px_4()
                                                 .py_1()
                                                 .text_xs()
-                                                .text_color(rgb(0x555555))
+                                                .text_color(muted_fg)
                                                 .child("COMMANDS"),
                                         )
                                         .child(
@@ -654,34 +663,33 @@ pub fn render_command_palette(
                                                 .py_2()
                                                 .gap_3()
                                                 .cursor(CursorStyle::PointingHand)
-                                                .hover(|s| s.bg(rgb(0x252535)))
+                                                .hover(|s| s.bg(list_hover))
                                                 .child(
                                                     Icon::new(IconName::File)
                                                         .size(px(16.0))
-                                                        .text_color(rgb(0x88ff88)),
+                                                        .text_color(success),
                                                 )
                                                 .child(
                                                     h_flex()
                                                         .flex_1()
                                                         .gap_2()
-                                                        .child(render_kbd("md"))
+                                                        .child(render_kbd("md", cx))
                                                         .child(
                                                             div()
                                                                 .text_sm()
-                                                                .text_color(rgb(0x888888))
+                                                                .text_color(muted_fg)
                                                                 .child("<name>"),
                                                         ),
                                                 )
                                                 .child(
                                                     div()
                                                         .text_xs()
-                                                        .text_color(rgb(0x555555))
+                                                        .text_color(muted_fg)
                                                         .child("create markdown note"),
                                                 ),
                                         ),
                                 )
                             })
-                            // Empty state
                             .when(
                                 !has_results && !show_md_hint && !current_text.is_empty(),
                                 |d| {
@@ -693,32 +701,249 @@ pub fn render_command_palette(
                                             .child(
                                                 Icon::new(IconName::Search)
                                                     .size(px(32.0))
-                                                    .text_color(rgb(0x444444)),
+                                                    .text_color(muted_fg),
                                             )
                                             .child(
                                                 div()
                                                     .text_sm()
-                                                    .text_color(rgb(0x666666))
+                                                    .text_color(muted_fg)
                                                     .child("No items found"),
                                             ),
                                     )
                                 },
                             ),
                     )
-                    // Footer with hints
                     .child(
                         h_flex()
                             .px_4()
                             .py_2()
                             .gap_4()
                             .border_t_1()
-                            .border_color(rgb(0x2a2a2a))
+                            .border_color(border)
                             .text_xs()
-                            .text_color(rgb(0x555555))
+                            .text_color(muted_fg)
                             .child(h_flex().gap_1().child("↑↓").child("navigate"))
                             .child(h_flex().gap_1().child("↵").child("select")),
                     ),
             ),
     )
     .with_priority(2000)
+}
+
+/// Render the settings modal
+pub fn render_settings_modal(
+    current_theme: &str,
+    cx: &mut Context<Humanboard>,
+) -> impl IntoElement {
+    let themes = Settings::available_themes(cx);
+    let current_theme = current_theme.to_string();
+
+    let bg = cx.theme().background;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let title_bar = cx.theme().title_bar;
+    let primary = cx.theme().primary;
+    let list_active = cx.theme().list_active;
+    let list_hover = cx.theme().list_hover;
+
+    // Hardcoded to "Appearance" tab for now
+    let active_tab = "Appearance";
+
+    deferred(
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .bg(hsla(0.0, 0.0, 0.0, 0.8))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.show_settings = false;
+                    cx.notify();
+                }),
+            )
+            .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
+            .child(
+                h_flex()
+                    .w(px(700.0))
+                    .h(px(500.0))
+                    .bg(bg)
+                    .border_1()
+                    .border_color(border)
+                    .rounded(px(12.0))
+                    .overflow_hidden()
+                    .shadow_lg()
+                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    .on_scroll_wheel(|_, _, _| {})
+                    // Left sidebar with tabs
+                    .child(
+                        v_flex()
+                            .w(px(200.0))
+                            .h_full()
+                            .bg(title_bar)
+                            .border_r_1()
+                            .border_color(border)
+                            // Header
+                            .child(
+                                div()
+                                    .px_4()
+                                    .py_4()
+                                    .border_b_1()
+                                    .border_color(border)
+                                    .child(
+                                        div()
+                                            .text_lg()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child("Settings"),
+                                    ),
+                            )
+                            // Tabs
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .pt_2()
+                                    .child(
+                                        div()
+                                            .id("tab-appearance")
+                                            .px_3()
+                                            .py_2()
+                                            .mx_2()
+                                            .rounded(px(6.0))
+                                            .cursor(CursorStyle::PointingHand)
+                                            .when(active_tab == "Appearance", |d| {
+                                                d.bg(list_active)
+                                            })
+                                            .when(active_tab != "Appearance", |d| {
+                                                d.hover(|s| s.bg(list_hover))
+                                            })
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(if active_tab == "Appearance" {
+                                                        fg
+                                                    } else {
+                                                        muted_fg
+                                                    })
+                                                    .child("Appearance"),
+                                            ),
+                                    ),
+                            ),
+                    )
+                    // Right content area
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .h_full()
+                            // Header with tab name and close button
+                            .child(
+                                h_flex()
+                                    .px_6()
+                                    .py_4()
+                                    .border_b_1()
+                                    .border_color(border)
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child("Appearance"),
+                                    )
+                                    .child(render_kbd("Cmd+,", cx)),
+                            )
+                            // Content
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .p_6()
+                                    .child(
+                                        v_flex()
+                                            .gap_6()
+                                    // Theme Section
+                                    .child(
+                                        v_flex()
+                                            .gap_3()
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(fg)
+                                                    .child("Theme"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .id("theme-list")
+                                                    .max_h(px(200.0))
+                                                    .bg(title_bar)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(8.0))
+                                                    .overflow_y_scroll()
+                                                    .child(v_flex().children(themes.into_iter().map(
+                                                        |theme_name| {
+                                                            let is_selected = theme_name == current_theme;
+                                                            let theme_name_clone = theme_name.clone();
+
+                                                            div()
+                                                                .id(ElementId::Name(
+                                                                    format!("theme-{}", theme_name).into(),
+                                                                ))
+                                                                .w_full()
+                                                                .px_4()
+                                                                .py_2p5()
+                                                                .cursor(CursorStyle::PointingHand)
+                                                                .when(is_selected, |d| d.bg(list_active))
+                                                                .when(!is_selected, |d| {
+                                                                    d.hover(|s| s.bg(list_hover))
+                                                                })
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    cx.listener(move |this, _, _, cx| {
+                                                                        this.set_theme(
+                                                                            theme_name_clone.clone(),
+                                                                            cx,
+                                                                        );
+                                                                    }),
+                                                                )
+                                                                .child(
+                                                                    h_flex()
+                                                                        .items_center()
+                                                                        .justify_between()
+                                                                        .child(
+                                                                            div()
+                                                                                .text_sm()
+                                                                                .text_color(
+                                                                                    if is_selected {
+                                                                                        fg
+                                                                                    } else {
+                                                                                        muted_fg
+                                                                                    },
+                                                                                )
+                                                                                .child(theme_name),
+                                                                        )
+                                                                        .when(is_selected, |d| {
+                                                                            d.child(
+                                                                                Icon::new(IconName::Check)
+                                                                                    .size(px(16.0))
+                                                                                    .text_color(primary),
+                                                                            )
+                                                                        }),
+                                                                )
+                                                        },
+                                                    ))),
+                                            )
+                                    ),
+                                        ),
+                            ),
+                    ),
+            ),
+    )
+    .with_priority(1500)
 }

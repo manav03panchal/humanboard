@@ -12,8 +12,8 @@ pub mod preview;
 // Re-export commonly used items
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use overlays::{
-    render_command_palette, render_footer_bar, render_header_bar, render_shortcuts_overlay,
-    render_stats_overlay,
+    render_command_palette, render_footer_bar, render_header_bar, render_settings_modal,
+    render_shortcuts_overlay,
 };
 pub use preview::{
     render_preview_panel, render_selected_item_label, render_splitter, render_tab_bar,
@@ -22,14 +22,15 @@ pub use preview::{
 
 use crate::actions::{
     ClosePreview, CloseTab, CommandPalette, DeleteSelected, GoHome, NewBoard, NextPage, NextTab,
-    OpenFile, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts,
-    ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo,
+    ShowShortcuts, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
 use gpui::DefiniteLength::Fraction;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::ActiveTheme as _;
 
 /// UI Font used throughout the application
 pub const UI_FONT: &str = "Iosevka Nerd Font";
@@ -52,13 +53,19 @@ impl Render for Humanboard {
         };
 
         // Wrap everything in a container with overlays on top
+        let bg = cx.theme().background;
+
         div()
             .size_full()
+            .bg(bg)
             .font_family(UI_FONT)
             .relative()
             .child(content)
             .when(self.show_shortcuts, |d| {
                 d.child(render_shortcuts_overlay(cx))
+            })
+            .when(self.show_settings, |d| {
+                d.child(render_settings_modal(&self.settings.theme, cx))
             })
     }
 }
@@ -92,6 +99,7 @@ impl Humanboard {
             })
             .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .child(render_landing_page(
                 &self.board_index,
                 self.editing_board_id.as_deref(),
@@ -215,6 +223,7 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
             }))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 if let Some(first_path) = paths.paths().first() {
                     let drop_pos = if let Some(pos) = this.last_drop_pos {
@@ -276,15 +285,17 @@ impl Humanboard {
                                     &items,
                                     selected_item_id,
                                     &self.youtube_webviews,
+                                    cx,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Vertical, cx))
-                        .child(
+                        .child({
+                            let bg = cx.theme().background;
                             div()
                                 .flex_shrink_0()
                                 .w(Fraction(preview_size))
                                 .h_full()
-                                .bg(rgb(0x000000))
+                                .bg(bg)
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
@@ -299,8 +310,8 @@ impl Humanboard {
                                         .when_some(tabs.get(active_tab), |d, tab| {
                                             d.child(render_tab_content(tab, true, active_tab, cx))
                                         }),
-                                ),
-                        ),
+                                )
+                        }),
                     SplitDirection::Horizontal => base
                         .flex()
                         .flex_col()
@@ -317,15 +328,17 @@ impl Humanboard {
                                     &items,
                                     selected_item_id,
                                     &self.youtube_webviews,
+                                    cx,
                                 )),
                         )
                         .child(render_splitter(SplitDirection::Horizontal, cx))
-                        .child(
+                        .child({
+                            let bg = cx.theme().background;
                             div()
                                 .flex_shrink_0()
                                 .h(Fraction(preview_size))
                                 .w_full()
-                                .bg(rgb(0x000000))
+                                .bg(bg)
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
@@ -340,8 +353,8 @@ impl Humanboard {
                                         .when_some(tabs.get(active_tab), |d, tab| {
                                             d.child(render_tab_content(tab, true, active_tab, cx))
                                         }),
-                                ),
-                        ),
+                                )
+                        }),
                 }
             }
             None => base.pt(px(40.0)).pb(px(28.0)).child(render_canvas_area(
@@ -350,6 +363,7 @@ impl Humanboard {
                 &items,
                 selected_item_id,
                 &self.youtube_webviews,
+                cx,
             )),
         }
         .child(render_footer_bar(
@@ -360,6 +374,7 @@ impl Humanboard {
             canvas_offset,
             selected_item_name,
             None,
+            cx,
         ))
         .child(render_header_bar(
             board_name,

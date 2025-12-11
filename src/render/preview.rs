@@ -11,7 +11,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::Input;
-use gpui_component::{Icon, IconName, Sizable, h_flex, v_flex};
+use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable, h_flex, v_flex};
 use std::path::PathBuf;
 
 /// Render the tab bar for the preview panel
@@ -20,12 +20,21 @@ pub fn render_tab_bar(
     active_tab: usize,
     cx: &mut Context<Humanboard>,
 ) -> Div {
+    let bg = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let list_active = cx.theme().list_active;
+    let list_hover = cx.theme().list_hover;
+    let primary = cx.theme().primary;
+    let danger = cx.theme().danger;
+
     h_flex()
         .h(px(36.0))
         .w_full()
-        .bg(rgb(0x000000))
+        .bg(bg)
         .border_b_1()
-        .border_color(rgb(0x333333))
+        .border_color(border)
         .items_center()
         .overflow_x_hidden()
         .children(tabs.iter().enumerate().map(|(index, tab)| {
@@ -47,31 +56,23 @@ pub fn render_tab_bar(
                 .gap_2()
                 .px_3()
                 .py_1()
-                .bg(if is_active {
-                    rgb(0x1a1a1a)
-                } else {
-                    rgb(0x000000)
-                })
+                .bg(if is_active { list_active } else { bg })
                 .border_r_1()
-                .border_color(rgb(0x333333))
-                .hover(|style| style.bg(rgb(0x2a2a2a)))
+                .border_color(border)
+                .hover(|style| style.bg(list_hover))
                 .cursor(CursorStyle::PointingHand)
                 .on_click(cx.listener(move |this, _event, _window, cx| {
                     this.switch_tab(tab_index, cx);
                 }))
                 .child(if is_markdown {
-                    Icon::new(IconName::File).xsmall().text_color(rgb(0x8888ff))
+                    Icon::new(IconName::File).xsmall().text_color(primary)
                 } else {
-                    Icon::new(IconName::File).xsmall().text_color(rgb(0xff6666))
+                    Icon::new(IconName::File).xsmall().text_color(danger)
                 })
                 .child(
                     div()
                         .text_xs()
-                        .text_color(if is_active {
-                            rgb(0xffffff)
-                        } else {
-                            rgb(0x888888)
-                        })
+                        .text_color(if is_active { fg } else { muted_fg })
                         .child(display_name),
                 )
                 .child(
@@ -83,8 +84,8 @@ pub fn render_tab_bar(
                         .justify_center()
                         .rounded(px(2.0))
                         .text_xs()
-                        .text_color(rgb(0x666666))
-                        .hover(|style| style.bg(rgb(0x444444)).text_color(rgb(0xffffff)))
+                        .text_color(muted_fg)
+                        .hover(|style| style.bg(list_hover).text_color(fg))
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _event, _window, cx| {
@@ -103,6 +104,11 @@ pub fn render_tab_content(
     _tab_index: usize,
     cx: &mut Context<Humanboard>,
 ) -> Div {
+    let bg = cx.theme().background;
+    let title_bar = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let muted_fg = cx.theme().muted_foreground;
+
     match tab {
         PreviewTab::Pdf { webview, path: _ } => div()
             .size_full()
@@ -117,29 +123,24 @@ pub fn render_tab_content(
 
             v_flex()
                 .size_full()
-                .bg(rgb(0x000000))
+                .bg(bg)
                 .child(
                     // Content area
                     div()
                         .id("md-content-scroll")
                         .flex_1()
                         .overflow_y_scroll()
-                        .bg(rgb(0x000000))
+                        .bg(bg)
                         .when(!is_editing, |d| {
                             // Preview mode - show rendered markdown (scrollable)
-                            d.child(crate::markdown_card::render_markdown_content(content, 1.0))
+                            d.child(crate::markdown_card::render_markdown_content(content, 1.0, cx))
                         })
                         .when(is_editing, |d| {
                             // Edit mode - code editor with markdown syntax highlighting
                             if let Some(ed) = editor {
                                 d.child(Input::new(ed).h_full().appearance(false))
                             } else {
-                                d.child(
-                                    div()
-                                        .p_4()
-                                        .text_color(rgb(0x666666))
-                                        .child("Loading editor..."),
-                                )
+                                d.child(div().p_4().text_color(muted_fg).child("Loading editor..."))
                             }
                         }),
                 )
@@ -147,16 +148,16 @@ pub fn render_tab_content(
                     // Footer with action buttons
                     h_flex()
                         .h(px(40.0))
-                        .bg(rgb(0x0a0a0a))
+                        .bg(title_bar)
                         .border_t_1()
-                        .border_color(rgb(0x2a2a2a))
+                        .border_color(border)
                         .items_center()
                         .justify_between()
                         .px_3()
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(0x666666))
+                                .text_color(muted_fg)
                                 .child(format!("{} chars", content.len())),
                         )
                         .child(
@@ -203,7 +204,15 @@ pub fn render_preview_panel(
     current_page: usize,
     page_count: usize,
     zoom: f32,
+    cx: &Context<Humanboard>,
 ) -> Div {
+    let bg = cx.theme().background;
+    let border = cx.theme().border;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let danger = cx.theme().danger;
+    let primary = cx.theme().primary;
+
     // Truncate filename if too long
     let display_name = if file_name.len() > 25 {
         format!("{}...", &file_name[..22])
@@ -215,7 +224,7 @@ pub fn render_preview_panel(
         .flex()
         .flex_col()
         .size_full()
-        .bg(rgb(0x000000))
+        .bg(bg)
         .child(
             // Header bar - compact layout
             div()
@@ -224,18 +233,18 @@ pub fn render_preview_panel(
                 .gap_2()
                 .px_3()
                 .py_2()
-                .bg(rgb(0x000000))
+                .bg(bg)
                 .border_b_1()
-                .border_color(rgb(0x505050))
+                .border_color(border)
                 // PDF badge
                 .child(
                     div()
                         .px_2()
                         .py(px(2.0))
-                        .bg(rgb(0xff6b6b))
+                        .bg(danger)
                         .rounded(px(4.0))
                         .text_xs()
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .flex_shrink_0()
                         .child("PDF"),
                 )
@@ -246,7 +255,7 @@ pub fn render_preview_panel(
                         .min_w(px(0.0))
                         .overflow_hidden()
                         .text_sm()
-                        .text_color(rgb(0xffffff))
+                        .text_color(fg)
                         .child(display_name),
                 )
                 // Page indicator
@@ -254,7 +263,7 @@ pub fn render_preview_panel(
                     div()
                         .flex_shrink_0()
                         .text_sm()
-                        .text_color(rgb(0xaaaaaa))
+                        .text_color(muted_fg)
                         .child(format!("{}/{}", current_page, page_count)),
                 )
                 // Zoom indicator
@@ -262,7 +271,7 @@ pub fn render_preview_panel(
                     div()
                         .flex_shrink_0()
                         .text_sm()
-                        .text_color(rgb(0x88aaff))
+                        .text_color(primary)
                         .child(format!("{:.0}%", zoom * 100.0)),
                 )
                 // Keyboard hints
@@ -270,7 +279,7 @@ pub fn render_preview_panel(
                     div()
                         .flex_shrink_0()
                         .text_xs()
-                        .text_color(rgb(0x666666))
+                        .text_color(muted_fg)
                         .child("Scroll=Pan • ⌘+Scroll=Zoom • T=Split"),
                 ),
         )
@@ -282,7 +291,7 @@ pub fn render_preview_panel(
                 .items_center()
                 .justify_center()
                 .overflow_hidden()
-                .bg(rgb(0x000000))
+                .bg(bg)
                 .when_some(page_image_path.clone(), |d, path| {
                     d.child(
                         img(path)
@@ -295,17 +304,12 @@ pub fn render_preview_panel(
                     if page_count == 0 {
                         d.child(
                             div()
-                                .text_color(rgb(0xff6b6b))
+                                .text_color(danger)
                                 .text_sm()
                                 .child("Failed to load PDF"),
                         )
                     } else {
-                        d.child(
-                            div()
-                                .text_color(rgb(0x888888))
-                                .text_sm()
-                                .child("Loading..."),
-                        )
+                        d.child(div().text_color(muted_fg).text_sm().child("Loading..."))
                     }
                 }),
         )
@@ -313,12 +317,16 @@ pub fn render_preview_panel(
 
 /// Render the resizable splitter between canvas and preview
 pub fn render_splitter(direction: SplitDirection, cx: &mut Context<Humanboard>) -> Div {
+    let title_bar = cx.theme().title_bar;
+    let list_hover = cx.theme().list_hover;
+    let border = cx.theme().border;
+
     match direction {
         SplitDirection::Vertical => div()
             .w(px(8.0))
             .h_full()
-            .bg(rgb(0x0a0a0a))
-            .hover(|s| s.bg(rgb(0x1a1a1a)))
+            .bg(title_bar)
+            .hover(|s| s.bg(list_hover))
             .cursor(CursorStyle::ResizeLeftRight)
             .on_mouse_down(
                 MouseButton::Left,
@@ -331,18 +339,12 @@ pub fn render_splitter(direction: SplitDirection, cx: &mut Context<Humanboard>) 
             .flex()
             .items_center()
             .justify_center()
-            .child(
-                div()
-                    .w(px(2.0))
-                    .h(px(40.0))
-                    .bg(rgb(0x333333))
-                    .rounded(px(1.0)),
-            ),
+            .child(div().w(px(2.0)).h(px(40.0)).bg(border).rounded(px(1.0))),
         SplitDirection::Horizontal => div()
             .h(px(8.0))
             .w_full()
-            .bg(rgb(0x0a0a0a))
-            .hover(|s| s.bg(rgb(0x1a1a1a)))
+            .bg(title_bar)
+            .hover(|s| s.bg(list_hover))
             .cursor(CursorStyle::ResizeUpDown)
             .on_mouse_down(
                 MouseButton::Left,
@@ -355,13 +357,7 @@ pub fn render_splitter(direction: SplitDirection, cx: &mut Context<Humanboard>) 
             .flex()
             .items_center()
             .justify_center()
-            .child(
-                div()
-                    .h(px(2.0))
-                    .w(px(40.0))
-                    .bg(rgb(0x333333))
-                    .rounded(px(1.0)),
-            ),
+            .child(div().h(px(2.0)).w(px(40.0)).bg(border).rounded(px(1.0))),
     }
 }
 
