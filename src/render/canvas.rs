@@ -257,7 +257,25 @@ fn render_item_content(
         }
 
         ItemContent::Markdown { title, content, .. } => {
-            render_collapsed_markdown(title, content, zoom)
+            // Use theme colors for markdown cards
+            let popover_bg = hsla(220.0 / 360.0, 0.15, 0.18, 1.0); // Subtle dark bg
+            let border = hsla(240.0 / 360.0, 0.2, 0.35, 1.0); // Muted border
+            let hover_bg = hsla(220.0 / 360.0, 0.15, 0.22, 1.0); // Slightly lighter on hover
+            let hover_border = hsla(240.0 / 360.0, 0.4, 0.55, 1.0); // More vibrant on hover
+            let icon_color = hsla(240.0 / 360.0, 0.6, 0.7, 1.0); // Blue-ish icon
+            let text_color = hsla(0.0, 0.0, 0.85, 1.0); // Light text
+
+            render_collapsed_markdown(
+                title,
+                content,
+                zoom,
+                popover_bg,
+                border,
+                hover_bg,
+                hover_border,
+                icon_color,
+                text_color,
+            )
         }
     }
 }

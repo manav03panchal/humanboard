@@ -439,6 +439,7 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                     .border_color(border)
                     .rounded(px(16.0))
                     .overflow_hidden()
+                    .shadow_lg()
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     // Header
                     .child(
@@ -466,7 +467,8 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                             .child(render_shortcut_section(
                                 "General",
                                 vec![
-                                    (":", "Command palette / Search"),
+                                    ("Cmd+K", "Command palette"),
+                                    (":", "Quick search"),
                                     ("Cmd+N", "New board"),
                                     ("Cmd+H", "Go home"),
                                     ("Cmd+O", "Open file"),
@@ -481,9 +483,11 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                                     ("Cmd+=", "Zoom in"),
                                     ("Cmd+-", "Zoom out"),
                                     ("Cmd+0", "Reset zoom"),
+                                    ("Cmd+D", "Duplicate selected"),
                                     ("Del", "Delete selected"),
                                     ("Cmd+Z", "Undo"),
                                     ("Cmd+Shift+Z", "Redo"),
+                                    ("Esc", "Close palette/preview"),
                                 ],
                                 cx,
                             ))

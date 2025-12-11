@@ -7,6 +7,7 @@
 //! - Resizable splitter
 
 use crate::app::{Humanboard, PreviewTab, SplitDirection};
+use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -133,14 +134,20 @@ pub fn render_tab_content(
                         .bg(bg)
                         .when(!is_editing, |d| {
                             // Preview mode - show rendered markdown (scrollable)
-                            d.child(crate::markdown_card::render_markdown_content(content, 1.0, cx))
+                            d.child(crate::markdown_card::render_markdown_content(
+                                content, 1.0, cx,
+                            ))
                         })
                         .when(is_editing, |d| {
                             // Edit mode - code editor with markdown syntax highlighting
                             if let Some(ed) = editor {
                                 d.child(Input::new(ed).h_full().appearance(false))
                             } else {
-                                d.child(div().p_4().text_color(muted_fg).child("Loading editor..."))
+                                d.child(div().p_4().child(render_loading_spinner(
+                                    "Loading editor...",
+                                    cx.theme().primary,
+                                    cx.theme().muted_foreground,
+                                )))
                             }
                         }),
                 )
@@ -309,7 +316,7 @@ pub fn render_preview_panel(
                                 .child("Failed to load PDF"),
                         )
                     } else {
-                        d.child(div().text_color(muted_fg).text_sm().child("Loading..."))
+                        d.child(render_loading_spinner("Loading page...", primary, muted_fg))
                     }
                 }),
         )

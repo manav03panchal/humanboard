@@ -132,17 +132,28 @@ pub fn extract_title_from_content(content: &str, fallback: &str) -> String {
 }
 
 /// Render a collapsed markdown card directly from content (avoids MarkdownCard allocation)
-pub fn render_collapsed_markdown(title: &str, content: &str, zoom: f32) -> Div {
+/// Takes theme colors as parameters for proper theming support
+pub fn render_collapsed_markdown(
+    title: &str,
+    content: &str,
+    zoom: f32,
+    bg: Hsla,
+    border: Hsla,
+    hover_bg: Hsla,
+    hover_border: Hsla,
+    icon_color: Hsla,
+    text_color: Hsla,
+) -> Div {
     let display_title = extract_title_from_content(content, title);
 
     div()
         .size_full()
-        .bg(rgb(0x1e1e1e))
+        .bg(bg)
         .rounded(px(6.0 * zoom))
         .border(px(1.0 * zoom))
-        .border_color(rgb(0x3a3a5a))
+        .border_color(border)
         .cursor(CursorStyle::PointingHand)
-        .hover(|s| s.bg(rgb(0x2a2a2a)).border_color(rgb(0x5a5a8a)))
+        .hover(move |s| s.bg(hover_bg).border_color(hover_border))
         .flex()
         .items_center()
         .gap(px(8.0 * zoom))
@@ -150,14 +161,14 @@ pub fn render_collapsed_markdown(title: &str, content: &str, zoom: f32) -> Div {
         .child(
             Icon::new(IconName::File)
                 .size(px(16.0 * zoom))
-                .text_color(rgb(0x8888ff)),
+                .text_color(icon_color),
         )
         .child(
             div()
                 .flex_1()
                 .text_size(px(12.0 * zoom))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(0xcccccc))
+                .text_color(text_color)
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .child(display_title),
@@ -165,17 +176,29 @@ pub fn render_collapsed_markdown(title: &str, content: &str, zoom: f32) -> Div {
 }
 
 /// Render a collapsed markdown card as a simple button with filename
-pub fn render_collapsed_card(card: &MarkdownCard, _bounds: Bounds<Pixels>, zoom: f32) -> Div {
+/// Takes theme colors as parameters for proper theming support
+#[allow(dead_code)]
+pub fn render_collapsed_card(
+    card: &MarkdownCard,
+    _bounds: Bounds<Pixels>,
+    zoom: f32,
+    bg: Hsla,
+    border: Hsla,
+    hover_bg: Hsla,
+    hover_border: Hsla,
+    icon_color: Hsla,
+    text_color: Hsla,
+) -> Div {
     let title = card.extract_title();
 
     div()
         .size_full()
-        .bg(rgb(0x1e1e1e))
+        .bg(bg)
         .rounded(px(6.0 * zoom))
         .border(px(1.0 * zoom))
-        .border_color(rgb(0x3a3a5a))
+        .border_color(border)
         .cursor(CursorStyle::PointingHand)
-        .hover(|s| s.bg(rgb(0x2a2a2a)).border_color(rgb(0x5a5a8a)))
+        .hover(move |s| s.bg(hover_bg).border_color(hover_border))
         .flex()
         .items_center()
         .gap(px(8.0 * zoom))
@@ -183,14 +206,14 @@ pub fn render_collapsed_card(card: &MarkdownCard, _bounds: Bounds<Pixels>, zoom:
         .child(
             Icon::new(IconName::File)
                 .size(px(16.0 * zoom))
-                .text_color(rgb(0x8888ff)),
+                .text_color(icon_color),
         )
         .child(
             div()
                 .flex_1()
                 .text_size(px(12.0 * zoom))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(0xcccccc))
+                .text_color(text_color)
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .child(title),
@@ -308,30 +331,118 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
     let is_dark = cx.theme().mode.is_dark();
 
     // Text colors based on theme mode
-    let heading_1: Hsla = if is_dark { rgb(0xffffff).into() } else { rgb(0x1a1a1a).into() };
-    let heading_2: Hsla = if is_dark { rgb(0xf0f0f0).into() } else { rgb(0x2a2a2a).into() };
-    let heading_3: Hsla = if is_dark { rgb(0xe0e0e0).into() } else { rgb(0x3a3a3a).into() };
-    let heading_4: Hsla = if is_dark { rgb(0xd0d0d0).into() } else { rgb(0x4a4a4a).into() };
-    let heading_5: Hsla = if is_dark { rgb(0xc0c0c0).into() } else { rgb(0x5a5a5a).into() };
-    let text_color: Hsla = if is_dark { rgb(0xbbbbbb).into() } else { rgb(0x333333).into() };
-    let text_bold: Hsla = if is_dark { rgb(0xffffff).into() } else { rgb(0x000000).into() };
-    let text_italic: Hsla = if is_dark { rgb(0xcccccc).into() } else { rgb(0x444444).into() };
-    let text_muted: Hsla = if is_dark { rgb(0x666666).into() } else { rgb(0x999999).into() };
-    let text_quote: Hsla = if is_dark { rgb(0x888888).into() } else { rgb(0x666666).into() };
+    let heading_1: Hsla = if is_dark {
+        rgb(0xffffff).into()
+    } else {
+        rgb(0x1a1a1a).into()
+    };
+    let heading_2: Hsla = if is_dark {
+        rgb(0xf0f0f0).into()
+    } else {
+        rgb(0x2a2a2a).into()
+    };
+    let heading_3: Hsla = if is_dark {
+        rgb(0xe0e0e0).into()
+    } else {
+        rgb(0x3a3a3a).into()
+    };
+    let heading_4: Hsla = if is_dark {
+        rgb(0xd0d0d0).into()
+    } else {
+        rgb(0x4a4a4a).into()
+    };
+    let heading_5: Hsla = if is_dark {
+        rgb(0xc0c0c0).into()
+    } else {
+        rgb(0x5a5a5a).into()
+    };
+    let text_color: Hsla = if is_dark {
+        rgb(0xbbbbbb).into()
+    } else {
+        rgb(0x333333).into()
+    };
+    let text_bold: Hsla = if is_dark {
+        rgb(0xffffff).into()
+    } else {
+        rgb(0x000000).into()
+    };
+    let text_italic: Hsla = if is_dark {
+        rgb(0xcccccc).into()
+    } else {
+        rgb(0x444444).into()
+    };
+    let text_muted: Hsla = if is_dark {
+        rgb(0x666666).into()
+    } else {
+        rgb(0x999999).into()
+    };
+    let text_quote: Hsla = if is_dark {
+        rgb(0x888888).into()
+    } else {
+        rgb(0x666666).into()
+    };
 
     // Background and border colors
-    let code_bg: Hsla = if is_dark { rgb(0x2a2a2a).into() } else { rgb(0xf5f5f5).into() };
-    let code_border: Hsla = if is_dark { rgb(0x252525).into() } else { rgb(0xe0e0e0).into() };
-    let code_block_bg: Hsla = if is_dark { rgb(0x0d0d0d).into() } else { rgb(0xfafafa).into() };
-    let code_text: Hsla = if is_dark { rgb(0xe06c75).into() } else { rgb(0xd73a49).into() };
-    let code_block_color: Hsla = if is_dark { rgb(0x98c379).into() } else { rgb(0x22863a).into() };
-    let border_color: Hsla = if is_dark { rgb(0x333333).into() } else { rgb(0xd1d5da).into() };
-    let quote_border: Hsla = if is_dark { rgb(0x4a4a4a).into() } else { rgb(0xdfe2e5).into() };
-    let table_bg_header: Hsla = if is_dark { rgb(0x1a1a1a).into() } else { rgb(0xf6f8fa).into() };
-    let table_bg_alt: Hsla = if is_dark { rgb(0x0f0f0f).into() } else { rgb(0xffffff).into() };
-    let table_text: Hsla = if is_dark { rgb(0xaaaaaa).into() } else { rgb(0x444444).into() };
-    let table_text_header: Hsla = if is_dark { rgb(0xdddddd).into() } else { rgb(0x24292e).into() };
-    let hr_color: Hsla = if is_dark { rgb(0x333333).into() } else { rgb(0xe1e4e8).into() };
+    let code_bg: Hsla = if is_dark {
+        rgb(0x2a2a2a).into()
+    } else {
+        rgb(0xf5f5f5).into()
+    };
+    let code_border: Hsla = if is_dark {
+        rgb(0x252525).into()
+    } else {
+        rgb(0xe0e0e0).into()
+    };
+    let code_block_bg: Hsla = if is_dark {
+        rgb(0x0d0d0d).into()
+    } else {
+        rgb(0xfafafa).into()
+    };
+    let code_text: Hsla = if is_dark {
+        rgb(0xe06c75).into()
+    } else {
+        rgb(0xd73a49).into()
+    };
+    let code_block_color: Hsla = if is_dark {
+        rgb(0x98c379).into()
+    } else {
+        rgb(0x22863a).into()
+    };
+    let border_color: Hsla = if is_dark {
+        rgb(0x333333).into()
+    } else {
+        rgb(0xd1d5da).into()
+    };
+    let quote_border: Hsla = if is_dark {
+        rgb(0x4a4a4a).into()
+    } else {
+        rgb(0xdfe2e5).into()
+    };
+    let table_bg_header: Hsla = if is_dark {
+        rgb(0x1a1a1a).into()
+    } else {
+        rgb(0xf6f8fa).into()
+    };
+    let table_bg_alt: Hsla = if is_dark {
+        rgb(0x0f0f0f).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    let table_text: Hsla = if is_dark {
+        rgb(0xaaaaaa).into()
+    } else {
+        rgb(0x444444).into()
+    };
+    let table_text_header: Hsla = if is_dark {
+        rgb(0xdddddd).into()
+    } else {
+        rgb(0x24292e).into()
+    };
+    let hr_color: Hsla = if is_dark {
+        rgb(0x333333).into()
+    } else {
+        rgb(0xe1e4e8).into()
+    };
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
@@ -451,7 +562,14 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
                     } else {
                         let segments = std::mem::take(&mut paragraph_segments);
                         container = container.child(render_styled_paragraph(
-                            segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
+                            segments,
+                            zoom,
+                            text_color,
+                            text_bold,
+                            text_italic,
+                            text_muted,
+                            code_bg,
+                            code_text,
                         ));
                     }
                 }
@@ -583,9 +701,16 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
                         .border_color(quote_border)
                         .child(
                             render_styled_paragraph(
-                                segments, zoom, text_quote, text_bold, text_italic, text_muted, code_bg, code_text
+                                segments,
+                                zoom,
+                                text_quote,
+                                text_bold,
+                                text_italic,
+                                text_muted,
+                                code_bg,
+                                code_text,
                             )
-                                .italic(),
+                            .italic(),
                         ),
                 );
                 in_blockquote = false;
@@ -637,13 +762,16 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
                                 .text_color(text_muted)
                                 .child(bullet),
                         )
-                        .child(
-                            div()
-                                .flex_1()
-                                .child(render_styled_paragraph(
-                                    segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
-                                )),
-                        ),
+                        .child(div().flex_1().child(render_styled_paragraph(
+                            segments,
+                            zoom,
+                            text_color,
+                            text_bold,
+                            text_italic,
+                            text_muted,
+                            code_bg,
+                            code_text,
+                        ))),
                 );
             }
 
@@ -808,7 +936,14 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
     );
     if !paragraph_segments.is_empty() {
         container = container.child(render_styled_paragraph(
-            paragraph_segments, zoom, text_color, text_bold, text_italic, text_muted, code_bg, code_text
+            paragraph_segments,
+            zoom,
+            text_color,
+            text_bold,
+            text_italic,
+            text_muted,
+            code_bg,
+            code_text,
         ));
     }
 
