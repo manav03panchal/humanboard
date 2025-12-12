@@ -79,7 +79,7 @@ impl SpotifyWebView {
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         html, body {{ width: 100%; height: 100%; overflow: hidden; background: #000; }}
-        iframe {{ width: 100%; height: 176px; border: none; }}
+        iframe {{ width: 100%; height: 100%; border: none; }}
     </style>
 </head>
 <body>
