@@ -197,7 +197,6 @@ impl Humanboard {
     }
 
     pub fn set_theme(&mut self, theme_name: String, cx: &mut Context<Self>) {
-        eprintln!("set_theme called with: {}", theme_name);
         self.settings.theme = theme_name.clone();
         self.settings.save();
 

@@ -106,26 +106,14 @@ pub fn init_themes(cx: &mut App) {
         .map(|p| p.join("themes"))
         .unwrap_or_else(|| PathBuf::from("./themes"));
 
-    eprintln!("Looking for themes in: {:?}", themes_dir);
-
     if themes_dir.exists() {
-        eprintln!("Themes directory exists, watching...");
         let saved_theme = Settings::load().theme;
         let saved_theme_clone = saved_theme.clone();
 
-        if let Err(err) = ThemeRegistry::watch_dir(themes_dir, cx, move |cx| {
-            eprintln!(
-                "Themes loaded, available: {:?}",
-                ThemeRegistry::global(cx)
-                    .themes()
-                    .keys()
-                    .collect::<Vec<_>>()
-);
-
+        if let Err(_err) = ThemeRegistry::watch_dir(themes_dir, cx, move |cx| {
             // Apply saved theme after themes are loaded
             let theme_name = SharedString::from(saved_theme_clone.clone());
             if let Some(config) = ThemeRegistry::global(cx).themes().get(&theme_name).cloned() {
-                eprintln!("Applying saved theme: {}", saved_theme_clone);
                 let mode = config.mode;
                 if mode.is_dark() {
                     Theme::global_mut(cx).dark_theme = config.clone();
@@ -137,9 +125,7 @@ pub fn init_themes(cx: &mut App) {
                 cx.refresh_windows();
             }
         }) {
-            eprintln!("Failed to watch themes directory: {}", err);
+            // Theme watch failed silently
         }
-    } else {
-        eprintln!("Themes directory does not exist: {:?}", themes_dir);
     }
 }
