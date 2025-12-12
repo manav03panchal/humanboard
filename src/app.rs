@@ -4,6 +4,7 @@ use crate::board_index::BoardIndex;
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
+use crate::spotify_webview::SpotifyWebView;
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
@@ -136,6 +137,9 @@ pub struct Humanboard {
     // Video WebViews (keyed by item ID)
     pub video_webviews: HashMap<u64, VideoWebView>,
 
+    // Spotify WebViews (keyed by item ID)
+    pub spotify_webviews: HashMap<u64, SpotifyWebView>,
+
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
@@ -202,6 +206,7 @@ impl Humanboard {
             youtube_webviews: HashMap::new(),
             audio_webviews: HashMap::new(),
             video_webviews: HashMap::new(),
+            spotify_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
             settings_theme_index: 0,
@@ -724,6 +729,7 @@ impl Humanboard {
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
         self.audio_webviews.clear(); // Clear Audio WebViews when leaving board
         self.video_webviews.clear(); // Clear Video WebViews when leaving board
+        self.spotify_webviews.clear(); // Clear Spotify WebViews when leaving board
         self.view = AppView::Landing;
         self.selected_items.clear();
         // Reload index to get any changes
@@ -1054,6 +1060,53 @@ impl Humanboard {
         let video_ids: std::collections::HashSet<u64> =
             video_items.iter().map(|(id, _)| *id).collect();
         self.video_webviews.retain(|id, _| video_ids.contains(id));
+    }
+
+    pub fn ensure_spotify_webviews(&mut self, window: &mut Window, cx: &mut App) {
+        use crate::spotify_webview::SpotifyContentType;
+        use crate::types::ItemContent;
+
+        let Some(ref board) = self.board else {
+            self.spotify_webviews.clear();
+            return;
+        };
+
+        // Collect Spotify item IDs and content info
+        let spotify_items: Vec<(u64, SpotifyContentType, String)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let ItemContent::Spotify {
+                    content_type,
+                    content_id,
+                } = &item.content
+                {
+                    Some((item.id, content_type.clone(), content_id.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create WebViews for new Spotify items
+        for (item_id, content_type, content_id) in &spotify_items {
+            if !self.spotify_webviews.contains_key(item_id) {
+                match SpotifyWebView::new(content_type.clone(), content_id.clone(), window, cx) {
+                    Ok(webview) => {
+                        self.spotify_webviews.insert(*item_id, webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create Spotify WebView: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Remove WebViews for deleted items
+        let spotify_ids: std::collections::HashSet<u64> =
+            spotify_items.iter().map(|(id, _, _)| *id).collect();
+        self.spotify_webviews
+            .retain(|id, _| spotify_ids.contains(id));
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {
