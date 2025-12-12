@@ -32,4 +32,4 @@ version = "0.1.0"
 copyright = "Copyright © 2025"
 category = "Productivity"
 short_description = "A moodboard app"
-resources = ["assets", "themes"]
+resources = ["assets", "themes", "lib"]

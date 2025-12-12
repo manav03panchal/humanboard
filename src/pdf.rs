@@ -33,12 +33,41 @@ impl PdfDocument {
     }
 
     fn load_pdfium() -> Result<Pdfium, String> {
-        // Try to load from lib/ directory first
+        // Try to load from lib/ directory first (development)
         let lib_path = std::env::current_dir()
             .ok()
             .map(|p| p.join("lib/libpdfium.dylib"));
 
         if let Some(path) = lib_path {
+            if path.exists() {
+                if let Ok(bindings) = Pdfium::bind_to_library(&path) {
+                    return Ok(Pdfium::new(bindings));
+                }
+            }
+        }
+
+        // Try relative to executable
+        let exe_path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .map(|p| p.join("lib/libpdfium.dylib"));
+
+        if let Some(path) = exe_path {
+            if path.exists() {
+                if let Ok(bindings) = Pdfium::bind_to_library(&path) {
+                    return Ok(Pdfium::new(bindings));
+                }
+            }
+        }
+
+        // Try macOS bundle Resources folder
+        let bundle_path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .map(|p| p.join("Resources/lib/libpdfium.dylib"));
+
+        if let Some(path) = bundle_path {
             if path.exists() {
                 if let Ok(bindings) = Pdfium::bind_to_library(&path) {
                     return Ok(Pdfium::new(bindings));
