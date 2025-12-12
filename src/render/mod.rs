@@ -83,7 +83,7 @@ impl Render for Humanboard {
                 d.child(render_shortcuts_overlay(cx))
             })
             .when(self.show_settings, |d| {
-                d.child(render_settings_modal(&self.settings.theme, cx))
+                d.child(render_settings_modal(&self.settings.theme, self.settings_theme_index, &self.settings_theme_scroll, cx))
             })
             // Toast notifications
             .when(!toasts.is_empty(), |d| {

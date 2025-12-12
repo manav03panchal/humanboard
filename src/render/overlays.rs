@@ -195,75 +195,73 @@ pub fn render_header_bar(
                                         .flex()
                                         .flex_col()
                                         .gap(px(2.0))
-                                        .children(
-                                            search_results.iter().enumerate().map(
-                                                |(idx, (item_id, name))| {
-                                                    let is_selected = idx == selected_result;
-                                                    let item_id = *item_id;
+                                        .children(search_results.iter().enumerate().map(
+                                            |(idx, (item_id, name))| {
+                                                let is_selected = idx == selected_result;
+                                                let item_id = *item_id;
 
-                                                    h_flex()
-                                                        .id(idx)
-                                                        .pl(px(6.0))
-                                                        .pr_2()
-                                                        .py_1()
-                                                        .gap_2()
-                                                        .rounded(px(4.0))
-                                                        .cursor(CursorStyle::PointingHand)
-                                                        .when(is_selected, |d| {
-                                                            d.bg(list_active)
-                                                                .border_l_2()
-                                                                .border_color(primary)
-                                                        })
-                                                        .when(!is_selected, |d| {
-                                                            d.hover(|s| s.bg(list_hover))
-                                                        })
-                                                        .on_click(cx.listener(
-                                                            move |this, _, _, cx| {
-                                                                this.pending_command = Some(
-                                                                    format!("__jump:{}", item_id),
-                                                                );
-                                                                this.command_palette = None;
-                                                                this.search_results.clear();
-                                                                cx.notify();
-                                                            },
-                                                        ))
-                                                        .child(
-                                                            Icon::new(IconName::File)
-                                                                .size(px(12.0))
-                                                                .text_color(if is_selected {
-                                                                    primary
-                                                                } else {
-                                                                    muted_fg
-                                                                }),
-                                                        )
-                                                        .child(
+                                                h_flex()
+                                                    .id(ElementId::Integer(idx as u64))
+                                                    .pl(px(6.0))
+                                                    .pr_2()
+                                                    .py_1()
+                                                    .gap_2()
+                                                    .rounded(px(4.0))
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .when(is_selected, |d| {
+                                                        d.bg(list_active)
+                                                            .border_l_2()
+                                                            .border_color(primary)
+                                                    })
+                                                    .when(!is_selected, |d| {
+                                                        d.hover(|s| s.bg(list_hover))
+                                                    })
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            this.pending_command =
+                                                                Some(format!("__jump:{}", item_id));
+                                                            this.command_palette = None;
+                                                            this.search_results.clear();
+                                                            cx.notify();
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        Icon::new(IconName::File)
+                                                            .size(px(12.0))
+                                                            .text_color(if is_selected {
+                                                                primary
+                                                            } else {
+                                                                muted_fg
+                                                            }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .flex_1()
+                                                            .text_sm()
+                                                            .text_color(if is_selected {
+                                                                fg
+                                                            } else {
+                                                                fg
+                                                            })
+                                                            .overflow_hidden()
+                                                            .whitespace_nowrap()
+                                                            .child(name.clone()),
+                                                    )
+                                                    .when(is_selected, |d| {
+                                                        d.child(
                                                             div()
-                                                                .flex_1()
-                                                                .text_sm()
-                                                                .text_color(if is_selected {
-                                                                    fg
-                                                                } else {
-                                                                    fg
-                                                                })
-                                                                .overflow_hidden()
-                                                                .whitespace_nowrap()
-                                                                .child(name.clone()),
+                                                                .px_1()
+                                                                .py(px(2.0))
+                                                                .bg(muted)
+                                                                .rounded(px(3.0))
+                                                                .text_xs()
+                                                                .text_color(muted_fg)
+                                                                .child("↵"),
                                                         )
-                                                        .when(is_selected, |d| {
-                                                            d.child(
-                                                                div()
-                                                                    .px_1()
-                                                                    .py(px(2.0))
-                                                                    .bg(muted)
-                                                                    .rounded(px(3.0))
-                                                                    .text_xs()
-                                                                    .text_color(muted_fg)
-                                                                    .child("↵"),
-                                                            )
-                                                        })
-                                                },
-                                            ),
-                                        ),
+                                                    })
+                                            },
+                                        )),
                                 )
                             })
                             // Commands section (when no results or showing hint)
@@ -929,10 +927,12 @@ pub fn render_command_palette(
 /// Render the settings modal
 pub fn render_settings_modal(
     current_theme: &str,
+    theme_index: usize,
+    theme_scroll: &ScrollHandle,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
-    let current_theme = current_theme.to_string();
+    let _current_theme = current_theme.to_string();
 
     let bg = cx.theme().background;
     let border = cx.theme().border;
@@ -979,6 +979,13 @@ pub fn render_settings_modal(
                             .shadow_lg()
                             .on_mouse_down(MouseButton::Left, |_, _, _| {})
                             .on_scroll_wheel(|_, _, _| {})
+                            .key_context("SettingsModal")
+                            .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
+                                this.select_prev_theme(cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
+                                this.select_next_theme(cx);
+                            }))
                     // Left sidebar with tabs
                     .child(
                         v_flex()
@@ -1085,15 +1092,17 @@ pub fn render_settings_modal(
                                                     .border_color(border)
                                                     .rounded(px(8.0))
                                                     .overflow_y_scroll()
-                                                    .child(v_flex().py_1().children(themes.into_iter().map(
-                                                        |theme_name| {
-                                                            let is_selected = theme_name == current_theme;
+                                                    .track_scroll(theme_scroll)
+                                                    .flex()
+                                                    .flex_col()
+                                                    .py_1()
+                                                    .children(themes.into_iter().enumerate().map(
+                                                        |(idx, theme_name)| {
+                                                            let is_selected = idx == theme_index;
                                                             let theme_name_clone = theme_name.clone();
 
                                                             div()
-                                                                .id(ElementId::Name(
-                                                                    format!("theme-{}", theme_name).into(),
-                                                                ))
+                                                                .id(ElementId::Integer(idx as u64))
                                                                 .w_full()
                                                                 .px_4()
                                                                 .py_2p5()
@@ -1136,7 +1145,7 @@ pub fn render_settings_modal(
                                                                         }),
                                                                 )
                                                         },
-                                                    ))),
+                                                    )),
                                             )
                                     ),
                                         ),

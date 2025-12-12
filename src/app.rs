@@ -123,6 +123,8 @@ pub struct Humanboard {
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
+    pub settings_theme_index: usize,
+    pub settings_theme_scroll: ScrollHandle,
 
     // Toast notifications
     pub toast_manager: ToastManager,
@@ -183,6 +185,8 @@ impl Humanboard {
             youtube_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
+            settings_theme_index: 0,
+            settings_theme_scroll: ScrollHandle::new(),
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
@@ -192,7 +196,41 @@ impl Humanboard {
 
     pub fn toggle_settings(&mut self, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
+        if self.show_settings {
+            // Initialize theme index to current theme
+            let themes = crate::settings::Settings::available_themes(cx);
+            self.settings_theme_index = themes
+                .iter()
+                .position(|t| t == &self.settings.theme)
+                .unwrap_or(0);
+        }
         cx.notify();
+    }
+
+    pub fn select_next_theme(&mut self, cx: &mut Context<Self>) {
+        let themes = crate::settings::Settings::available_themes(cx);
+        if !themes.is_empty() {
+            self.settings_theme_index = (self.settings_theme_index + 1) % themes.len();
+            self.settings_theme_scroll
+                .scroll_to_item(self.settings_theme_index);
+            // Apply theme immediately
+            self.set_theme(themes[self.settings_theme_index].clone(), cx);
+        }
+    }
+
+    pub fn select_prev_theme(&mut self, cx: &mut Context<Self>) {
+        let themes = crate::settings::Settings::available_themes(cx);
+        if !themes.is_empty() {
+            self.settings_theme_index = if self.settings_theme_index == 0 {
+                themes.len() - 1
+            } else {
+                self.settings_theme_index - 1
+            };
+            self.settings_theme_scroll
+                .scroll_to_item(self.settings_theme_index);
+            // Apply theme immediately
+            self.set_theme(themes[self.settings_theme_index].clone(), cx);
+        }
     }
 
     /// Show a toast notification
