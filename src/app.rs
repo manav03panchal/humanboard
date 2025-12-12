@@ -1,10 +1,10 @@
-use crate::audio_webview::AudioWebView;
+use crate::audio_webview::AudioPlayer;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
-use crate::video_webview::VideoWebView;
+use crate::video_webview::VideoPlayer;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
@@ -130,11 +130,11 @@ pub struct Humanboard {
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
 
-    // Audio WebViews (keyed by item ID)
-    pub audio_webviews: HashMap<u64, AudioWebView>,
+    // Audio Players (keyed by item ID)
+    pub audio_players: HashMap<u64, AudioPlayer>,
 
-    // Video WebViews (keyed by item ID)
-    pub video_webviews: HashMap<u64, VideoWebView>,
+    // Video Players (keyed by item ID)
+    pub video_players: HashMap<u64, VideoPlayer>,
 
     // Settings
     pub settings: Settings,
@@ -200,8 +200,8 @@ impl Humanboard {
             selected_result: 0,
             cmd_palette_mode: CmdPaletteMode::default(),
             youtube_webviews: HashMap::new(),
-            audio_webviews: HashMap::new(),
-            video_webviews: HashMap::new(),
+            audio_players: HashMap::new(),
+            video_players: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
             settings_theme_index: 0,
@@ -722,8 +722,8 @@ impl Humanboard {
         self.board = None;
         self.preview = None;
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
-        self.audio_webviews.clear(); // Clear Audio WebViews when leaving board
-        self.video_webviews.clear(); // Clear Video WebViews when leaving board
+        self.audio_players.clear(); // Clear Audio Players when leaving board
+        self.video_players.clear(); // Clear Video Players when leaving board
         self.view = AppView::Landing;
         self.selected_items.clear();
         // Reload index to get any changes
@@ -974,11 +974,11 @@ impl Humanboard {
             .retain(|id, _| youtube_ids.contains(id));
     }
 
-    pub fn ensure_audio_webviews(&mut self, window: &mut Window, cx: &mut App) {
+    pub fn ensure_audio_players(&mut self) {
         use crate::types::ItemContent;
 
         let Some(ref board) = self.board else {
-            self.audio_webviews.clear();
+            self.audio_players.clear();
             return;
         };
 
@@ -995,31 +995,25 @@ impl Humanboard {
             })
             .collect();
 
-        // Create WebViews for new Audio items
+        // Create players for new Audio items
         for (item_id, path) in &audio_items {
-            if !self.audio_webviews.contains_key(item_id) {
-                match AudioWebView::new(path.clone(), window, cx) {
-                    Ok(webview) => {
-                        self.audio_webviews.insert(*item_id, webview);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to create Audio WebView: {}", e);
-                    }
-                }
+            if !self.audio_players.contains_key(item_id) {
+                self.audio_players
+                    .insert(*item_id, AudioPlayer::new(path.clone()));
             }
         }
 
-        // Remove WebViews for deleted items
+        // Remove players for deleted items
         let audio_ids: std::collections::HashSet<u64> =
             audio_items.iter().map(|(id, _)| *id).collect();
-        self.audio_webviews.retain(|id, _| audio_ids.contains(id));
+        self.audio_players.retain(|id, _| audio_ids.contains(id));
     }
 
-    pub fn ensure_video_webviews(&mut self, window: &mut Window, cx: &mut App) {
+    pub fn ensure_video_players(&mut self) {
         use crate::types::ItemContent;
 
         let Some(ref board) = self.board else {
-            self.video_webviews.clear();
+            self.video_players.clear();
             return;
         };
 
@@ -1036,24 +1030,31 @@ impl Humanboard {
             })
             .collect();
 
-        // Create WebViews for new Video items
+        // Create players for new Video items
         for (item_id, path) in &video_items {
-            if !self.video_webviews.contains_key(item_id) {
-                match VideoWebView::new(path.clone(), window, cx) {
-                    Ok(webview) => {
-                        self.video_webviews.insert(*item_id, webview);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to create Video WebView: {}", e);
-                    }
-                }
+            if !self.video_players.contains_key(item_id) {
+                self.video_players
+                    .insert(*item_id, VideoPlayer::new(path.clone()));
             }
         }
 
-        // Remove WebViews for deleted items
+        // Remove players for deleted items
         let video_ids: std::collections::HashSet<u64> =
             video_items.iter().map(|(id, _)| *id).collect();
-        self.video_webviews.retain(|id, _| video_ids.contains(id));
+        self.video_players.retain(|id, _| video_ids.contains(id));
+    }
+
+    pub fn toggle_audio_playback(&mut self, item_id: u64, cx: &mut Context<Self>) {
+        if let Some(player) = self.audio_players.get(&item_id) {
+            player.toggle_playback();
+            cx.notify();
+        }
+    }
+
+    pub fn open_video_in_player(&self, item_id: u64) {
+        if let Some(player) = self.video_players.get(&item_id) {
+            player.open_in_system_player();
+        }
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {

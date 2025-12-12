@@ -157,11 +157,11 @@ impl Humanboard {
         // Ensure YouTube WebViews are created for any YouTube items
         self.ensure_youtube_webviews(window, cx);
 
-        // Ensure Audio WebViews are created for any Audio items
-        self.ensure_audio_webviews(window, cx);
+        // Ensure Audio Players are created for any Audio items
+        self.ensure_audio_players();
 
-        // Ensure Video WebViews are created for any Video items
-        self.ensure_video_webviews(window, cx);
+        // Ensure Video Players are created for any Video items
+        self.ensure_video_players();
 
         // Get board data (with fallback defaults if somehow no board)
         let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
@@ -354,8 +354,8 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
-                                    &self.audio_webviews,
-                                    &self.video_webviews,
+                                    &self.audio_players,
+                                    &self.video_players,
                                     marquee,
                                     cx,
                                 )),
@@ -405,8 +405,8 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
-                                    &self.audio_webviews,
-                                    &self.video_webviews,
+                                    &self.audio_players,
+                                    &self.video_players,
                                     marquee,
                                     cx,
                                 )),
@@ -448,8 +448,8 @@ impl Humanboard {
                 &items,
                 &selected_items,
                 &self.youtube_webviews,
-                &self.audio_webviews,
-                &self.video_webviews,
+                &self.audio_players,
+                &self.video_players,
                 marquee,
                 cx,
             )),
