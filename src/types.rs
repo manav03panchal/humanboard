@@ -101,14 +101,7 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
-            ItemContent::Spotify { content_type, .. } => {
-                match content_type {
-                    SpotifyContentType::Track => (352.0, 80.0), // Compact track player (no extra space)
-                    SpotifyContentType::Album | SpotifyContentType::Playlist => (352.0, 352.0), // List view
-                    SpotifyContentType::Artist => (352.0, 352.0),
-                    SpotifyContentType::Episode | SpotifyContentType::Show => (352.0, 152.0), // Podcast player
-                }
-            }
+            ItemContent::Spotify { .. } => (300.0, 80.0), // Compact track embed height
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
         }
     }
