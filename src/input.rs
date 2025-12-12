@@ -92,16 +92,6 @@ impl Humanboard {
                 }
             }
 
-            // Handle double-click for audio playback
-            if event.click_count == 2 {
-                let item_content = board.get_item(item_id).map(|item| item.content.clone());
-
-                if let Some(ItemContent::Audio(_)) = item_content {
-                    self.toggle_audio_playback(item_id, cx);
-                    return;
-                }
-            }
-
             // Check if clicking on resize corner (bottom-right corner)
             // Use get_item for O(1) lookup - extract needed values
             let item_info = board

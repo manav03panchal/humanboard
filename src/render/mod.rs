@@ -157,8 +157,8 @@ impl Humanboard {
         // Ensure YouTube WebViews are created for any YouTube items
         self.ensure_youtube_webviews(window, cx);
 
-        // Ensure Audio Players are created for any Audio items
-        self.ensure_audio_players();
+        // Ensure Audio WebViews are created for any Audio items
+        self.ensure_audio_webviews(window, cx);
 
         // Ensure Video WebViews are created for any Video items
         self.ensure_video_webviews(window, cx);
@@ -354,7 +354,7 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
-                                    &self.audio_players,
+                                    &self.audio_webviews,
                                     &self.video_webviews,
                                     marquee,
                                     cx,
@@ -405,7 +405,7 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
-                                    &self.audio_players,
+                                    &self.audio_webviews,
                                     &self.video_webviews,
                                     marquee,
                                     cx,
@@ -448,7 +448,7 @@ impl Humanboard {
                 &items,
                 &selected_items,
                 &self.youtube_webviews,
-                &self.audio_players,
+                &self.audio_webviews,
                 &self.video_webviews,
                 marquee,
                 cx,
