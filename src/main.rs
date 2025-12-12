@@ -1,9 +1,9 @@
 use gpui::*;
 use humanboard::actions::{
     CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
-    CommandPalette, DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab, NudgeDown,
-    NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SelectAll,
-    ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
+    DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab, NudgeDown, NudgeLeft, NudgeRight,
+    NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SelectAll, ShowShortcuts,
+    ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use std::borrow::Cow;
@@ -84,7 +84,6 @@ fn main() {
             KeyBinding::new("cmd-n", NewBoard, None),
             KeyBinding::new("cmd-h", GoHome, None),
             KeyBinding::new("cmd-/", ShowShortcuts, None),
-            KeyBinding::new(":", CommandPalette, Some("Canvas")),
             KeyBinding::new("cmd-,", OpenSettings, None),
         ]);
 

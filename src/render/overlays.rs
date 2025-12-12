@@ -147,7 +147,13 @@ pub fn render_header_bar(
                                         .text_color(muted_fg)
                                         .child("Search items or type command..."),
                                 )
-                                .child(div().ml_auto().text_xs().text_color(muted_fg).child(":"))
+                                .child(
+                                    div()
+                                        .ml_auto()
+                                        .text_xs()
+                                        .text_color(muted_fg)
+                                        .child("Cmd+K"),
+                                )
                         }),
                 )
                 // Dropdown results
@@ -611,7 +617,6 @@ pub fn render_shortcuts_overlay(cx: &mut Context<Humanboard>) -> impl IntoElemen
                                 "General",
                                 vec![
                                     ("Cmd+K", "Command palette"),
-                                    (":", "Quick search"),
                                     ("Cmd+N", "New board"),
                                     ("Cmd+H", "Go home"),
                                     ("Cmd+O", "Open file"),
