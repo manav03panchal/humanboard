@@ -370,36 +370,11 @@ fn render_item_content(
         ItemContent::Spotify { content_type, .. } => {
             // Render Spotify WebView if available
             if let Some(webview) = spotify_webviews.get(&item.id) {
-                v_flex()
+                div()
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(24.0 * zoom))
-                            .bg(hsla(0.0, 0.0, 0.1, 1.0))
-                            .border_b_1()
-                            .border_color(hsla(0.0, 0.0, 0.2, 1.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(hsla(0.0, 0.0, 0.4, 1.0))
-                                    .child("≡"),
-                            ),
-                    )
-                    // WebView takes remaining space
-                    .child(
-                        div()
-                            .flex_1()
-                            .w_full()
-                            .overflow_hidden()
-                            .child(webview.webview().clone()),
-                    )
+                    .child(webview.webview().clone())
             } else {
                 // Placeholder while loading
                 div()
