@@ -186,7 +186,7 @@ fn render_item_content(
                                 div()
                                     .text_size(px(12.0 * zoom))
                                     .text_color(hsla(0.0, 0.0, 0.4, 1.0))
-                                    .child("≡ drag"),
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
@@ -237,7 +237,7 @@ fn render_item_content(
                                 div()
                                     .text_size(px(12.0 * zoom))
                                     .text_color(hsla(0.0, 0.0, 0.4, 1.0))
-                                    .child("≡ drag"),
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
