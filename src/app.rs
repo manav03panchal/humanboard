@@ -130,6 +130,9 @@ pub struct Humanboard {
     // Preview tab scroll handle
     pub preview_tab_scroll: ScrollHandle,
 
+    // Command palette scroll handle
+    pub cmd_palette_scroll: ScrollHandle,
+
     // Pan animation state
     pub pan_animation: Option<PanAnimation>,
 }
@@ -182,6 +185,7 @@ impl Humanboard {
             show_settings: false,
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),
+            cmd_palette_scroll: ScrollHandle::new(),
             pan_animation: None,
         }
     }
@@ -311,6 +315,7 @@ impl Humanboard {
     pub fn select_next_result(&mut self, cx: &mut Context<Self>) {
         if !self.search_results.is_empty() {
             self.selected_result = (self.selected_result + 1) % self.search_results.len();
+            self.cmd_palette_scroll.scroll_to_item(self.selected_result);
             cx.notify();
         }
     }
@@ -322,6 +327,7 @@ impl Humanboard {
             } else {
                 self.selected_result - 1
             };
+            self.cmd_palette_scroll.scroll_to_item(self.selected_result);
             cx.notify();
         }
     }

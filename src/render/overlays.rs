@@ -21,6 +21,7 @@ pub fn render_header_bar(
     command_palette: Option<&Entity<InputState>>,
     search_results: &[(u64, String)],
     selected_result: usize,
+    scroll_handle: &ScrollHandle,
     cx: &mut Context<Humanboard>,
 ) -> Div {
     let has_results = !search_results.is_empty();
@@ -188,18 +189,20 @@ pub fn render_header_bar(
                                         .id("cmd-dropdown-results")
                                         .max_h(px(200.0))
                                         .overflow_y_scroll()
+                                        .track_scroll(scroll_handle)
                                         .px_1()
                                         .pb_1()
-                                        .child(v_flex().gap(px(2.0)).children(
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.0))
+                                        .children(
                                             search_results.iter().enumerate().map(
                                                 |(idx, (item_id, name))| {
                                                     let is_selected = idx == selected_result;
                                                     let item_id = *item_id;
 
                                                     h_flex()
-                                                        .id(ElementId::Name(
-                                                            format!("result-{}", item_id).into(),
-                                                        ))
+                                                        .id(idx)
                                                         .pl(px(6.0))
                                                         .pr_2()
                                                         .py_1()
@@ -260,7 +263,7 @@ pub fn render_header_bar(
                                                         })
                                                 },
                                             ),
-                                        )),
+                                        ),
                                 )
                             })
                             // Commands section (when no results or showing hint)
