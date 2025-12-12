@@ -306,7 +306,10 @@ impl Humanboard {
                     }
                     gpui_component::input::InputEvent::Blur => {
                         // Close command palette when input loses focus (click outside)
-                        this.hide_command_palette(cx);
+                        // But not if we're in theme mode (user clicked theme command)
+                        if this.cmd_palette_mode != CmdPaletteMode::Themes {
+                            this.hide_command_palette(cx);
+                        }
                     }
                     _ => {}
                 }
@@ -332,7 +335,31 @@ impl Humanboard {
     fn update_search_results(&mut self, text: &str, cx: &mut Context<Self>) {
         let text = text.trim();
 
-        // Handle theme mode
+        // Check if user typed "theme " to enter theme mode
+        if text.starts_with("theme ") || text == "theme" {
+            self.cmd_palette_mode = CmdPaletteMode::Themes;
+            let filter = text.strip_prefix("theme ").unwrap_or("").trim();
+            let themes = Settings::available_themes(cx);
+            if filter.is_empty() {
+                self.search_results = themes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, name)| (idx as u64, name))
+                    .collect();
+            } else {
+                self.search_results = themes
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, name)| name.to_lowercase().contains(&filter.to_lowercase()))
+                    .map(|(idx, name)| (idx as u64, name))
+                    .collect();
+            }
+            self.selected_result = 0;
+            cx.notify();
+            return;
+        }
+
+        // Handle theme mode (when entered via click)
         if self.cmd_palette_mode == CmdPaletteMode::Themes {
             let themes = Settings::available_themes(cx);
             if text.is_empty() {
