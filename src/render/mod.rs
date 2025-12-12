@@ -453,6 +453,7 @@ impl Humanboard {
             self.command_palette.as_ref(),
             &self.search_results,
             self.selected_result,
+            &self.cmd_palette_scroll,
             cx,
         ));
 
