@@ -16,6 +16,7 @@ pub enum ItemContent {
     Image(PathBuf),
     Text(String),
     Video(PathBuf),
+    Audio(PathBuf),
     Pdf {
         path: PathBuf,
         thumbnail: Option<PathBuf>,
@@ -91,6 +92,7 @@ impl ItemContent {
             }
             ItemContent::Text(_) => (300.0, 100.0),
             ItemContent::Video(_) => (400.0, 300.0),
+            ItemContent::Audio(_) => (320.0, 160.0), // Compact audio player
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
@@ -100,7 +102,7 @@ impl ItemContent {
 
     pub fn display_name(&self) -> String {
         match self {
-            ItemContent::Image(path) | ItemContent::Video(path) => path
+            ItemContent::Image(path) | ItemContent::Video(path) | ItemContent::Audio(path) => path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
@@ -121,6 +123,7 @@ impl ItemContent {
         match self {
             ItemContent::Image(_) => "IMAGE",
             ItemContent::Video(_) => "VIDEO",
+            ItemContent::Audio(_) => "AUDIO",
             ItemContent::Pdf { .. } => "PDF",
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
@@ -136,6 +139,7 @@ impl ItemContent {
                     ItemContent::Image(path.clone())
                 }
                 "mp4" | "mov" | "avi" | "webm" | "mkv" => ItemContent::Video(path.clone()),
+                "mp3" | "wav" | "ogg" | "m4a" | "aac" | "flac" => ItemContent::Audio(path.clone()),
                 "pdf" => {
                     let thumbnail = generate_pdf_thumbnail(path);
                     ItemContent::Pdf {
@@ -306,5 +310,37 @@ mod tests {
                 ext
             );
         }
+    }
+
+    #[test]
+    fn test_audio_extensions() {
+        let extensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
+        for ext in extensions {
+            let path = PathBuf::from(format!("/test/file.{}", ext));
+            let content = ItemContent::from_path(&path);
+            assert!(
+                matches!(content, ItemContent::Audio(_)),
+                "Failed for {}",
+                ext
+            );
+        }
+    }
+
+    #[test]
+    fn test_item_content_from_path_audio() {
+        let path = PathBuf::from("/test/audio.mp3");
+        let content = ItemContent::from_path(&path);
+        assert!(matches!(content, ItemContent::Audio(_)));
+    }
+
+    #[test]
+    fn test_default_size_audio() {
+        let content = ItemContent::Audio(PathBuf::new());
+        assert_eq!(content.default_size(), (320.0, 160.0));
+    }
+
+    #[test]
+    fn test_type_label_audio() {
+        assert_eq!(ItemContent::Audio(PathBuf::new()).type_label(), "AUDIO");
     }
 }

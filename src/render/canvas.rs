@@ -7,8 +7,10 @@
 //! - Item selection and resize handles
 
 use crate::app::Humanboard;
+use crate::audio_webview::AudioWebView;
 use crate::markdown_card::render_collapsed_markdown;
 use crate::types::{CanvasItem, ItemContent};
+use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -59,7 +61,8 @@ fn render_item_backgrounds(
         // Use semantic colors based on content type for better theme integration
         // Each type has a distinct hue for visual differentiation
         let bg_color = match &item.content {
-            ItemContent::Video(_) => hsla(280.0 / 360.0, 0.6, 0.45, 0.85), // Purple/magenta for media
+            ItemContent::Video(_) => hsla(280.0 / 360.0, 0.6, 0.45, 0.85), // Purple/magenta for video
+            ItemContent::Audio(_) => hsla(320.0 / 360.0, 0.6, 0.45, 0.85), // Pink/magenta for audio
             ItemContent::Text(_) => hsla(210.0 / 360.0, 0.6, 0.45, 0.85),  // Blue for text
             ItemContent::Pdf { .. } => hsla(15.0 / 360.0, 0.7, 0.5, 0.85), // Orange for documents
             ItemContent::Link(_) => hsla(180.0 / 360.0, 0.6, 0.4, 0.85),   // Cyan for links
@@ -83,6 +86,8 @@ fn render_item_content(
     item: &CanvasItem,
     zoom: f32,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    audio_webviews: &HashMap<u64, AudioWebView>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -159,30 +164,133 @@ fn render_item_content(
                     ),
             ),
 
-        ItemContent::Video(path) => div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
+        ItemContent::Video(path) => {
+            // Render Video WebView if available, otherwise placeholder
+            if let Some(webview) = video_webviews.get(&item.id) {
+                // Use vertical flex with drag bar ABOVE the webview
                 v_flex()
-                    .items_center()
-                    .gap(px(8.0 * zoom))
-                    .child(div().text_size(px(48.0 * zoom)).text_color(fg).child("🎬"))
+                    .size_full()
+                    // Drag handle bar at top - OUTSIDE the webview
                     .child(
                         div()
-                            .text_size(px(12.0 * zoom))
-                            .text_color(muted_fg)
-                            .max_w(px(180.0 * zoom))
-                            .overflow_hidden()
+                            .w_full()
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.15, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.3, 1.0))
+                            .rounded_t(corner_radius)
+                            .flex()
+                            .items_center()
+                            .justify_center()
                             .child(
-                                path.file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or("video")
-                                    .to_string(),
+                                div()
+                                    .text_size(px(14.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.5, 1.0))
+                                    .child("≡"),
                             ),
-                    ),
-            ),
+                    )
+                    // WebView takes remaining space
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .rounded_b(corner_radius)
+                            .child(webview.webview_entity.clone()),
+                    )
+            } else {
+                div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(muted_bg)
+                    .rounded(corner_radius)
+                    .child(
+                        v_flex()
+                            .items_center()
+                            .gap(px(8.0 * zoom))
+                            .child(div().text_size(px(48.0 * zoom)).text_color(fg).child("🎬"))
+                            .child(
+                                div()
+                                    .text_size(px(12.0 * zoom))
+                                    .text_color(muted_fg)
+                                    .max_w(px(180.0 * zoom))
+                                    .overflow_hidden()
+                                    .child(
+                                        path.file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("video")
+                                            .to_string(),
+                                    ),
+                            ),
+                    )
+            }
+        }
+
+        ItemContent::Audio(path) => {
+            // Render Audio WebView if available, otherwise placeholder
+            if let Some(webview) = audio_webviews.get(&item.id) {
+                // Use vertical flex with drag bar ABOVE the webview
+                v_flex()
+                    .size_full()
+                    // Drag handle bar at top - OUTSIDE the webview
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.15, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.3, 1.0))
+                            .rounded_t(corner_radius)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(14.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.5, 1.0))
+                                    .child("≡"),
+                            ),
+                    )
+                    // WebView takes remaining space
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .rounded_b(corner_radius)
+                            .child(webview.webview_entity.clone()),
+                    )
+            } else {
+                div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(muted_bg)
+                    .rounded(corner_radius)
+                    .child(
+                        v_flex()
+                            .items_center()
+                            .gap(px(8.0 * zoom))
+                            .child(div().text_size(px(48.0 * zoom)).text_color(fg).child("🎵"))
+                            .child(
+                                div()
+                                    .text_size(px(12.0 * zoom))
+                                    .text_color(muted_fg)
+                                    .max_w(px(180.0 * zoom))
+                                    .overflow_hidden()
+                                    .child(
+                                        path.file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("audio")
+                                            .to_string(),
+                                    ),
+                            ),
+                    )
+            }
+        }
 
         ItemContent::Text(text) => div()
             .size_full()
@@ -313,6 +421,8 @@ pub fn render_items(
     zoom: f32,
     selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    audio_webviews: &HashMap<u64, AudioWebView>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     let offset_x = f32::from(canvas_offset.x);
@@ -343,6 +453,8 @@ pub fn render_items(
                     item,
                     zoom,
                     youtube_webviews,
+                    audio_webviews,
+                    video_webviews,
                     fg,
                     muted_fg,
                     muted_bg,
@@ -378,6 +490,8 @@ pub fn render_canvas_area(
     items: &[CanvasItem],
     selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
+    audio_webviews: &HashMap<u64, AudioWebView>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     cx: &Context<Humanboard>,
 ) -> Div {
@@ -396,6 +510,8 @@ pub fn render_canvas_area(
             zoom,
             selected_items,
             youtube_webviews,
+            audio_webviews,
+            video_webviews,
             cx,
         ))
         // Render marquee selection rectangle

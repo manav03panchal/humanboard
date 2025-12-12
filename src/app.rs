@@ -1,8 +1,10 @@
+use crate::audio_webview::AudioWebView;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
+use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
@@ -26,7 +28,7 @@ pub enum SplitDirection {
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum CmdPaletteMode {
     #[default]
-    Items,  // Searching canvas items
+    Items, // Searching canvas items
     Themes, // Selecting theme
 }
 
@@ -128,6 +130,12 @@ pub struct Humanboard {
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
 
+    // Audio WebViews (keyed by item ID)
+    pub audio_webviews: HashMap<u64, AudioWebView>,
+
+    // Video WebViews (keyed by item ID)
+    pub video_webviews: HashMap<u64, VideoWebView>,
+
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
@@ -192,6 +200,8 @@ impl Humanboard {
             selected_result: 0,
             cmd_palette_mode: CmdPaletteMode::default(),
             youtube_webviews: HashMap::new(),
+            audio_webviews: HashMap::new(),
+            video_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
             settings_theme_index: 0,
@@ -712,6 +722,8 @@ impl Humanboard {
         self.board = None;
         self.preview = None;
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
+        self.audio_webviews.clear(); // Clear Audio WebViews when leaving board
+        self.video_webviews.clear(); // Clear Video WebViews when leaving board
         self.view = AppView::Landing;
         self.selected_items.clear();
         // Reload index to get any changes
@@ -960,6 +972,88 @@ impl Humanboard {
             youtube_items.iter().map(|(id, _)| *id).collect();
         self.youtube_webviews
             .retain(|id, _| youtube_ids.contains(id));
+    }
+
+    pub fn ensure_audio_webviews(&mut self, window: &mut Window, cx: &mut App) {
+        use crate::types::ItemContent;
+
+        let Some(ref board) = self.board else {
+            self.audio_webviews.clear();
+            return;
+        };
+
+        // Collect Audio item IDs and paths
+        let audio_items: Vec<(u64, std::path::PathBuf)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let ItemContent::Audio(path) = &item.content {
+                    Some((item.id, path.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create WebViews for new Audio items
+        for (item_id, path) in &audio_items {
+            if !self.audio_webviews.contains_key(item_id) {
+                match AudioWebView::new(path.clone(), window, cx) {
+                    Ok(webview) => {
+                        self.audio_webviews.insert(*item_id, webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create Audio WebView: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Remove WebViews for deleted items
+        let audio_ids: std::collections::HashSet<u64> =
+            audio_items.iter().map(|(id, _)| *id).collect();
+        self.audio_webviews.retain(|id, _| audio_ids.contains(id));
+    }
+
+    pub fn ensure_video_webviews(&mut self, window: &mut Window, cx: &mut App) {
+        use crate::types::ItemContent;
+
+        let Some(ref board) = self.board else {
+            self.video_webviews.clear();
+            return;
+        };
+
+        // Collect Video item IDs and paths
+        let video_items: Vec<(u64, std::path::PathBuf)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let ItemContent::Video(path) = &item.content {
+                    Some((item.id, path.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create WebViews for new Video items
+        for (item_id, path) in &video_items {
+            if !self.video_webviews.contains_key(item_id) {
+                match VideoWebView::new(path.clone(), window, cx) {
+                    Ok(webview) => {
+                        self.video_webviews.insert(*item_id, webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create Video WebView: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Remove WebViews for deleted items
+        let video_ids: std::collections::HashSet<u64> =
+            video_items.iter().map(|(id, _)| *id).collect();
+        self.video_webviews.retain(|id, _| video_ids.contains(id));
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {

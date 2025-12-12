@@ -83,7 +83,12 @@ impl Render for Humanboard {
                 d.child(render_shortcuts_overlay(cx))
             })
             .when(self.show_settings, |d| {
-                d.child(render_settings_modal(&self.settings.theme, self.settings_theme_index, &self.settings_theme_scroll, cx))
+                d.child(render_settings_modal(
+                    &self.settings.theme,
+                    self.settings_theme_index,
+                    &self.settings_theme_scroll,
+                    cx,
+                ))
             })
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
@@ -151,6 +156,12 @@ impl Humanboard {
 
         // Ensure YouTube WebViews are created for any YouTube items
         self.ensure_youtube_webviews(window, cx);
+
+        // Ensure Audio WebViews are created for any Audio items
+        self.ensure_audio_webviews(window, cx);
+
+        // Ensure Video WebViews are created for any Video items
+        self.ensure_video_webviews(window, cx);
 
         // Get board data (with fallback defaults if somehow no board)
         let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
@@ -343,6 +354,8 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
+                                    &self.audio_webviews,
+                                    &self.video_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -392,6 +405,8 @@ impl Humanboard {
                                     &items,
                                     &selected_items,
                                     &self.youtube_webviews,
+                                    &self.audio_webviews,
+                                    &self.video_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -433,6 +448,8 @@ impl Humanboard {
                 &items,
                 &selected_items,
                 &self.youtube_webviews,
+                &self.audio_webviews,
+                &self.video_webviews,
                 marquee,
                 cx,
             )),

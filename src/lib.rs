@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod app;
+pub mod audio_webview;
 pub mod board;
 pub mod board_index;
 pub mod input;
@@ -14,4 +15,5 @@ pub mod pdf_webview;
 pub mod render;
 pub mod settings;
 pub mod types;
+pub mod video_webview;
 pub mod youtube_webview;
