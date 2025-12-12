@@ -103,10 +103,10 @@ impl ItemContent {
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
             ItemContent::Spotify { content_type, .. } => {
                 match content_type {
-                    SpotifyContentType::Track => (352.0, 152.0), // Single track - compact
-                    SpotifyContentType::Album | SpotifyContentType::Playlist => (352.0, 352.0), // List view - taller
-                    SpotifyContentType::Artist => (352.0, 352.0),
-                    SpotifyContentType::Episode | SpotifyContentType::Show => (352.0, 232.0),
+                    SpotifyContentType::Track => (400.0, 100.0), // Single track - very compact
+                    SpotifyContentType::Album | SpotifyContentType::Playlist => (352.0, 380.0), // List view
+                    SpotifyContentType::Artist => (352.0, 380.0),
+                    SpotifyContentType::Episode | SpotifyContentType::Show => (352.0, 160.0),
                 }
             }
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
