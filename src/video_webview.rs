@@ -49,7 +49,7 @@ impl VideoWebView {
     </style>
 </head>
 <body>
-    <video controls autoplay>
+    <video controls>
         <source src="/video" type="video/mp4">
     </video>
 </body>
