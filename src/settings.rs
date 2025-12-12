@@ -98,15 +98,48 @@ impl Settings {
     }
 }
 
+/// Find the themes directory in various locations
+fn find_themes_dir() -> Option<PathBuf> {
+    // Try current directory first (for development)
+    let cwd_path = std::env::current_dir().ok().map(|p| p.join("themes"));
+    if let Some(ref p) = cwd_path {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+
+    // Try relative to executable
+    let exe_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .map(|p| p.join("themes"));
+    if let Some(ref p) = exe_path {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+
+    // Try macOS bundle Resources folder
+    let bundle_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf())) // MacOS/
+        .and_then(|p| p.parent().map(|p| p.to_path_buf())) // Contents/
+        .map(|p| p.join("Resources").join("themes"));
+    if let Some(ref p) = bundle_path {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+
+    None
+}
+
 /// Initialize themes by watching the themes directory
 pub fn init_themes(cx: &mut App) {
-    // Get themes directory relative to executable or cwd
-    let themes_dir = std::env::current_dir()
-        .ok()
-        .map(|p| p.join("themes"))
-        .unwrap_or_else(|| PathBuf::from("./themes"));
+    // Try multiple locations for themes directory
+    let themes_dir = find_themes_dir();
 
-    if themes_dir.exists() {
+    if let Some(themes_dir) = themes_dir {
         let saved_theme = Settings::load().theme;
         let saved_theme_clone = saved_theme.clone();
 

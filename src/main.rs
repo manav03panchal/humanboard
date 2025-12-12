@@ -36,18 +36,32 @@ impl AssetSource for Assets {
             }
         }
 
+        // Try macOS bundle Resources folder
+        let bundle_path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf())) // MacOS/
+            .and_then(|p| p.parent().map(|p| p.to_path_buf())) // Contents/
+            .map(|p| p.join("Resources").join("assets").join(path));
+
+        if let Some(ref p) = bundle_path {
+            if p.exists() {
+                return Ok(Some(Cow::Owned(std::fs::read(p)?)));
+            }
+        }
+
         // Asset not found - this is normal for optional assets
         Ok(None)
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        let assets_path = std::env::current_dir()
+        // Try current directory first
+        let cwd_path = std::env::current_dir()
             .ok()
             .map(|p| p.join("assets").join(path));
 
-        if let Some(path) = assets_path {
-            if path.is_dir() {
-                let entries: Vec<SharedString> = std::fs::read_dir(&path)?
+        if let Some(ref p) = cwd_path {
+            if p.is_dir() {
+                let entries: Vec<SharedString> = std::fs::read_dir(p)?
                     .filter_map(|e| e.ok())
                     .filter_map(|e| e.file_name().into_string().ok())
                     .map(SharedString::from)
@@ -55,6 +69,25 @@ impl AssetSource for Assets {
                 return Ok(entries);
             }
         }
+
+        // Try macOS bundle Resources folder
+        let bundle_path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .map(|p| p.join("Resources").join("assets").join(path));
+
+        if let Some(ref p) = bundle_path {
+            if p.is_dir() {
+                let entries: Vec<SharedString> = std::fs::read_dir(p)?
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .map(SharedString::from)
+                    .collect();
+                return Ok(entries);
+            }
+        }
+
         Ok(vec![])
     }
 }

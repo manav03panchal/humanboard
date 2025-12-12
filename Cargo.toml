@@ -22,3 +22,14 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+
+[package.metadata.bundle]
+name = "Humanboard"
+identifier = "com.manavpanchal.humanboard"
+# icon = ["assets/icon.icns"]  # or icon.png
+version = "0.1.0"
+copyright = "Copyright © 2025"
+category = "Productivity"
+short_description = "A moodboard app"
+resources = ["assets", "themes"]
