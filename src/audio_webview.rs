@@ -109,46 +109,62 @@ impl AudioWebView {
                     Ok(Some(request)) => {
                         let url = request.url();
                         if url == "/audio" {
-                            // Serve the audio file
-                            match std::fs::read(&audio_path_clone) {
-                                Ok(data) => {
-                                    let mime = if audio_path_clone
+                            // Serve the audio file using streaming
+                            match std::fs::File::open(&audio_path_clone) {
+                                Ok(file) => {
+                                    let metadata = file.metadata().ok();
+                                    let file_size = metadata.map(|m| m.len());
+
+                                    let mime = match audio_path_clone
                                         .extension()
-                                        .map(|e| e == "mp3")
-                                        .unwrap_or(false)
+                                        .and_then(|e| e.to_str())
+                                        .map(|e| e.to_lowercase())
+                                        .as_deref()
                                     {
-                                        "audio/mpeg"
-                                    } else if audio_path_clone
-                                        .extension()
-                                        .map(|e| e == "wav")
-                                        .unwrap_or(false)
-                                    {
-                                        "audio/wav"
-                                    } else if audio_path_clone
-                                        .extension()
-                                        .map(|e| e == "ogg")
-                                        .unwrap_or(false)
-                                    {
-                                        "audio/ogg"
-                                    } else if audio_path_clone
-                                        .extension()
-                                        .map(|e| e == "m4a" || e == "aac")
-                                        .unwrap_or(false)
-                                    {
-                                        "audio/mp4"
-                                    } else {
-                                        "audio/mpeg"
+                                        Some("mp3") => "audio/mpeg",
+                                        Some("wav") => "audio/wav",
+                                        Some("ogg") => "audio/ogg",
+                                        Some("m4a") | Some("aac") => "audio/mp4",
+                                        Some("flac") => "audio/flac",
+                                        _ => "audio/mpeg",
                                     };
-                                    let response = Response::from_data(data).with_header(
-                                        tiny_http::Header::from_bytes(
-                                            &b"Content-Type"[..],
-                                            mime.as_bytes(),
+
+                                    let response = if let Some(size) = file_size {
+                                        Response::from_file(file)
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Content-Type"[..],
+                                                    mime.as_bytes(),
+                                                )
+                                                .unwrap(),
+                                            )
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Content-Length"[..],
+                                                    size.to_string().as_bytes(),
+                                                )
+                                                .unwrap(),
+                                            )
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Accept-Ranges"[..],
+                                                    &b"bytes"[..],
+                                                )
+                                                .unwrap(),
+                                            )
+                                    } else {
+                                        Response::from_file(file).with_header(
+                                            tiny_http::Header::from_bytes(
+                                                &b"Content-Type"[..],
+                                                mime.as_bytes(),
+                                            )
+                                            .unwrap(),
                                         )
-                                        .unwrap(),
-                                    );
+                                    };
                                     let _ = request.respond(response);
                                 }
-                                Err(_) => {
+                                Err(e) => {
+                                    eprintln!("Failed to open audio file: {}", e);
                                     let _ = request.respond(Response::empty(404));
                                 }
                             }

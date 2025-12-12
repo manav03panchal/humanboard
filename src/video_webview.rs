@@ -82,52 +82,62 @@ impl VideoWebView {
                     Ok(Some(request)) => {
                         let url = request.url();
                         if url == "/video" {
-                            // Serve the video file
-                            match std::fs::read(&video_path_clone) {
-                                Ok(data) => {
-                                    let mime = if video_path_clone
+                            // Serve the video file using streaming
+                            match std::fs::File::open(&video_path_clone) {
+                                Ok(file) => {
+                                    let metadata = file.metadata().ok();
+                                    let file_size = metadata.map(|m| m.len());
+
+                                    let mime = match video_path_clone
                                         .extension()
-                                        .map(|e| e == "mp4")
-                                        .unwrap_or(false)
+                                        .and_then(|e| e.to_str())
+                                        .map(|e| e.to_lowercase())
+                                        .as_deref()
                                     {
-                                        "video/mp4"
-                                    } else if video_path_clone
-                                        .extension()
-                                        .map(|e| e == "webm")
-                                        .unwrap_or(false)
-                                    {
-                                        "video/webm"
-                                    } else if video_path_clone
-                                        .extension()
-                                        .map(|e| e == "mov")
-                                        .unwrap_or(false)
-                                    {
-                                        "video/quicktime"
-                                    } else if video_path_clone
-                                        .extension()
-                                        .map(|e| e == "avi")
-                                        .unwrap_or(false)
-                                    {
-                                        "video/x-msvideo"
-                                    } else if video_path_clone
-                                        .extension()
-                                        .map(|e| e == "mkv")
-                                        .unwrap_or(false)
-                                    {
-                                        "video/x-matroska"
-                                    } else {
-                                        "video/mp4"
+                                        Some("mp4") => "video/mp4",
+                                        Some("webm") => "video/webm",
+                                        Some("mov") => "video/quicktime",
+                                        Some("avi") => "video/x-msvideo",
+                                        Some("mkv") => "video/x-matroska",
+                                        _ => "video/mp4",
                                     };
-                                    let response = Response::from_data(data).with_header(
-                                        tiny_http::Header::from_bytes(
-                                            &b"Content-Type"[..],
-                                            mime.as_bytes(),
+
+                                    let response = if let Some(size) = file_size {
+                                        Response::from_file(file)
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Content-Type"[..],
+                                                    mime.as_bytes(),
+                                                )
+                                                .unwrap(),
+                                            )
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Content-Length"[..],
+                                                    size.to_string().as_bytes(),
+                                                )
+                                                .unwrap(),
+                                            )
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(
+                                                    &b"Accept-Ranges"[..],
+                                                    &b"bytes"[..],
+                                                )
+                                                .unwrap(),
+                                            )
+                                    } else {
+                                        Response::from_file(file).with_header(
+                                            tiny_http::Header::from_bytes(
+                                                &b"Content-Type"[..],
+                                                mime.as_bytes(),
+                                            )
+                                            .unwrap(),
                                         )
-                                        .unwrap(),
-                                    );
+                                    };
                                     let _ = request.respond(response);
                                 }
-                                Err(_) => {
+                                Err(e) => {
+                                    eprintln!("Failed to open video file: {}", e);
                                     let _ = request.respond(Response::empty(404));
                                 }
                             }
