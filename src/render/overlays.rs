@@ -7,11 +7,12 @@
 //! - Command palette popup
 //! - Settings modal
 
+use crate::actions::{CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp};
 use crate::app::Humanboard;
 use crate::settings::Settings;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{Input, InputState};
+use gpui_component::input::{Enter, Input, InputState, MoveDown, MoveUp};
 use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 
 /// Render the header bar with navigation and integrated command palette
@@ -84,14 +85,25 @@ pub fn render_header_bar(
                 .id("cmd-palette-container")
                 .w(px(400.0))
                 .relative()
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                    if this.command_palette.is_some() {
-                        match event.keystroke.key.as_str() {
-                            "down" => this.select_next_result(cx),
-                            "up" => this.select_prev_result(cx),
-                            _ => {}
-                        }
-                    }
+                .key_context("CommandPalette")
+                // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
+                    this.select_prev_result(cx);
+                }))
+                .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
+                    this.select_next_result(cx);
+                }))
+                .on_action(cx.listener(|this, _: &Enter, _, cx| {
+                    this.execute_command_from_action(cx);
+                }))
+                .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
+                    this.select_prev_result(cx);
+                }))
+                .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
+                    this.select_next_result(cx);
+                }))
+                .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
+                    this.execute_command_from_action(cx);
                 }))
                 // Search trigger button / input
                 .child(
@@ -114,7 +126,7 @@ pub fn render_header_bar(
                         )
                         .when(is_open, |d| {
                             if let Some(input) = command_palette {
-                                d.text_color(fg).child(
+                                d.child(
                                     Input::new(input)
                                         .w_full()
                                         .appearance(false)
@@ -183,12 +195,17 @@ pub fn render_header_bar(
                                                             format!("hdr-result-{}", item_id)
                                                                 .into(),
                                                         ))
-                                                        .px_2()
+                                                        .pl(px(6.0))
+                                                        .pr_2()
                                                         .py_1()
                                                         .gap_2()
                                                         .rounded(px(4.0))
                                                         .cursor(CursorStyle::PointingHand)
-                                                        .when(is_selected, |d| d.bg(list_active))
+                                                        .when(is_selected, |d| {
+                                                            d.bg(list_active)
+                                                                .border_l_2()
+                                                                .border_color(primary)
+                                                        })
                                                         .when(!is_selected, |d| {
                                                             d.hover(|s| s.bg(list_hover))
                                                         })
@@ -346,23 +363,70 @@ pub fn render_header_bar(
                     )
                 }),
         )
-        // Right side - shortcuts button
+        // Right side - add button, settings, and help
         .child(
-            h_flex().gap_2().child(
-                div()
-                    .id("show-shortcuts-btn")
-                    .px_2()
-                    .py_1()
-                    .rounded(px(4.0))
-                    .cursor(CursorStyle::PointingHand)
-                    .hover(|s| s.bg(list_hover))
-                    .text_sm()
-                    .text_color(muted_fg)
-                    .child("?")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_shortcuts(cx);
-                    })),
-            ),
+            h_flex()
+                .gap_2()
+                // Add button
+                .child(
+                    div()
+                        .id("add-item-btn")
+                        .px_2()
+                        .py_1()
+                        .rounded(px(4.0))
+                        .cursor(CursorStyle::PointingHand)
+                        .hover(|s| s.bg(list_hover))
+                        .text_sm()
+                        .text_color(muted_fg)
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(
+                                    Icon::new(IconName::Plus)
+                                        .size(px(14.0))
+                                        .text_color(muted_fg),
+                                )
+                                .child("Add"),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_file(window, cx);
+                        })),
+                )
+                // Settings button
+                .child(
+                    div()
+                        .id("settings-btn")
+                        .px_2()
+                        .py_1()
+                        .rounded(px(4.0))
+                        .cursor(CursorStyle::PointingHand)
+                        .hover(|s| s.bg(list_hover))
+                        .child(
+                            Icon::new(IconName::Settings)
+                                .size(px(14.0))
+                                .text_color(muted_fg),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_settings(cx);
+                        })),
+                )
+                // Help button
+                .child(
+                    div()
+                        .id("show-shortcuts-btn")
+                        .px_2()
+                        .py_1()
+                        .rounded(px(4.0))
+                        .cursor(CursorStyle::PointingHand)
+                        .hover(|s| s.bg(list_hover))
+                        .text_sm()
+                        .text_color(muted_fg)
+                        .child("?")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_shortcuts(cx);
+                        })),
+                ),
         )
 }
 
@@ -375,12 +439,14 @@ pub fn render_footer_bar(
     canvas_offset: Point<Pixels>,
     selected_item_name: Option<String>,
     board_name: Option<String>,
+    is_dirty: bool,
     cx: &Context<Humanboard>,
 ) -> Div {
     let bg = cx.theme().title_bar;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
+    let success = cx.theme().success;
 
     h_flex()
         .absolute()
@@ -412,7 +478,13 @@ pub fn render_footer_bar(
                     "X: {:.0} Y: {:.0}",
                     f32::from(canvas_offset.x),
                     f32::from(canvas_offset.y)
-                ))),
+                )))
+                // Save state indicator
+                .child(if is_dirty {
+                    div().text_color(muted_fg).child("Saving...")
+                } else {
+                    div().text_color(success).child("Saved")
+                }),
         )
         .when_some(selected_item_name, |d, name| {
             d.child(div().text_color(fg).child(name))
@@ -613,13 +685,7 @@ pub fn render_command_palette(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| this.hide_command_palette(cx)),
             )
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                match event.keystroke.key.as_str() {
-                    "down" => this.select_next_result(cx),
-                    "up" => this.select_prev_result(cx),
-                    _ => {}
-                }
-            }))
+            .on_scroll_wheel(|_, _, _| {})
             .child(
                 v_flex()
                     .w(px(500.0))
@@ -631,7 +697,28 @@ pub fn render_command_palette(
                     .rounded(px(12.0))
                     .shadow_lg()
                     .overflow_hidden()
+                    .key_context("CommandPalette")
+                    // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                    .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
+                        this.select_prev_result(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
+                        this.select_next_result(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &Enter, _, cx| {
+                        this.execute_command_from_action(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
+                        this.select_prev_result(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
+                        this.select_next_result(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
+                        this.execute_command_from_action(cx);
+                    }))
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    .on_scroll_wheel(|_, _, _| {})
                     .child(
                         h_flex()
                             .px_4()
@@ -645,10 +732,29 @@ pub fn render_command_palette(
                                     .text_color(muted_fg),
                             )
                             .child(
-                                Input::new(input)
-                                    .w_full()
-                                    .appearance(false)
-                                    .cleanable(false),
+                                div()
+                                    .flex_1()
+                                    .relative()
+                                    .child(
+                                        Input::new(input)
+                                            .w_full()
+                                            .appearance(false)
+                                            .cleanable(false),
+                                    )
+                                    .when(current_text.is_empty(), |d| {
+                                        d.child(
+                                            div()
+                                                .absolute()
+                                                .top_0()
+                                                .left_0()
+                                                .h_full()
+                                                .flex()
+                                                .items_center()
+                                                .text_sm()
+                                                .text_color(fg.opacity(0.5))
+                                                .child("Type to search or use commands..."),
+                                        )
+                                    }),
                             )
                             .child(
                                 div()
@@ -662,6 +768,7 @@ pub fn render_command_palette(
                             .id("command-palette-results")
                             .flex_1()
                             .overflow_y_scroll()
+                            .on_scroll_wheel(|_, _, _| {})
                             .when(has_results, |d| {
                                 d.child(v_flex().py_2().children(
                                     search_results.iter().enumerate().map(
@@ -673,12 +780,19 @@ pub fn render_command_palette(
                                                 .id(ElementId::Name(
                                                     format!("result-{}", item_id).into(),
                                                 ))
-                                                .px_4()
+                                                .pl(px(12.0))
+                                                .pr_4()
                                                 .py_2()
                                                 .gap_3()
                                                 .cursor(CursorStyle::PointingHand)
-                                                .when(is_selected, |d| d.bg(list_active))
-                                                .hover(|s| s.bg(list_hover))
+                                                .when(is_selected, |d| {
+                                                    d.bg(list_active)
+                                                        .border_l_2()
+                                                        .border_color(primary)
+                                                })
+                                                .when(!is_selected, |d| {
+                                                    d.hover(|s| s.bg(list_hover))
+                                                })
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     this.pending_command =
                                                         Some(format!("__jump:{}", item_id));
@@ -958,13 +1072,13 @@ pub fn render_settings_modal(
                                             .child(
                                                 div()
                                                     .id("theme-list")
-                                                    .max_h(px(200.0))
+                                                    .max_h(px(320.0))
                                                     .bg(title_bar)
                                                     .border_1()
                                                     .border_color(border)
                                                     .rounded(px(8.0))
                                                     .overflow_y_scroll()
-                                                    .child(v_flex().children(themes.into_iter().map(
+                                                    .child(v_flex().py_1().children(themes.into_iter().map(
                                                         |theme_name| {
                                                             let is_selected = theme_name == current_theme;
                                                             let theme_name_clone = theme_name.clone();

@@ -1,8 +1,9 @@
 use gpui::*;
 use humanboard::actions::{
-    CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
-    GoHome, NewBoard, NextTab, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, ShowShortcuts,
-    ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
+    CommandPalette, DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab, NudgeDown,
+    NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SelectAll,
+    ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use std::borrow::Cow;
@@ -92,10 +93,23 @@ fn main() {
             KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
             KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
             KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
+            KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
             KeyBinding::new("escape", ClosePreview, Some("Canvas")),
             KeyBinding::new("escape", CloseCommandPalette, Some("Canvas")),
             KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
             KeyBinding::new("cmd-v", Paste, Some("Canvas")), // Canvas paste (for images)
+            // Arrow keys to nudge selected items
+            KeyBinding::new("up", NudgeUp, Some("Canvas")),
+            KeyBinding::new("down", NudgeDown, Some("Canvas")),
+            KeyBinding::new("left", NudgeLeft, Some("Canvas")),
+            KeyBinding::new("right", NudgeRight, Some("Canvas")),
+        ]);
+
+        // Command palette navigation (higher priority than Input context)
+        cx.bind_keys([
+            KeyBinding::new("up", CmdPaletteUp, Some("CommandPalette")),
+            KeyBinding::new("down", CmdPaletteDown, Some("CommandPalette")),
+            KeyBinding::new("enter", CmdPaletteSelect, Some("CommandPalette")),
         ]);
 
         cx.open_window(

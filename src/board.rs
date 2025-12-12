@@ -163,10 +163,18 @@ impl Board {
             return;
         }
 
-        for path in paths {
-            let content = ItemContent::from_path(&path);
-            let canvas_pos = self.screen_to_canvas(position);
-            self.add_item_internal(canvas_pos, content);
+        // Stagger offset for multiple files so they don't overlap
+        const STAGGER_X: f32 = 30.0;
+        const STAGGER_Y: f32 = 30.0;
+
+        for (i, path) in paths.iter().enumerate() {
+            let content = ItemContent::from_path(path);
+            let base_pos = self.screen_to_canvas(position);
+            let staggered_pos = point(
+                px(f32::from(base_pos.x) + (i as f32 * STAGGER_X)),
+                px(f32::from(base_pos.y) + (i as f32 * STAGGER_Y)),
+            );
+            self.add_item_internal(staggered_pos, content);
         }
 
         // Single history push and save for the entire batch
@@ -296,6 +304,11 @@ impl Board {
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
         self.last_change = Instant::now();
+    }
+
+    /// Check if the board has unsaved changes
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     /// Check if enough time has passed to save (debouncing)

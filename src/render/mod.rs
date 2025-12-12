@@ -22,12 +22,13 @@ pub use preview::{
 
 use crate::actions::{
     CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
-    GoHome, NewBoard, NextPage, NextTab, OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut,
-    PdfZoomReset, PrevPage, PrevTab, Redo, ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo,
-    ZoomIn, ZoomOut, ZoomReset,
+    GoHome, NewBoard, NextPage, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
+    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SelectAll,
+    ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
+use crate::notifications::render_toast_container;
 use gpui::DefiniteLength::Fraction;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -47,14 +48,30 @@ impl Render for Humanboard {
         // Process any pending command from Enter key press
         self.process_pending_command(window, cx);
 
+        // Update pan animation and request next frame if still animating
+        if self.update_pan_animation() {
+            window.request_animation_frame();
+        }
+
         // Route based on current view
         let content = match &self.view {
             AppView::Landing => self.render_landing_view(cx),
             AppView::Board(_) => self.render_board_view(window, cx),
         };
 
+        // Remove expired toasts
+        self.toast_manager.remove_expired();
+
+        // Check for debounced save
+        if let Some(ref mut board) = self.board {
+            if board.should_save() {
+                board.flush_save();
+            }
+        }
+
         // Wrap everything in a container with overlays on top
         let bg = cx.theme().background;
+        let toasts = self.toast_manager.toasts().to_vec();
 
         div()
             .size_full()
@@ -67,6 +84,10 @@ impl Render for Humanboard {
             })
             .when(self.show_settings, |d| {
                 d.child(render_settings_modal(&self.settings.theme, cx))
+            })
+            // Toast notifications
+            .when(!toasts.is_empty(), |d| {
+                d.child(render_toast_container(&toasts))
             })
     }
 }
@@ -221,6 +242,11 @@ impl Humanboard {
             .on_action(
                 cx.listener(|this, _: &DuplicateSelected, _, cx| this.duplicate_selected(cx)),
             )
+            .on_action(cx.listener(|this, _: &SelectAll, _, cx| this.select_all(cx)))
+            .on_action(cx.listener(|this, _: &NudgeUp, _, cx| this.nudge_up(cx)))
+            .on_action(cx.listener(|this, _: &NudgeDown, _, cx| this.nudge_down(cx)))
+            .on_action(cx.listener(|this, _: &NudgeLeft, _, cx| this.nudge_left(cx)))
+            .on_action(cx.listener(|this, _: &NudgeRight, _, cx| this.nudge_right(cx)))
             .on_action(cx.listener(|this, _: &Undo, _, cx| this.undo(cx)))
             .on_action(cx.listener(|this, _: &Redo, _, cx| this.redo(cx)))
             .on_action(cx.listener(|this, _: &ClosePreview, _, cx| this.close_preview(cx)))
@@ -246,42 +272,53 @@ impl Humanboard {
             )
             .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
-                if let Some(first_path) = paths.paths().first() {
-                    let drop_pos = if let Some(pos) = this.last_drop_pos {
-                        pos
+                let all_paths: Vec<_> = paths.paths().to_vec();
+                if all_paths.is_empty() {
+                    return;
+                }
+
+                let drop_pos = if let Some(pos) = this.last_drop_pos {
+                    pos
+                } else {
+                    let bounds = window.bounds();
+                    let window_size = bounds.size;
+
+                    let (canvas_center_x, canvas_center_y) = if let Some(ref preview) = this.preview
+                    {
+                        match preview.split {
+                            SplitDirection::Vertical => {
+                                let canvas_width =
+                                    f32::from(window_size.width) * (1.0 - preview.size);
+                                (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
+                            }
+                            SplitDirection::Horizontal => {
+                                let canvas_height =
+                                    f32::from(window_size.height) * (1.0 - preview.size);
+                                (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
+                            }
+                        }
                     } else {
-                        let bounds = window.bounds();
-                        let window_size = bounds.size;
-
-                        let (canvas_center_x, canvas_center_y) =
-                            if let Some(ref preview) = this.preview {
-                                match preview.split {
-                                    SplitDirection::Vertical => {
-                                        let canvas_width =
-                                            f32::from(window_size.width) * (1.0 - preview.size);
-                                        (canvas_width / 2.0, f32::from(window_size.height) / 2.0)
-                                    }
-                                    SplitDirection::Horizontal => {
-                                        let canvas_height =
-                                            f32::from(window_size.height) * (1.0 - preview.size);
-                                        (f32::from(window_size.width) / 2.0, canvas_height / 2.0)
-                                    }
-                                }
-                            } else {
-                                (
-                                    f32::from(window_size.width) / 2.0,
-                                    f32::from(window_size.height) / 2.0,
-                                )
-                            };
-
-                        point(px(canvas_center_x), px(canvas_center_y))
+                        (
+                            f32::from(window_size.width) / 2.0,
+                            f32::from(window_size.height) / 2.0,
+                        )
                     };
 
-                    if let Some(ref mut board) = this.board {
-                        board.handle_file_drop(drop_pos, vec![first_path.clone()]);
-                    }
-                    cx.notify();
+                    point(px(canvas_center_x), px(canvas_center_y))
+                };
+
+                let count = all_paths.len();
+                if let Some(ref mut board) = this.board {
+                    board.handle_file_drop(drop_pos, all_paths);
                 }
+                // Show toast notification
+                let msg = if count == 1 {
+                    "Added 1 item".to_string()
+                } else {
+                    format!("Added {} items", count)
+                };
+                this.show_toast(crate::notifications::Toast::success(msg));
+                cx.notify();
             }));
 
         let content = match preview_info {
@@ -321,7 +358,12 @@ impl Humanboard {
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
-                                .child(render_tab_bar(tabs, active_tab, cx))
+                                .child(render_tab_bar(
+                                    tabs,
+                                    active_tab,
+                                    &self.preview_tab_scroll,
+                                    cx,
+                                ))
                                 .child(
                                     div()
                                         .id(ElementId::Name(
@@ -365,7 +407,12 @@ impl Humanboard {
                                 .flex()
                                 .flex_col()
                                 .overflow_hidden()
-                                .child(render_tab_bar(tabs, active_tab, cx))
+                                .child(render_tab_bar(
+                                    tabs,
+                                    active_tab,
+                                    &self.preview_tab_scroll,
+                                    cx,
+                                ))
                                 .child(
                                     div()
                                         .id(ElementId::Name(
@@ -398,6 +445,7 @@ impl Humanboard {
             canvas_offset,
             selected_item_name,
             None,
+            self.board.as_ref().is_some_and(|b| b.is_dirty()),
             cx,
         ))
         .child(render_header_bar(

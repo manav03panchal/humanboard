@@ -219,7 +219,7 @@ pub fn render_toast(toast: &Toast) -> Div {
 pub fn render_toast_container(toasts: &[Toast]) -> Div {
     div()
         .absolute()
-        .top_4()
+        .top(px(52.0)) // Below header bar (40px) + padding
         .right_4()
         .flex()
         .flex_col()

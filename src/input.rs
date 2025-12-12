@@ -352,6 +352,11 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Block canvas scroll when any modal/overlay is open
+        if self.command_palette.is_some() || self.show_settings || self.show_shortcuts {
+            return;
+        }
+
         // Check if scrolling over preview panel - if so, let it handle its own scroll
         if let Some(ref preview) = self.preview {
             let bounds = window.bounds();

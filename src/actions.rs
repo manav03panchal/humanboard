@@ -33,7 +33,15 @@ actions!(
         CommandPalette,
         ToggleCommandPalette,
         CloseCommandPalette,
-        OpenSettings
+        OpenSettings,
+        NudgeUp,
+        NudgeDown,
+        NudgeLeft,
+        NudgeRight,
+        // Command palette navigation
+        CmdPaletteUp,
+        CmdPaletteDown,
+        CmdPaletteSelect
     ]
 );
 
@@ -97,6 +105,39 @@ impl Humanboard {
         if !self.selected_items.is_empty() {
             if let Some(ref mut board) = self.board {
                 let selected = self.selected_items.clone();
+
+                // Collect paths of items being deleted (for closing preview tabs)
+                let deleted_paths: Vec<_> = board
+                    .items
+                    .iter()
+                    .filter(|item| selected.contains(&item.id))
+                    .filter_map(|item| match &item.content {
+                        crate::types::ItemContent::Pdf { path, .. } => Some(path.clone()),
+                        crate::types::ItemContent::Markdown { path, .. } => Some(path.clone()),
+                        _ => None,
+                    })
+                    .collect();
+
+                // Close preview tabs for deleted items
+                if let Some(ref mut preview) = self.preview {
+                    let mut tabs_to_remove: Vec<usize> = Vec::new();
+                    for (i, tab) in preview.tabs.iter().enumerate() {
+                        if deleted_paths.contains(tab.path()) {
+                            tabs_to_remove.push(i);
+                        }
+                    }
+                    // Remove in reverse order to preserve indices
+                    for i in tabs_to_remove.into_iter().rev() {
+                        preview.tabs.remove(i);
+                    }
+                    // Adjust active tab if needed
+                    if preview.tabs.is_empty() {
+                        self.preview = None;
+                    } else if preview.active_tab >= preview.tabs.len() {
+                        preview.active_tab = preview.tabs.len() - 1;
+                    }
+                }
+
                 board.items.retain(|item| !selected.contains(&item.id));
                 self.selected_items.clear();
                 board.push_history();
@@ -155,6 +196,40 @@ impl Humanboard {
             }
             cx.notify();
         }
+    }
+
+    /// Nudge selected items by a given delta
+    fn nudge_selected(&mut self, dx: f32, dy: f32, cx: &mut Context<Self>) {
+        if self.selected_items.is_empty() {
+            return;
+        }
+        if let Some(ref mut board) = self.board {
+            for item in &mut board.items {
+                if self.selected_items.contains(&item.id) {
+                    item.position.0 += dx;
+                    item.position.1 += dy;
+                }
+            }
+            board.push_history();
+            board.mark_dirty();
+            cx.notify();
+        }
+    }
+
+    pub fn nudge_up(&mut self, cx: &mut Context<Self>) {
+        self.nudge_selected(0.0, -10.0, cx);
+    }
+
+    pub fn nudge_down(&mut self, cx: &mut Context<Self>) {
+        self.nudge_selected(0.0, 10.0, cx);
+    }
+
+    pub fn nudge_left(&mut self, cx: &mut Context<Self>) {
+        self.nudge_selected(-10.0, 0.0, cx);
+    }
+
+    pub fn nudge_right(&mut self, cx: &mut Context<Self>) {
+        self.nudge_selected(10.0, 0.0, cx);
     }
 
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {

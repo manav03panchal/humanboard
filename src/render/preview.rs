@@ -19,8 +19,9 @@ use std::path::PathBuf;
 pub fn render_tab_bar(
     tabs: &Vec<PreviewTab>,
     active_tab: usize,
+    scroll_handle: &ScrollHandle,
     cx: &mut Context<Humanboard>,
-) -> Div {
+) -> Stateful<Div> {
     let bg = cx.theme().title_bar;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
@@ -30,72 +31,81 @@ pub fn render_tab_bar(
     let primary = cx.theme().primary;
     let danger = cx.theme().danger;
 
-    h_flex()
+    div()
+        .id("preview-tab-bar")
         .h(px(36.0))
         .w_full()
         .bg(bg)
         .border_b_1()
         .border_color(border)
+        .flex()
         .items_center()
-        .overflow_x_hidden()
-        .children(tabs.iter().enumerate().map(|(index, tab)| {
-            let is_active = index == active_tab;
-            let filename = tab.title();
-            let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
-
-            let display_name = if filename.len() > 20 {
-                format!("{}...", &filename[..17])
-            } else {
-                filename
-            };
-
-            let tab_index = index;
-            let tab_index_close = index;
-
+        .overflow_x_scroll()
+        .track_scroll(scroll_handle)
+        .child(
             h_flex()
-                .id(ElementId::Name(format!("tab-{}", index).into()))
-                .gap_2()
-                .px_3()
-                .py_1()
-                .bg(if is_active { list_active } else { bg })
-                .border_r_1()
-                .border_color(border)
-                .hover(|style| style.bg(list_hover))
-                .cursor(CursorStyle::PointingHand)
-                .on_click(cx.listener(move |this, _event, _window, cx| {
-                    this.switch_tab(tab_index, cx);
-                }))
-                .child(if is_markdown {
-                    Icon::new(IconName::File).xsmall().text_color(primary)
-                } else {
-                    Icon::new(IconName::File).xsmall().text_color(danger)
-                })
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if is_active { fg } else { muted_fg })
-                        .child(display_name),
-                )
-                .child(
-                    div()
-                        .w(px(14.0))
-                        .h(px(14.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(2.0))
-                        .text_xs()
-                        .text_color(muted_fg)
-                        .hover(|style| style.bg(list_hover).text_color(fg))
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _event, _window, cx| {
-                                this.close_tab(tab_index_close, cx);
-                            }),
+                .flex_shrink_0()
+                .children(tabs.iter().enumerate().map(|(index, tab)| {
+                    let is_active = index == active_tab;
+                    let filename = tab.title();
+                    let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
+
+                    let display_name = if filename.len() > 20 {
+                        format!("{}...", &filename[..17])
+                    } else {
+                        filename
+                    };
+
+                    let tab_index = index;
+                    let tab_index_close = index;
+
+                    h_flex()
+                        .id(ElementId::Name(format!("tab-{}", index).into()))
+                        .flex_shrink_0()
+                        .gap_2()
+                        .px_3()
+                        .py_1()
+                        .bg(if is_active { list_active } else { bg })
+                        .border_r_1()
+                        .border_color(border)
+                        .hover(|style| style.bg(list_hover))
+                        .cursor(CursorStyle::PointingHand)
+                        .on_click(cx.listener(move |this, _event, _window, cx| {
+                            this.switch_tab(tab_index, cx);
+                        }))
+                        .child(if is_markdown {
+                            Icon::new(IconName::File).xsmall().text_color(primary)
+                        } else {
+                            Icon::new(IconName::File).xsmall().text_color(danger)
+                        })
+                        .child(
+                            div()
+                                .text_xs()
+                                .whitespace_nowrap()
+                                .text_color(if is_active { fg } else { muted_fg })
+                                .child(display_name),
                         )
-                        .child("×"),
-                )
-        }))
+                        .child(
+                            div()
+                                .w(px(14.0))
+                                .h(px(14.0))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(2.0))
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .hover(|style| style.bg(list_hover).text_color(fg))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(move |this, _event, _window, cx| {
+                                        this.close_tab(tab_index_close, cx);
+                                    }),
+                                )
+                                .child("×"),
+                        )
+                })),
+        )
 }
 
 /// Render the content area for a preview tab

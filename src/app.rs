@@ -126,6 +126,20 @@ pub struct Humanboard {
 
     // Toast notifications
     pub toast_manager: ToastManager,
+
+    // Preview tab scroll handle
+    pub preview_tab_scroll: ScrollHandle,
+
+    // Pan animation state
+    pub pan_animation: Option<PanAnimation>,
+}
+
+/// Animation state for smooth panning to a target position
+pub struct PanAnimation {
+    pub start_offset: Point<Pixels>,
+    pub target_offset: Point<Pixels>,
+    pub start_time: Instant,
+    pub duration: Duration,
 }
 
 impl Humanboard {
@@ -167,12 +181,19 @@ impl Humanboard {
             settings: Settings::load(),
             show_settings: false,
             toast_manager: ToastManager::new(),
+            preview_tab_scroll: ScrollHandle::new(),
+            pan_animation: None,
         }
     }
 
     pub fn toggle_settings(&mut self, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
         cx.notify();
+    }
+
+    /// Show a toast notification
+    pub fn show_toast(&mut self, toast: crate::notifications::Toast) {
+        self.toast_manager.push(toast);
     }
 
     pub fn set_theme(&mut self, theme_name: String, cx: &mut Context<Self>) {
@@ -221,7 +242,12 @@ impl Humanboard {
             |this, input, event: &gpui_component::input::InputEvent, cx| {
                 match event {
                     gpui_component::input::InputEvent::PressEnter { .. } => {
-                        this.execute_command_from_subscription(cx);
+                        // Note: Enter is handled by the action handler on the container
+                        // which runs before this subscription. Don't double-handle.
+                        // Only handle if pending_command wasn't already set by action handler.
+                        if this.pending_command.is_none() && this.command_palette.is_some() {
+                            this.execute_command_from_subscription(cx);
+                        }
                     }
                     gpui_component::input::InputEvent::Change { .. } => {
                         // Update search results as user types
@@ -301,6 +327,11 @@ impl Humanboard {
         }
     }
 
+    /// Called from action when Enter is pressed - stores command for deferred execution
+    pub fn execute_command_from_action(&mut self, cx: &mut Context<Self>) {
+        self.execute_command_from_subscription(cx);
+    }
+
     /// Called from subscription when Enter is pressed - stores command for deferred execution
     fn execute_command_from_subscription(&mut self, cx: &mut Context<Self>) {
         // If we have search results selected, jump to that item
@@ -345,20 +376,75 @@ impl Humanboard {
         }
     }
 
-    /// Jump to and select an item by ID
-    fn jump_to_item(&mut self, item_id: u64, window: &mut Window, _cx: &mut Context<Self>) {
-        if let Some(ref mut board) = self.board {
-            // Get window size for centering
-            let bounds = window.bounds();
-            let screen_size = bounds.size;
+    /// Jump to and select an item by ID with smooth animation
+    fn jump_to_item(&mut self, item_id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref board) = self.board {
+            if let Some(item) = board.items.iter().find(|i| i.id == item_id) {
+                // Get window size for centering
+                let bounds = window.bounds();
+                let screen_size = bounds.size;
 
-            // Center on the item
-            board.center_on_item(item_id, screen_size);
+                // Calculate the center of the item in canvas coordinates
+                let item_center_x = item.position.0 + item.size.0 / 2.0;
+                let item_center_y = item.position.1 + item.size.1 / 2.0;
 
-            // Select the item
-            self.selected_items.clear();
-            self.selected_items.insert(item_id);
+                // Calculate target offset to center item on screen
+                let screen_center_x = f32::from(screen_size.width) / 2.0;
+                let screen_center_y = f32::from(screen_size.height) / 2.0;
+
+                let target_offset = point(
+                    px(screen_center_x - item_center_x * board.zoom),
+                    px(screen_center_y - item_center_y * board.zoom),
+                );
+
+                // Start animation from current position to target
+                self.pan_animation = Some(PanAnimation {
+                    start_offset: board.canvas_offset,
+                    target_offset,
+                    start_time: Instant::now(),
+                    duration: Duration::from_millis(300),
+                });
+
+                // Select the item
+                self.selected_items.clear();
+                self.selected_items.insert(item_id);
+
+                // Trigger first frame
+                cx.notify();
+            }
         }
+    }
+
+    /// Update pan animation, returns true if animation is active
+    pub fn update_pan_animation(&mut self) -> bool {
+        if let Some(ref anim) = self.pan_animation {
+            let elapsed = anim.start_time.elapsed();
+            let progress = (elapsed.as_secs_f32() / anim.duration.as_secs_f32()).min(1.0);
+
+            // Ease out cubic for smooth deceleration
+            let eased = 1.0 - (1.0 - progress).powi(3);
+
+            if let Some(ref mut board) = self.board {
+                // Interpolate between start and target
+                let start_x = f32::from(anim.start_offset.x);
+                let start_y = f32::from(anim.start_offset.y);
+                let target_x = f32::from(anim.target_offset.x);
+                let target_y = f32::from(anim.target_offset.y);
+
+                board.canvas_offset = point(
+                    px(start_x + (target_x - start_x) * eased),
+                    px(start_y + (target_y - start_y) * eased),
+                );
+            }
+
+            if progress >= 1.0 {
+                // Animation complete
+                self.pan_animation = None;
+                return false;
+            }
+            return true;
+        }
+        false
     }
 
     pub fn execute_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
