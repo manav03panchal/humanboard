@@ -92,24 +92,13 @@ impl Humanboard {
                 }
             }
 
-            // Handle double-click for audio/video playback
+            // Handle double-click for audio playback
             if event.click_count == 2 {
                 let item_content = board.get_item(item_id).map(|item| item.content.clone());
 
-                if let Some(content) = item_content {
-                    match content {
-                        ItemContent::Audio(_) => {
-                            println!("Audio item double-clicked: {}", item_id);
-                            self.toggle_audio_playback(item_id, cx);
-                            return;
-                        }
-                        ItemContent::Video(_) => {
-                            println!("Video item double-clicked: {}", item_id);
-                            self.open_video_in_player(item_id);
-                            return;
-                        }
-                        _ => {}
-                    }
+                if let Some(ItemContent::Audio(_)) = item_content {
+                    self.toggle_audio_playback(item_id, cx);
+                    return;
                 }
             }
 

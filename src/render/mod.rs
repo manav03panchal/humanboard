@@ -160,8 +160,8 @@ impl Humanboard {
         // Ensure Audio Players are created for any Audio items
         self.ensure_audio_players();
 
-        // Ensure Video Players are created for any Video items
-        self.ensure_video_players();
+        // Ensure Video WebViews are created for any Video items
+        self.ensure_video_webviews(window, cx);
 
         // Get board data (with fallback defaults if somehow no board)
         let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
@@ -355,7 +355,7 @@ impl Humanboard {
                                     &selected_items,
                                     &self.youtube_webviews,
                                     &self.audio_players,
-                                    &self.video_players,
+                                    &self.video_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -406,7 +406,7 @@ impl Humanboard {
                                     &selected_items,
                                     &self.youtube_webviews,
                                     &self.audio_players,
-                                    &self.video_players,
+                                    &self.video_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -449,7 +449,7 @@ impl Humanboard {
                 &selected_items,
                 &self.youtube_webviews,
                 &self.audio_players,
-                &self.video_players,
+                &self.video_webviews,
                 marquee,
                 cx,
             )),

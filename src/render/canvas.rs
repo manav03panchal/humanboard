@@ -10,7 +10,7 @@ use crate::app::Humanboard;
 use crate::audio_webview::AudioPlayer;
 use crate::markdown_card::render_collapsed_markdown;
 use crate::types::{CanvasItem, ItemContent};
-use crate::video_webview::VideoPlayer;
+use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -87,7 +87,7 @@ fn render_item_content(
     zoom: f32,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_players: &HashMap<u64, AudioPlayer>,
-    _video_players: &HashMap<u64, VideoPlayer>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -164,98 +164,55 @@ fn render_item_content(
                     ),
             ),
 
-        ItemContent::Video(path) => {
-            // Modern video player UI
-            let file_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("video")
-                .to_string();
-
-            div()
-                .size_full()
-                .rounded(corner_radius)
-                .overflow_hidden()
-                .bg(hsla(250.0 / 360.0, 0.25, 0.12, 1.0))
-                .flex()
-                .flex_col()
-                .child(
-                    // Top bar with icon
-                    div()
-                        .w_full()
-                        .h(px(28.0 * zoom))
-                        .px(px(12.0 * zoom))
-                        .bg(hsla(0.0, 0.0, 0.0, 0.3))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0 * zoom))
-                        .child(
-                            div()
-                                .text_size(px(12.0 * zoom))
-                                .text_color(hsla(280.0 / 360.0, 0.7, 0.7, 1.0))
-                                .child("◉"),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.0 * zoom))
-                                .text_color(hsla(0.0, 0.0, 0.5, 1.0))
-                                .child("VIDEO"),
-                        ),
-                )
-                .child(
-                    // Center play button
-                    div()
-                        .flex_1()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            div()
-                                .w(px(48.0 * zoom))
-                                .h(px(48.0 * zoom))
-                                .bg(hsla(280.0 / 360.0, 0.6, 0.5, 0.9))
-                                .rounded(px(24.0 * zoom))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(hsla(280.0 / 360.0, 0.7, 0.6, 1.0)))
-                                .child(
-                                    div()
-                                        .text_size(px(18.0 * zoom))
-                                        .text_color(hsla(0.0, 0.0, 1.0, 1.0))
-                                        .ml(px(2.0 * zoom))
-                                        .child("▶"),
-                                ),
-                        ),
-                )
-                .child(
-                    // Bottom bar with filename
-                    div()
-                        .w_full()
-                        .px(px(12.0 * zoom))
-                        .py(px(8.0 * zoom))
-                        .bg(hsla(0.0, 0.0, 0.0, 0.4))
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.0 * zoom))
-                        .child(
-                            div()
-                                .text_size(px(10.0 * zoom))
-                                .text_color(hsla(0.0, 0.0, 0.85, 1.0))
-                                .max_w_full()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(file_name),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(9.0 * zoom))
-                                .text_color(hsla(0.0, 0.0, 0.45, 1.0))
-                                .child("Double-click to open"),
-                        ),
-                )
+        ItemContent::Video(_path) => {
+            // Render Video WebView if available
+            if let Some(webview) = video_webviews.get(&item.id) {
+                v_flex()
+                    .size_full()
+                    .rounded(corner_radius)
+                    .overflow_hidden()
+                    // Drag handle bar at top
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.1, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.2, 1.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(12.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.4, 1.0))
+                                    .child("≡ drag"),
+                            ),
+                    )
+                    // WebView takes remaining space
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .child(webview.webview_entity.clone()),
+                    )
+            } else {
+                // Placeholder while loading
+                div()
+                    .size_full()
+                    .bg(hsla(0.0, 0.0, 0.1, 1.0))
+                    .rounded(corner_radius)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(14.0 * zoom))
+                            .text_color(muted_fg)
+                            .child("Loading video..."),
+                    )
+            }
         }
 
         ItemContent::Audio(path) => {
@@ -503,7 +460,7 @@ pub fn render_items(
     selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_players: &HashMap<u64, AudioPlayer>,
-    video_players: &HashMap<u64, VideoPlayer>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     let offset_x = f32::from(canvas_offset.x);
@@ -535,7 +492,7 @@ pub fn render_items(
                     zoom,
                     youtube_webviews,
                     audio_players,
-                    video_players,
+                    video_webviews,
                     fg,
                     muted_fg,
                     muted_bg,
@@ -572,7 +529,7 @@ pub fn render_canvas_area(
     selected_items: &std::collections::HashSet<u64>,
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_players: &HashMap<u64, AudioPlayer>,
-    video_players: &HashMap<u64, VideoPlayer>,
+    video_webviews: &HashMap<u64, VideoWebView>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     cx: &Context<Humanboard>,
 ) -> Div {
@@ -592,7 +549,7 @@ pub fn render_canvas_area(
             selected_items,
             youtube_webviews,
             audio_players,
-            video_players,
+            video_webviews,
             cx,
         ))
         // Render marquee selection rectangle
