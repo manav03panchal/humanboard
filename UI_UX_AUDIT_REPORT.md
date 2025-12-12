@@ -382,29 +382,29 @@ div()
 
 ### CRITICAL (Fix Immediately) - Ship Blockers
 
-| # | Issue | Location | Effort |
-|---|-------|----------|--------|
-| 1 | Add ARIA labels to all interactive elements | Multiple files | 1 day |
-| 2 | Implement visible focus indicators | All render files | 1 day |
-| 3 | Replace hard-coded colors with theme tokens | canvas.rs, markdown_card.rs | 1 day |
-| 4 | Add loading spinners/indicators | preview.rs, app.rs | 1 day |
-| 5 | Implement toast notification system | New file | 2 days |
-| 6 | Add focus trap to modals | overlays.rs | 1 day |
-| 7 | Fix color contrast in light themes | themes/*.json | 1 day |
-| 8 | Add icons to distinguish item types | canvas.rs | 1 day |
+| # | Issue | Location | Effort | Status |
+|---|-------|----------|--------|--------|
+| 1 | Add ARIA labels to all interactive elements | Multiple files | 1 day | ⬜ |
+| 2 | Implement visible focus indicators | All render files | 1 day | ⬜ |
+| 3 | Replace hard-coded colors with theme tokens | canvas.rs, markdown_card.rs | 1 day | ✅ DONE |
+| 4 | Add loading spinners/indicators | preview.rs, app.rs | 1 day | ⬜ |
+| 5 | Implement toast notification system | New file | 2 days | ✅ DONE |
+| 6 | Add focus trap to modals | overlays.rs | 1 day | ⬜ |
+| 7 | Fix color contrast in light themes | themes/*.json | 1 day | ⬜ |
+| 8 | Add icons to distinguish item types | canvas.rs | 1 day | ✅ DONE |
 
 ### HIGH (Next Sprint)
 
-| # | Issue | Location | Effort |
-|---|-------|----------|--------|
-| 9 | Add modal enter/exit animations | overlays.rs | 2 days |
-| 10 | Implement multi-select | app.rs, input.rs | 3 days |
-| 11 | Add command palette autocomplete | app.rs | 2 days |
-| 12 | Add first-run tutorial/onboarding | New file | 3 days |
-| 13 | Replace custom button divs with Button | overlays.rs | 1 day |
-| 14 | Add hover state transitions | Multiple files | 1 day |
-| 15 | Implement responsive modal sizing | overlays.rs | 1 day |
-| 16 | Add Escape handler to command palette | overlays.rs | 0.5 days |
+| # | Issue | Location | Effort | Status |
+|---|-------|----------|--------|--------|
+| 9 | Add modal enter/exit animations | overlays.rs | 2 days | ⬜ |
+| 10 | Implement multi-select | app.rs, input.rs | 3 days | ✅ DONE |
+| 11 | Add command palette autocomplete | app.rs | 2 days | ✅ DONE (arrow key nav + Enter to jump) |
+| 12 | Add first-run tutorial/onboarding | New file | 3 days | ⬜ |
+| 13 | Replace custom button divs with Button | overlays.rs | 1 day | ✅ DONE (+ Add button, settings icon) |
+| 14 | Add hover state transitions | Multiple files | 1 day | ⬜ |
+| 15 | Implement responsive modal sizing | overlays.rs | 1 day | ⬜ |
+| 16 | Add Escape handler to command palette | overlays.rs | 0.5 days | ✅ DONE |
 
 ### MEDIUM (Backlog)
 
@@ -426,25 +426,25 @@ div()
 ### Phase 1: Critical Fixes (1-2 weeks)
 - [ ] Accessibility ARIA labels
 - [ ] Focus indicators
-- [ ] Theme color compliance
+- [x] Theme color compliance (canvas.rs and markdown_card.rs updated to use theme colors)
 - [ ] Loading states
-- [ ] Toast notifications
+- [x] Toast notifications (implemented in src/notifications.rs, wired to file drops)
 - [ ] Modal focus traps
 - [ ] Contrast fixes
 
 ### Phase 2: Core UX (2-3 weeks)
 - [ ] Modal animations
-- [ ] Multi-select
-- [ ] Command palette improvements
+- [x] Multi-select (implemented with HashSet, marquee selection, Cmd+A select all)
+- [x] Command palette improvements (arrow key navigation, Enter to jump, smooth pan animation)
 - [ ] Onboarding flow
-- [ ] Component standardization
+- [x] Component standardization (replaced emoji with Icon components, added visible + button)
 - [ ] Hover transitions
 
 ### Phase 3: Polish (2-3 weeks)
 - [ ] Reduced motion support
-- [ ] Canvas keyboard navigation
+- [x] Canvas keyboard navigation (arrow keys to nudge selected items)
 - [ ] Design system tokens
-- [ ] Visual feedback improvements
+- [x] Visual feedback improvements (smooth pan animation when jumping to items, left border on selected palette items)
 - [ ] Mini-map
 - [ ] High contrast mode
 
