@@ -454,6 +454,7 @@ impl Humanboard {
             &self.search_results,
             self.selected_result,
             &self.cmd_palette_scroll,
+            self.cmd_palette_mode,
             cx,
         ));
 

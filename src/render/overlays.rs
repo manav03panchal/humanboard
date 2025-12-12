@@ -22,10 +22,12 @@ pub fn render_header_bar(
     search_results: &[(u64, String)],
     selected_result: usize,
     scroll_handle: &ScrollHandle,
+    palette_mode: crate::app::CmdPaletteMode,
     cx: &mut Context<Humanboard>,
 ) -> Div {
     let has_results = !search_results.is_empty();
     let is_open = command_palette.is_some();
+    let is_theme_mode = palette_mode == crate::app::CmdPaletteMode::Themes;
 
     // Get theme colors
     let bg = cx.theme().title_bar;
@@ -172,7 +174,7 @@ pub fn render_header_bar(
                             .rounded(px(6.0))
                             .shadow_lg()
                             .overflow_hidden()
-                            // Items section
+                            // Items/Themes section
                             .when(has_results, |d| {
                                 d.child(
                                     div()
@@ -182,7 +184,7 @@ pub fn render_header_bar(
                                         .text_xs()
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(muted_fg)
-                                        .child("Items"),
+                                        .child(if is_theme_mode { "Themes" } else { "Items" }),
                                 )
                                 .child(
                                     div()
@@ -199,6 +201,7 @@ pub fn render_header_bar(
                                             |(idx, (item_id, name))| {
                                                 let is_selected = idx == selected_result;
                                                 let item_id = *item_id;
+                                                let name_clone = name.clone();
 
                                                 h_flex()
                                                     .id(ElementId::Integer(idx as u64))
@@ -219,21 +222,31 @@ pub fn render_header_bar(
                                                     .on_mouse_down(
                                                         MouseButton::Left,
                                                         cx.listener(move |this, _, _, cx| {
-                                                            this.pending_command =
-                                                                Some(format!("__jump:{}", item_id));
+                                                            if this.cmd_palette_mode == crate::app::CmdPaletteMode::Themes {
+                                                                this.pending_command =
+                                                                    Some(format!("__theme:{}", name_clone));
+                                                            } else {
+                                                                this.pending_command =
+                                                                    Some(format!("__jump:{}", item_id));
+                                                            }
                                                             this.command_palette = None;
                                                             this.search_results.clear();
+                                                            this.cmd_palette_mode = crate::app::CmdPaletteMode::Items;
                                                             cx.notify();
                                                         }),
                                                     )
                                                     .child(
-                                                        Icon::new(IconName::File)
-                                                            .size(px(12.0))
-                                                            .text_color(if is_selected {
-                                                                primary
-                                                            } else {
-                                                                muted_fg
-                                                            }),
+                                                        Icon::new(if is_theme_mode {
+                                                            IconName::Palette
+                                                        } else {
+                                                            IconName::File
+                                                        })
+                                                        .size(px(12.0))
+                                                        .text_color(if is_selected {
+                                                            primary
+                                                        } else {
+                                                            muted_fg
+                                                        }),
                                                     )
                                                     .child(
                                                         div()
@@ -284,7 +297,6 @@ pub fn render_header_bar(
                                             .px_2()
                                             .py_1()
                                             .mx_1()
-                                            .mb_1()
                                             .gap_2()
                                             .rounded(px(4.0))
                                             .hover(|s| s.bg(list_hover))
@@ -312,6 +324,41 @@ pub fn render_header_bar(
                                                     .text_xs()
                                                     .text_color(muted_fg)
                                                     .child("Create markdown note"),
+                                            ),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .px_2()
+                                            .py_1()
+                                            .mx_1()
+                                            .mb_1()
+                                            .gap_2()
+                                            .rounded(px(4.0))
+                                            .hover(|s| s.bg(list_hover))
+                                            .cursor(CursorStyle::PointingHand)
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.enter_theme_mode(cx);
+                                                }),
+                                            )
+                                            .child(
+                                                div()
+                                                    .px(px(6.0))
+                                                    .py(px(2.0))
+                                                    .bg(primary.opacity(0.15))
+                                                    .rounded(px(3.0))
+                                                    .text_xs()
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(primary)
+                                                    .child("theme"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .ml_auto()
+                                                    .text_xs()
+                                                    .text_color(muted_fg)
+                                                    .child("Change theme"),
                                             ),
                                     ),
                             )

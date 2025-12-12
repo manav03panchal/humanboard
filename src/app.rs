@@ -23,6 +23,13 @@ pub enum SplitDirection {
     Horizontal, // Panel on the bottom
 }
 
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum CmdPaletteMode {
+    #[default]
+    Items,  // Searching canvas items
+    Themes, // Selecting theme
+}
+
 pub enum PreviewTab {
     Pdf {
         path: PathBuf,
@@ -116,6 +123,7 @@ pub struct Humanboard {
     pub pending_command: Option<String>, // Command to execute (deferred until we have window access)
     pub search_results: Vec<(u64, String)>, // Search results: (item_id, display_name)
     pub selected_result: usize,          // Currently selected search result index
+    pub cmd_palette_mode: CmdPaletteMode, // Current mode: items or themes
 
     // YouTube WebViews (keyed by item ID)
     pub youtube_webviews: HashMap<u64, YouTubeWebView>,
@@ -182,6 +190,7 @@ impl Humanboard {
             pending_command: None,
             search_results: Vec::new(),
             selected_result: 0,
+            cmd_palette_mode: CmdPaletteMode::default(),
             youtube_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
@@ -315,12 +324,37 @@ impl Humanboard {
         self.command_palette = None;
         self.search_results.clear();
         self.selected_result = 0;
+        self.cmd_palette_mode = CmdPaletteMode::Items;
         cx.notify();
     }
 
     /// Update search results based on input text
     fn update_search_results(&mut self, text: &str, cx: &mut Context<Self>) {
         let text = text.trim();
+
+        // Handle theme mode
+        if self.cmd_palette_mode == CmdPaletteMode::Themes {
+            let themes = Settings::available_themes(cx);
+            if text.is_empty() {
+                // Show all themes
+                self.search_results = themes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, name)| (idx as u64, name))
+                    .collect();
+            } else {
+                // Filter themes by search text
+                self.search_results = themes
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, name)| name.to_lowercase().contains(&text.to_lowercase()))
+                    .map(|(idx, name)| (idx as u64, name))
+                    .collect();
+            }
+            self.selected_result = 0;
+            cx.notify();
+            return;
+        }
 
         // Don't search if it's a command
         if text.starts_with("md ") || text == "md" {
@@ -347,6 +381,13 @@ impl Humanboard {
             self.search_results.clear();
         }
         cx.notify();
+    }
+
+    /// Enter theme selection mode in command palette
+    pub fn enter_theme_mode(&mut self, cx: &mut Context<Self>) {
+        self.cmd_palette_mode = CmdPaletteMode::Themes;
+        // Show all themes
+        self.update_search_results("", cx);
     }
 
     /// Navigate search results
@@ -377,6 +418,20 @@ impl Humanboard {
 
     /// Called from subscription when Enter is pressed - stores command for deferred execution
     fn execute_command_from_subscription(&mut self, cx: &mut Context<Self>) {
+        // Handle theme mode
+        if self.cmd_palette_mode == CmdPaletteMode::Themes {
+            if !self.search_results.is_empty() {
+                let (_, theme_name) = &self.search_results[self.selected_result];
+                self.pending_command = Some(format!("__theme:{}", theme_name));
+            }
+            self.command_palette = None;
+            self.search_results.clear();
+            self.selected_result = 0;
+            self.cmd_palette_mode = CmdPaletteMode::Items;
+            cx.notify();
+            return;
+        }
+
         // If we have search results selected, jump to that item
         if !self.search_results.is_empty() {
             let (item_id, _) = self.search_results[self.selected_result];
@@ -409,6 +464,11 @@ impl Humanboard {
                     .parse::<u64>()
                 {
                     self.jump_to_item(item_id, window, cx);
+                }
+            } else if command.starts_with("__theme:") {
+                let theme_name = command.strip_prefix("__theme:").unwrap_or("");
+                if !theme_name.is_empty() {
+                    self.set_theme(theme_name.to_string(), cx);
                 }
             } else if command.starts_with("md ") {
                 let name = command.strip_prefix("md ").unwrap_or("Untitled");
