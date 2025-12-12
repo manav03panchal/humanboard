@@ -101,7 +101,7 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
-            ItemContent::Spotify { .. } => (352.0, 152.0), // Spotify compact embed
+            ItemContent::Spotify { .. } => (352.0, 200.0), // Spotify compact embed (fixed size)
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
         }
     }
