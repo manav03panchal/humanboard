@@ -69,7 +69,7 @@ impl SpotifyWebView {
                 }
             };
 
-            // HTML with Spotify embed iframe
+            // HTML with Spotify embed iframe - use compact style
             let html = format!(
                 r#"<!DOCTYPE html>
 <html>
@@ -78,8 +78,8 @@ impl SpotifyWebView {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        html, body {{ width: 100%; height: 100%; overflow: hidden; background: transparent; }}
-        iframe {{ width: 100%; height: 100%; border: none; }}
+        html, body {{ width: 100%; height: 100%; overflow: hidden; background: #000; }}
+        iframe {{ width: 100%; height: 152px; border: none; }}
     </style>
 </head>
 <body>
