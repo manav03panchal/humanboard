@@ -1187,8 +1187,8 @@ pub fn render_settings_modal(
                 if this.settings_backdrop_clicked {
                     this.show_settings = false;
                     this.settings_backdrop_clicked = false;
-                    // Release focus back to canvas
-                    this.focus.release(crate::focus::FocusContext::Modal, window);
+                    // Force focus back to canvas
+                    this.focus.force_canvas_focus(window);
                 }
                 cx.notify();
             }))

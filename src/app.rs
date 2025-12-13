@@ -251,8 +251,8 @@ impl Humanboard {
                 .position(|t| t == &self.settings.theme)
                 .unwrap_or(0);
         } else {
-            // Release focus back to canvas
-            self.focus.release(FocusContext::Modal, window);
+            // Force focus back to canvas when closing settings
+            self.focus.force_canvas_focus(window);
         }
         cx.notify();
     }
