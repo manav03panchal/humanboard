@@ -313,6 +313,22 @@ impl Humanboard {
         cx.notify();
     }
 
+    pub fn toggle_theme_dropdown(&mut self, cx: &mut Context<Self>) {
+        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+            cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
+        } else {
+            cx.set_global(crate::render::overlays::ThemeDropdownOpen);
+        }
+        cx.notify();
+    }
+
+    pub fn close_theme_dropdown(&mut self, cx: &mut Context<Self>) {
+        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+            cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
+        }
+        cx.notify();
+    }
+
     pub fn start_spotify_connect(&mut self, cx: &mut Context<Self>) {
         // Start the OAuth flow
         let auth_flow = SpotifyAuthFlow::new();

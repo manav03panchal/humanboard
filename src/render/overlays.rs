@@ -1007,17 +1007,149 @@ pub fn render_command_palette(
     .with_priority(2000)
 }
 
+/// Render the Spotify connect/disconnect button
+fn render_spotify_button(
+    connected: bool,
+    connecting: bool,
+    muted_fg: Hsla,
+    cx: &mut Context<Humanboard>,
+) -> Stateful<Div> {
+    let success = cx.theme().success;
+    let danger_color = Hsla::from(gpui::rgb(0xef4444));
+    let spotify_green = Hsla::from(gpui::rgb(0x1DB954));
+    let spotify_green_hover = Hsla::from(gpui::rgb(0x1ed760));
+
+    div()
+        .id("spotify-btn")
+        .px_3()
+        .py_1p5()
+        .rounded(px(6.0))
+        .when(connected, |d| {
+            d.bg(danger_color.opacity(0.1))
+                .border_1()
+                .border_color(danger_color.opacity(0.3))
+                .cursor(CursorStyle::PointingHand)
+                .hover(|s| s.bg(danger_color.opacity(0.2)))
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .w(px(6.0))
+                                .h(px(6.0))
+                                .rounded_full()
+                                .bg(success),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(danger_color)
+                                .child("Disconnect"),
+                        ),
+                )
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.disconnect_spotify(cx);
+                    }),
+                )
+        })
+        .when(connecting && !connected, |d| {
+            d.bg(muted_fg.opacity(0.1)).child(
+                div()
+                    .text_sm()
+                    .text_color(muted_fg)
+                    .child("Connecting..."),
+            )
+        })
+        .when(!connected && !connecting, |d| {
+            d.bg(spotify_green)
+                .cursor(CursorStyle::PointingHand)
+                .hover(|s| s.bg(spotify_green_hover))
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(Hsla::from(gpui::rgb(0x000000)))
+                        .child("Connect"),
+                )
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.start_spotify_connect(cx);
+                    }),
+                )
+        })
+}
+
+/// Render a setting row with title, description, and control on the right
+fn render_setting_row(
+    title: &str,
+    description: &str,
+    control: impl IntoElement,
+    cx: &Context<Humanboard>,
+) -> Div {
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
+    h_flex()
+        .w_full()
+        .py_3()
+        .items_start()
+        .justify_between()
+        .gap_4()
+        .child(
+            v_flex()
+                .flex_1()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(fg)
+                        .child(title.to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(description.to_string()),
+                ),
+        )
+        .child(control)
+}
+
+/// Render a section header
+fn render_section_header(title: &str, cx: &Context<Humanboard>) -> Div {
+    let muted_fg = cx.theme().muted_foreground;
+    let border = cx.theme().border;
+
+    div()
+        .w_full()
+        .pb_2()
+        .mb_2()
+        .border_b_1()
+        .border_color(border)
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(muted_fg)
+                .child(title.to_string().to_uppercase()),
+        )
+}
+
 /// Render the settings modal
 pub fn render_settings_modal(
     current_theme: &str,
-    theme_index: usize,
-    theme_scroll: &ScrollHandle,
+    _theme_index: usize,
+    _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
     spotify_connecting: bool,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
-    let _current_theme = current_theme.to_string();
+    let current_theme_display = current_theme.to_string();
     let spotify_connected = spotify_auth::is_connected();
 
     let bg = cx.theme().background;
@@ -1025,9 +1157,10 @@ pub fn render_settings_modal(
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
     let title_bar = cx.theme().title_bar;
-    let primary = cx.theme().primary;
+    let _primary = cx.theme().primary;
     let list_active = cx.theme().list_active;
     let list_hover = cx.theme().list_hover;
+    let input_bg = cx.theme().input;
 
     deferred(
         div()
@@ -1035,7 +1168,7 @@ pub fn render_settings_modal(
             .top_0()
             .left_0()
             .size_full()
-            .bg(hsla(0.0, 0.0, 0.0, 0.8))
+            .bg(hsla(0.0, 0.0, 0.0, 0.6))
             .flex()
             .items_center()
             .justify_center()
@@ -1049,62 +1182,63 @@ pub fn render_settings_modal(
             .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
             .child(
                 div()
-                    .p_4() // Add padding around modal to prevent shadow/border clipping
+                    .p_4()
                     .child(
                         h_flex()
-                            .w(px(700.0))
-                            .h(px(500.0))
+                            .w(px(680.0))
+                            .h(px(480.0))
                             .bg(bg)
                             .border_1()
                             .border_color(border)
-                            .rounded(px(12.0))
+                            .rounded(px(10.0))
                             .overflow_hidden()
                             .shadow_lg()
                             .on_mouse_down(MouseButton::Left, |_, _, _| {})
                             .on_scroll_wheel(|_, _, _| {})
                             .key_context("SettingsModal")
-                            .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
-                                this.select_prev_theme(cx);
-                            }))
-                            .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
-                                this.select_next_theme(cx);
-                            }))
-                    // Left sidebar with tabs
-                    .child(
-                        v_flex()
-                            .w(px(200.0))
-                            .h_full()
-                            .bg(title_bar)
-                            .border_r_1()
-                            .border_color(border)
-                            // Header
-                            .child(
-                                div()
-                                    .px_4()
-                                    .py_4()
-                                    .border_b_1()
-                                    .border_color(border)
-                                    .child(
-                                        div()
-                                            .text_lg()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(fg)
-                                            .child("Settings"),
-                                    ),
-                            )
-                            // Tabs
+                            // Left sidebar
                             .child(
                                 v_flex()
-                                    .flex_1()
-                                    .pt_2()
+                                    .w(px(180.0))
+                                    .h_full()
+                                    .bg(title_bar)
+                                    .border_r_1()
+                                    .border_color(border)
+                                    .p_2()
+                                    .gap_1()
+                                    // Search input placeholder
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .h(px(28.0))
+                                            .mb_2()
+                                            .px_2()
+                                            .bg(input_bg)
+                                            .border_1()
+                                            .border_color(border)
+                                            .rounded(px(6.0))
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                Icon::new(IconName::Search)
+                                                    .size(px(12.0))
+                                                    .text_color(muted_fg),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(muted_fg)
+                                                    .child("Search settings..."),
+                                            ),
+                                    )
                                     // Appearance tab
                                     .child(
                                         div()
                                             .id("tab-appearance")
-                                            .px_3()
-                                            .py_2()
-                                            .mx_2()
-                                            .rounded(px(6.0))
+                                            .w_full()
+                                            .px_2()
+                                            .py_1p5()
+                                            .rounded(px(4.0))
                                             .cursor(CursorStyle::PointingHand)
                                             .when(active_tab == SettingsTab::Appearance, |d| {
                                                 d.bg(list_active)
@@ -1147,10 +1281,10 @@ pub fn render_settings_modal(
                                     .child(
                                         div()
                                             .id("tab-integrations")
-                                            .px_3()
-                                            .py_2()
-                                            .mx_2()
-                                            .rounded(px(6.0))
+                                            .w_full()
+                                            .px_2()
+                                            .py_1p5()
+                                            .rounded(px(4.0))
                                             .cursor(CursorStyle::PointingHand)
                                             .when(active_tab == SettingsTab::Integrations, |d| {
                                                 d.bg(list_active)
@@ -1189,296 +1323,148 @@ pub fn render_settings_modal(
                                                     ),
                                             ),
                                     ),
-                            ),
-                    )
-                    // Right content area
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .h_full()
-                            // Header with tab name and close button
-                            .child(
-                                h_flex()
-                                    .px_6()
-                                    .py_4()
-                                    .border_b_1()
-                                    .border_color(border)
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(fg)
-                                            .child(match active_tab {
-                                                SettingsTab::Appearance => "Appearance",
-                                                SettingsTab::Integrations => "Integrations",
-                                            }),
-                                    )
-                                    .child(render_kbd("Cmd+,", cx)),
                             )
-                            // Content - Appearance tab
-                            .when(active_tab == SettingsTab::Appearance, |d| {
-                                d.child(
-                                    div()
-                                        .flex_1()
-                                        .p_6()
-                                        .child(
+                            // Right content area
+                            .child(
+                                div()
+                                    .id("settings-content")
+                                    .flex_1()
+                                    .h_full()
+                                    .overflow_y_scroll()
+                                    .p_6()
+                                    // Content - Appearance tab
+                                    .when(active_tab == SettingsTab::Appearance, |d| {
+                                        d.child(
                                             v_flex()
-                                                .gap_6()
-                                                // Theme Section
-                                                .child(
-                                                    v_flex()
-                                                        .gap_3()
+                                                .gap_4()
+                                                // Section: Theme
+                                                .child(render_section_header("Theme", cx))
+                                                .child(render_setting_row(
+                                                    "Theme",
+                                                    "Choose a color theme for the interface",
+                                                    // Theme dropdown
+                                                    div()
+                                                        .id("theme-dropdown")
+                                                        .relative()
                                                         .child(
                                                             div()
-                                                                .text_sm()
-                                                                .font_weight(FontWeight::SEMIBOLD)
-                                                                .text_color(fg)
-                                                                .child("Theme"),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .id("theme-list")
-                                                                .max_h(px(320.0))
-                                                                .bg(title_bar)
+                                                                .id("theme-dropdown-trigger")
+                                                                .w(px(160.0))
+                                                                .h(px(28.0))
+                                                                .px_3()
+                                                                .bg(input_bg)
                                                                 .border_1()
                                                                 .border_color(border)
-                                                                .rounded(px(8.0))
-                                                                .overflow_y_scroll()
-                                                                .track_scroll(theme_scroll)
+                                                                .rounded(px(6.0))
+                                                                .cursor(CursorStyle::PointingHand)
                                                                 .flex()
-                                                                .flex_col()
-                                                                .py_1()
-                                                                .children(themes.into_iter().enumerate().map(
-                                                                    |(idx, theme_name)| {
-                                                                        let is_selected = idx == theme_index;
-                                                                        let theme_name_clone = theme_name.clone();
-
-                                                                        div()
-                                                                            .id(ElementId::Integer(idx as u64))
-                                                                            .w_full()
-                                                                            .px_4()
-                                                                            .py_2p5()
-                                                                            .cursor(CursorStyle::PointingHand)
-                                                                            .when(is_selected, |d| d.bg(list_active))
-                                                                            .when(!is_selected, |d| {
-                                                                                d.hover(|s| s.bg(list_hover))
-                                                                            })
-                                                                            .on_mouse_down(
-                                                                                MouseButton::Left,
-                                                                                cx.listener(move |this, _, _, cx| {
-                                                                                    this.set_theme(
-                                                                                        theme_name_clone.clone(),
-                                                                                        cx,
-                                                                                    );
-                                                                                }),
-                                                                            )
-                                                                            .child(
-                                                                                h_flex()
-                                                                                    .items_center()
-                                                                                    .justify_between()
-                                                                                    .child(
-                                                                                        div()
-                                                                                            .text_sm()
-                                                                                            .text_color(
-                                                                                                if is_selected {
-                                                                                                    fg
-                                                                                                } else {
-                                                                                                    muted_fg
-                                                                                                },
-                                                                                            )
-                                                                                            .child(theme_name),
-                                                                                    )
-                                                                                    .when(is_selected, |d| {
-                                                                                        d.child(
-                                                                                            Icon::new(IconName::Check)
-                                                                                                .size(px(16.0))
-                                                                                                .text_color(primary),
-                                                                                        )
-                                                                                    }),
-                                                                            )
-                                                                    },
-                                                                )),
-                                                        ),
-                                                ),
-                                        ),
-                                )
-                            })
-                            // Content - Integrations tab
-                            .when(active_tab == SettingsTab::Integrations, |d| {
-                                d.child(
-                                    div()
-                                        .flex_1()
-                                        .p_6()
-                                        .child(
-                                            v_flex()
-                                                .gap_6()
-                                                // Spotify Section
-                                                .child(
-                                                    v_flex()
-                                                        .gap_3()
-                                                        .child(
-                                                            h_flex()
                                                                 .items_center()
-                                                                .gap_2()
-                                                                .child(
-                                                                    div()
-                                                                        .w(px(24.0))
-                                                                        .h(px(24.0))
-                                                                        .rounded(px(4.0))
-                                                                        .bg(Hsla::from(gpui::rgb(0x1DB954)))
-                                                                        .flex()
-                                                                        .items_center()
-                                                                        .justify_center()
-                                                                        .child(
-                                                                            div()
-                                                                                .text_sm()
-                                                                                .font_weight(FontWeight::BOLD)
-                                                                                .text_color(Hsla::from(gpui::rgb(0x000000)))
-                                                                                .child("S"),
-                                                                        ),
+                                                                .justify_between()
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    cx.listener(|this, _, _, cx| {
+                                                                        this.toggle_theme_dropdown(cx);
+                                                                    }),
                                                                 )
                                                                 .child(
                                                                     div()
                                                                         .text_sm()
-                                                                        .font_weight(FontWeight::SEMIBOLD)
                                                                         .text_color(fg)
-                                                                        .child("Spotify"),
-                                                                ),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_sm()
-                                                                .text_color(muted_fg)
-                                                                .child("Connect your Spotify account to play full tracks instead of 30-second previews."),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .mt_2()
-                                                                .p_4()
-                                                                .bg(title_bar)
-                                                                .border_1()
-                                                                .border_color(border)
-                                                                .rounded(px(8.0))
+                                                                        .overflow_hidden()
+                                                                        .whitespace_nowrap()
+                                                                        .child(current_theme_display.clone()),
+                                                                )
                                                                 .child(
-                                                                    h_flex()
-                                                                        .items_center()
-                                                                        .justify_between()
-                                                                        .child(
-                                                                            h_flex()
-                                                                                .gap_3()
-                                                                                .items_center()
-                                                                                .child(
-                                                                                    div()
-                                                                                        .w(px(8.0))
-                                                                                        .h(px(8.0))
-                                                                                        .rounded_full()
-                                                                                        .bg(if spotify_connected {
-                                                                                            cx.theme().success
-                                                                                        } else {
-                                                                                            muted_fg
-                                                                                        }),
-                                                                                )
-                                                                                .child(
-                                                                                    div()
-                                                                                        .text_sm()
-                                                                                        .text_color(fg)
-                                                                                        .child(if spotify_connected {
-                                                                                            "Connected"
-                                                                                        } else if spotify_connecting {
-                                                                                            "Connecting..."
-                                                                                        } else {
-                                                                                            "Not connected"
-                                                                                        }),
-                                                                                ),
-                                                                        )
-                                                                        .when(!spotify_connected && !spotify_connecting, |d| {
-                                                                            d.child(
-                                                                                div()
-                                                                                    .id("spotify-connect-btn")
-                                                                                    .px_3()
-                                                                                    .py_1p5()
-                                                                                    .bg(Hsla::from(gpui::rgb(0x1DB954)))
-                                                                                    .rounded(px(6.0))
-                                                                                    .cursor(CursorStyle::PointingHand)
-                                                                                    .hover(|s| s.bg(Hsla::from(gpui::rgb(0x1ed760))))
-                                                                                    .child(
-                                                                                        div()
-                                                                                            .text_sm()
-                                                                                            .font_weight(FontWeight::MEDIUM)
-                                                                                            .text_color(Hsla::from(gpui::rgb(0x000000)))
-                                                                                            .child("Connect"),
-                                                                                    )
-                                                                                    .on_mouse_down(
-                                                                                        MouseButton::Left,
-                                                                                        cx.listener(|this, _, _, cx| {
-                                                                                            this.start_spotify_connect(cx);
-                                                                                        }),
-                                                                                    ),
-                                                                            )
-                                                                        })
-                                                                        .when(spotify_connecting, |d| {
-                                                                            d.child(
-                                                                                div()
-                                                                                    .px_3()
-                                                                                    .py_1p5()
-                                                                                    .bg(muted_fg.opacity(0.2))
-                                                                                    .rounded(px(6.0))
-                                                                                    .child(
-                                                                                        div()
-                                                                                            .text_sm()
-                                                                                            .text_color(muted_fg)
-                                                                                            .child("Waiting..."),
-                                                                                    ),
-                                                                            )
-                                                                        })
-                                                                        .when(spotify_connected, |d| {
-                                                                            let danger_color = Hsla::from(gpui::rgb(0xdc2626));
-                                                                            d.child(
-                                                                                div()
-                                                                                    .id("spotify-disconnect-btn")
-                                                                                    .px_3()
-                                                                                    .py_1p5()
-                                                                                    .bg(danger_color.opacity(0.1))
-                                                                                    .border_1()
-                                                                                    .border_color(danger_color.opacity(0.3))
-                                                                                    .rounded(px(6.0))
-                                                                                    .cursor(CursorStyle::PointingHand)
-                                                                                    .hover(|s| s.bg(danger_color.opacity(0.2)))
-                                                                                    .child(
-                                                                                        div()
-                                                                                            .text_sm()
-                                                                                            .font_weight(FontWeight::MEDIUM)
-                                                                                            .text_color(danger_color)
-                                                                                            .child("Disconnect"),
-                                                                                    )
-                                                                                    .on_mouse_down(
-                                                                                        MouseButton::Left,
-                                                                                        cx.listener(|this, _, _, cx| {
-                                                                                            this.disconnect_spotify(cx);
-                                                                                        }),
-                                                                                    ),
-                                                                            )
-                                                                        }),
+                                                                    Icon::new(IconName::ChevronDown)
+                                                                        .size(px(12.0))
+                                                                        .text_color(muted_fg),
                                                                 ),
-                                                        )
-                                                        .when(spotify_connected, |d| {
-                                                            d.child(
+                                                        ),
+                                                    cx,
+                                                ))
+                                                // Theme dropdown menu (shown when open)
+                                                .when(cx.try_global::<ThemeDropdownOpen>().is_some(), |d| {
+                                                    d.child(
+                                                        div()
+                                                            .id("theme-dropdown-menu")
+                                                            .absolute()
+                                                            .top(px(120.0))
+                                                            .right(px(24.0))
+                                                            .w(px(200.0))
+                                                            .max_h(px(280.0))
+                                                            .bg(bg)
+                                                            .border_1()
+                                                            .border_color(border)
+                                                            .rounded(px(6.0))
+                                                            .shadow_lg()
+                                                            .overflow_y_scroll()
+                                                            .py_1()
+                                                            .children(themes.iter().map(|theme_name| {
+                                                                let is_current = theme_name == &current_theme_display;
+                                                                let theme_clone = theme_name.clone();
+
                                                                 div()
-                                                                    .mt_1()
-                                                                    .text_xs()
-                                                                    .text_color(muted_fg)
-                                                                    .child("Spotify embeds will now play full tracks. Requires Spotify Premium."),
-                                                            )
-                                                        }),
-                                                ),
-                                        ),
-                                )
-                            }),
+                                                                    .id(ElementId::Name(theme_name.clone().into()))
+                                                                    .w_full()
+                                                                    .px_3()
+                                                                    .py_1p5()
+                                                                    .cursor(CursorStyle::PointingHand)
+                                                                    .when(is_current, |d| d.bg(list_active))
+                                                                    .when(!is_current, |d| d.hover(|s| s.bg(list_hover)))
+                                                                    .on_mouse_down(
+                                                                        MouseButton::Left,
+                                                                        cx.listener(move |this, _, _, cx| {
+                                                                            this.set_theme(theme_clone.clone(), cx);
+                                                                            this.close_theme_dropdown(cx);
+                                                                        }),
+                                                                    )
+                                                                    .child(
+                                                                        h_flex()
+                                                                            .items_center()
+                                                                            .justify_between()
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_sm()
+                                                                                    .text_color(if is_current { fg } else { muted_fg })
+                                                                                    .child(theme_name.clone()),
+                                                                            )
+                                                                            .when(is_current, |d| {
+                                                                                d.child(
+                                                                                    Icon::new(IconName::Check)
+                                                                                        .size(px(14.0))
+                                                                                        .text_color(cx.theme().primary),
+                                                                                )
+                                                                            }),
+                                                                    )
+                                                            })),
+                                                    )
+                                                }),
+                                        )
+                                    })
+                                    // Content - Integrations tab
+                                    .when(active_tab == SettingsTab::Integrations, |d| {
+                                        d.child(
+                                            v_flex()
+                                                .gap_4()
+                                                // Section: Music
+                                                .child(render_section_header("Music", cx))
+                                                .child(render_setting_row(
+                                                    "Spotify",
+                                                    "Connect to play full tracks instead of 30-second previews. Requires Premium.",
+                                                    render_spotify_button(spotify_connected, spotify_connecting, muted_fg, cx),
+                                                    cx,
+                                                )),
+                                        )
+                                    }),
+                            ),
                     ),
-                ), // Close wrapper div
             ),
     )
     .with_priority(1500)
 }
+
+/// Global marker for theme dropdown state
+#[derive(Clone)]
+pub struct ThemeDropdownOpen;
+
+impl gpui::Global for ThemeDropdownOpen {}
