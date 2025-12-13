@@ -1,5 +1,7 @@
+use base64::Engine;
 use gpui::*;
 use gpui_component::webview::WebView;
+use lofty::{Accessor, PictureType, Probe, TaggedFileExt};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,6 +35,11 @@ impl AudioWebView {
         let shutdown_flag = Arc::new(AtomicBool::new(false));
         let shutdown_flag_clone = shutdown_flag.clone();
 
+        // Extract metadata from audio file
+        let (title, artist, album_art_base64) = extract_audio_metadata(&audio_path);
+        let display_title = title.unwrap_or_else(|| file_name.clone());
+        let display_artist = artist.unwrap_or_else(|| "Audio File".to_string());
+
         let server_thread = thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", port);
             let server = match Server::http(&addr) {
@@ -43,7 +50,7 @@ impl AudioWebView {
                 }
             };
 
-            let html = format!(r#"<!DOCTYPE html>
+            let html = format!(r##"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -52,9 +59,10 @@ impl AudioWebView {
         html, body {{
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: #121212;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
         }}
         .container {{
             width: 100%;
@@ -62,42 +70,194 @@ impl AudioWebView {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            align-items: center;
             padding: 16px;
         }}
+        .player {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        .icon {{
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 4px;
+            background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }}
+        .icon svg {{
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }}
+        .icon img {{
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }}
+        .info {{
+            flex: 1;
+            min-width: 0;
+        }}
         .title {{
-            color: #e0e0e0;
             font-size: 13px;
-            font-weight: 500;
-            text-align: center;
-            margin-bottom: 16px;
-            max-width: 100%;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-            padding: 0 8px;
         }}
-        audio {{
-            width: 100%;
-            max-width: 280px;
-            height: 40px;
-            border-radius: 20px;
-            outline: none;
+        .subtitle {{
+            font-size: 11px;
+            color: #b3b3b3;
         }}
-        audio::-webkit-media-controls-panel {{
-            background: rgba(255,255,255,0.1);
+        .controls {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }}
+        .play-btn {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #fff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s;
+        }}
+        .play-btn:hover {{ transform: scale(1.06); }}
+        .play-btn:active {{ transform: scale(0.96); }}
+        .play-btn svg {{ width: 16px; height: 16px; fill: #000; }}
+        .play-icon {{ margin-left: 2px; }}
+        .progress {{
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .time {{
+            font-size: 10px;
+            color: #a0a0a0;
+            min-width: 36px;
+            font-variant-numeric: tabular-nums;
+        }}
+        .time.end {{ text-align: right; }}
+        .bar {{
+            flex: 1;
+            height: 4px;
+            background: #404040;
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }}
+        .bar:hover .fill {{ background: #e91e63; }}
+        .fill {{
+            height: 100%;
+            background: #fff;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }}
+        .hidden {{ display: none; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="title">{}</div>
-        <audio controls>
-            <source src="/audio" type="audio/mpeg">
-        </audio>
+        <div class="player">
+            <div class="icon">{album_art}</div>
+            <div class="info">
+                <div class="title">{title}</div>
+                <div class="subtitle">{artist}</div>
+            </div>
+            <div class="controls">
+                <button class="play-btn" id="playBtn">
+                    <svg class="play-icon" id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg class="hidden" id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="progress">
+            <span class="time" id="cur">0:00</span>
+            <div class="bar" id="bar">
+                <div class="fill" id="fill"></div>
+            </div>
+            <span class="time end" id="dur">0:00</span>
+        </div>
     </div>
+    <audio id="audio" preload="metadata">
+        <source src="/audio" type="audio/mpeg">
+    </audio>
+    <script>
+        const audio = document.getElementById('audio');
+        const playBtn = document.getElementById('playBtn');
+        const playIcon = document.getElementById('playIcon');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const fill = document.getElementById('fill');
+        const cur = document.getElementById('cur');
+        const dur = document.getElementById('dur');
+        const bar = document.getElementById('bar');
+
+        const fmt = s => {{
+            const mins = Math.floor(s / 60);
+            const secs = Math.floor(s % 60);
+            return mins + ':' + String(secs).padStart(2, '0');
+        }};
+
+        audio.addEventListener('loadedmetadata', () => {{
+            dur.textContent = fmt(audio.duration);
+        }});
+
+        audio.addEventListener('timeupdate', () => {{
+            const pct = (audio.currentTime / audio.duration) * 100;
+            fill.style.width = pct + '%';
+            cur.textContent = fmt(audio.currentTime);
+        }});
+
+        audio.addEventListener('ended', () => {{
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+        }});
+
+        playBtn.onclick = () => {{
+            if (audio.paused) {{
+                audio.play();
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
+            }} else {{
+                audio.pause();
+                playIcon.classList.remove('hidden');
+                pauseIcon.classList.add('hidden');
+            }}
+        }};
+
+        bar.onclick = e => {{
+            const rect = bar.getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = pct * audio.duration;
+        }};
+    </script>
 </body>
-</html>"#, html_escape(&file_name));
+</html>"##,
+                title = html_escape(&display_title),
+                artist = html_escape(&display_artist),
+                album_art = if let Some(ref art_data) = album_art_base64 {
+                    // Format is "mime_type|base64_data"
+                    let parts: Vec<&str> = art_data.splitn(2, '|').collect();
+                    if parts.len() == 2 {
+                        format!(r#"<img src="data:{};base64,{}" alt="">"#, parts[0], parts[1])
+                    } else {
+                        r#"<svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>"#.to_string()
+                    }
+                } else {
+                    r#"<svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>"#.to_string()
+                }
+            );
 
             loop {
                 if shutdown_flag_clone.load(Ordering::Relaxed) {
@@ -283,4 +443,35 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+/// Extract title, artist, and album art from audio file metadata
+fn extract_audio_metadata(path: &PathBuf) -> (Option<String>, Option<String>, Option<String>) {
+    let tagged_file = match Probe::open(path).and_then(|p| p.read()) {
+        Ok(f) => f,
+        Err(_) => return (None, None, None),
+    };
+
+    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+
+    let Some(tag) = tag else {
+        return (None, None, None);
+    };
+
+    let title = tag.title().map(|s| s.to_string());
+    let artist = tag.artist().map(|s| s.to_string());
+
+    // Try to get album art - prefer front cover, fall back to any picture
+    let album_art = tag
+        .pictures()
+        .iter()
+        .find(|p| p.pic_type() == PictureType::CoverFront)
+        .or_else(|| tag.pictures().first())
+        .map(|p| {
+            let mime = p.mime_type().map(|m| m.as_str()).unwrap_or("image/jpeg");
+            let data = base64::engine::general_purpose::STANDARD.encode(p.data());
+            format!("{}|{}", mime, data)
+        });
+
+    (title, artist, album_art)
 }
