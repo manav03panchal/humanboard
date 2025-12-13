@@ -499,12 +499,11 @@ impl Humanboard {
                         this.update_search_results(&text, cx);
                     }
                     gpui_component::input::InputEvent::Blur => {
-                        // Close command palette when input loses focus (click outside)
-                        // But not if we're in theme mode (user clicked theme command)
-                        // Note: Using clear_command_palette_state since window isn't available here
-                        if this.cmd_palette_mode != CmdPaletteMode::Themes {
-                            this.clear_command_palette_state(cx);
-                        }
+                        // Don't close on blur - this causes race conditions with Enter key
+                        // The palette is closed by:
+                        // - Clicking the backdrop (has its own handler)
+                        // - Pressing Escape (CloseCommandPalette action)
+                        // - Executing a command that should close it
                     }
                     _ => {}
                 }
