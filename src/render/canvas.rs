@@ -115,27 +115,12 @@ fn render_item_content(
         ItemContent::Pdf {
             thumbnail: Some(thumb_path),
             ..
-        } => div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(8.0 * zoom))
-            .child(
-                img(thumb_path.clone())
-                    .w(px(150.0 * zoom))
-                    .h(px(200.0 * zoom))
-                    .object_fit(ObjectFit::Contain)
-                    .rounded(px(4.0 * zoom)),
-            )
-            .child(
-                div()
-                    .text_size(px(12.0 * zoom))
-                    .text_color(fg)
-                    .font_weight(FontWeight::MEDIUM)
-                    .child("PDF Document"),
-            ),
+        } => div().size_full().p(px(8.0 * zoom)).child(
+            img(thumb_path.clone())
+                .size_full()
+                .object_fit(ObjectFit::Contain)
+                .rounded(px(4.0 * zoom)),
+        ),
 
         ItemContent::Pdf { path, .. } => div()
             .size_full()

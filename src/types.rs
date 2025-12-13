@@ -202,7 +202,7 @@ impl ItemContent {
             ItemContent::Text(_) => (300.0, 100.0),
             ItemContent::Video(_) => (400.0, 300.0),
             ItemContent::Audio(_) => (320.0, 160.0), // Compact audio player
-            ItemContent::Pdf { .. } => (250.0, 350.0),
+            ItemContent::Pdf { .. } => (180.0, 240.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
             ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
