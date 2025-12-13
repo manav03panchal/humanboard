@@ -2,7 +2,7 @@ use gpui::*;
 use humanboard::actions::{
     CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
     DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab, NudgeDown, NudgeLeft, NudgeRight,
-    NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SelectAll, ShowShortcuts,
+    NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SaveCode, SelectAll, ShowShortcuts,
     ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
@@ -109,8 +109,6 @@ fn main() {
             KeyBinding::new("cmd-+", ZoomIn, None),
             KeyBinding::new("cmd--", ZoomOut, None),
             KeyBinding::new("cmd-0", ZoomReset, None),
-            KeyBinding::new("cmd-z", Undo, None),
-            KeyBinding::new("cmd-shift-z", Redo, None),
             KeyBinding::new("cmd-shift-]", NextTab, None),
             KeyBinding::new("cmd-shift-[", PrevTab, None),
             KeyBinding::new("cmd-w", CloseTab, None),
@@ -118,6 +116,14 @@ fn main() {
             KeyBinding::new("cmd-h", GoHome, None),
             KeyBinding::new("cmd-/", ShowShortcuts, None),
             KeyBinding::new("cmd-,", OpenSettings, None),
+            // Undo/Redo only on Canvas - code editor handles its own
+            KeyBinding::new("cmd-z", Undo, Some("Canvas")),
+            KeyBinding::new("cmd-shift-z", Redo, Some("Canvas")),
+        ]);
+
+        // Code editor shortcuts (only active when editing code)
+        cx.bind_keys([
+            KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor")),
         ]);
 
         // Canvas-only shortcuts (not active when text input is focused)

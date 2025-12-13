@@ -15,6 +15,7 @@ actions!(
         SelectAll,
         Undo,
         Redo,
+        SaveCode,
         ClosePreview,
         ToggleSplit,
         NextPage,

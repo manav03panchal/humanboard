@@ -49,6 +49,8 @@ pub fn render_tab_bar(
                     let is_active = index == active_tab;
                     let filename = tab.title();
                     let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
+                    let is_code = matches!(tab, PreviewTab::Code { .. });
+                    let is_dirty = tab.is_dirty();
 
                     let display_name = if filename.len() > 20 {
                         format!("{}...", &filename[..17])
@@ -73,10 +75,12 @@ pub fn render_tab_bar(
                         .on_click(cx.listener(move |this, _event, _window, cx| {
                             this.switch_tab(tab_index, cx);
                         }))
-                        .child(if is_markdown {
+                        .child(if is_code {
+                            Icon::new(IconName::SquareTerminal).xsmall().text_color(hsla(40.0 / 360.0, 0.8, 0.6, 1.0)) // Orange for code
+                        } else if is_markdown {
                             Icon::new(IconName::File).xsmall().text_color(primary)
                         } else {
-                            Icon::new(IconName::File).xsmall().text_color(danger)
+                            Icon::new(IconName::File).xsmall().text_color(danger) // PDF
                         })
                         .child(
                             div()
@@ -93,16 +97,29 @@ pub fn render_tab_bar(
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(2.0))
-                                .text_xs()
-                                .text_color(muted_fg)
-                                .hover(|style| style.bg(list_hover).text_color(fg))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, _event, _window, cx| {
-                                        this.close_tab(tab_index_close, cx);
-                                    }),
-                                )
-                                .child("×"),
+                                .when(is_dirty, |d| {
+                                    // Show dot indicator when dirty
+                                    d.child(
+                                        div()
+                                            .w(px(8.0))
+                                            .h(px(8.0))
+                                            .rounded_full()
+                                            .bg(primary)
+                                    )
+                                })
+                                .when(!is_dirty, |d| {
+                                    // Show close button when not dirty
+                                    d.text_xs()
+                                        .text_color(muted_fg)
+                                        .hover(|style| style.bg(list_hover).text_color(fg))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(move |this, _event, _window, cx| {
+                                                this.close_tab(tab_index_close, cx);
+                                            }),
+                                        )
+                                        .child("×")
+                                }),
                         )
                 })),
         )
@@ -209,6 +226,95 @@ pub fn render_tab_content(
                                         }))
                                 }),
                         ),
+                )
+        }
+        PreviewTab::Code {
+            content,
+            language,
+            dirty,
+            editor,
+            ..
+        } => {
+            let is_dirty = *dirty;
+            let lang = language.clone();
+            let line_count = content.lines().count();
+
+            v_flex()
+                .size_full()
+                .bg(bg)
+                .child({
+                    // Content area - always editable
+                    let editor_entity = editor.clone();
+                    let code_editor_focus = cx.focus_handle();
+                    div()
+                        .id("code-content-scroll")
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .bg(bg)
+                        .track_focus(&code_editor_focus)
+                        .key_context("CodeEditor")
+                        .on_click(cx.listener(move |this, _event, window, cx| {
+                            // Set focus context to CodeEditor and focus the editor
+                            this.focus.focus(crate::focus::FocusContext::CodeEditor, window);
+                            code_editor_focus.focus(window);
+                            if let Some(ref ed) = editor_entity {
+                                ed.update(cx, |state, cx| {
+                                    state.focus(window, cx);
+                                });
+                            }
+                        }))
+                        .child(if let Some(ed) = editor {
+                            Input::new(ed).h_full().appearance(false).into_any_element()
+                        } else {
+                            div()
+                                .p_4()
+                                .child(render_loading_spinner(
+                                    "Loading code...",
+                                    cx.theme().primary,
+                                    cx.theme().muted_foreground,
+                                ))
+                                .into_any_element()
+                        })
+                })
+                .child(
+                    // Footer with action buttons
+                    h_flex()
+                        .h(px(40.0))
+                        .bg(title_bar)
+                        .border_t_1()
+                        .border_color(border)
+                        .items_center()
+                        .justify_between()
+                        .px_3()
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .px(px(6.0))
+                                        .py(px(2.0))
+                                        .bg(hsla(200.0 / 360.0, 0.4, 0.25, 1.0))
+                                        .rounded(px(3.0))
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(hsla(200.0 / 360.0, 0.6, 0.8, 1.0))
+                                        .child(lang.to_uppercase()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted_fg)
+                                        .child(format!("{} lines", line_count)),
+                                ),
+                        )
+                        .when(is_dirty, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child("⌘S to save"),
+                            )
+                        }),
                 )
         }
     }

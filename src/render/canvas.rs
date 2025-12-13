@@ -8,7 +8,7 @@
 
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
-use crate::markdown_card::render_collapsed_markdown;
+use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
 use crate::types::{CanvasItem, ItemContent};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -42,10 +42,10 @@ fn render_item_backgrounds(
     zoom: f32,
 ) {
     for item in items {
-        // Skip items that render themselves (images, markdown cards)
+        // Skip items that render themselves (images, markdown cards, code files)
         if matches!(
             &item.content,
-            ItemContent::Image(_) | ItemContent::Markdown { .. }
+            ItemContent::Image(_) | ItemContent::Markdown { .. } | ItemContent::Code { .. }
         ) {
             continue;
         }
@@ -448,6 +448,37 @@ fn render_item_content(
                 hover_border,
                 icon_color,
                 text_color,
+            )
+        }
+
+        ItemContent::Code { path, language } => {
+            // Use theme colors for code file cards
+            let popover_bg = hsla(220.0 / 360.0, 0.15, 0.14, 1.0); // Darker bg for code
+            let border = hsla(200.0 / 360.0, 0.3, 0.35, 1.0); // Cyan-ish border
+            let hover_bg = hsla(220.0 / 360.0, 0.15, 0.18, 1.0);
+            let hover_border = hsla(200.0 / 360.0, 0.5, 0.5, 1.0); // Brighter cyan on hover
+            let icon_color = hsla(40.0 / 360.0, 0.8, 0.6, 1.0); // Orange-ish icon for code
+            let text_color = hsla(0.0, 0.0, 0.85, 1.0);
+            let badge_bg = hsla(200.0 / 360.0, 0.4, 0.25, 1.0); // Cyan badge bg
+            let badge_text = hsla(200.0 / 360.0, 0.6, 0.8, 1.0); // Cyan badge text
+
+            let filename = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown");
+
+            render_collapsed_code(
+                filename,
+                language,
+                zoom,
+                popover_bg,
+                border,
+                hover_bg,
+                hover_border,
+                icon_color,
+                text_color,
+                badge_bg,
+                badge_text,
             )
         }
     }

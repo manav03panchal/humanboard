@@ -29,6 +29,65 @@ pub enum ItemContent {
         title: String,
         content: String, // Store content for preview
     },
+    Code {
+        path: PathBuf,
+        language: String, // e.g., "rust", "python", "javascript"
+    },
+}
+
+/// Get the language identifier for syntax highlighting from file extension
+pub fn language_from_extension(ext: &str) -> Option<&'static str> {
+    match ext.to_lowercase().as_str() {
+        "rs" => Some("rust"),
+        "py" => Some("python"),
+        "js" => Some("javascript"),
+        "ts" => Some("typescript"),
+        "jsx" => Some("javascript"),
+        "tsx" => Some("typescript"),
+        "go" => Some("go"),
+        "c" => Some("c"),
+        "h" => Some("c"),
+        "cpp" | "cc" | "cxx" => Some("cpp"),
+        "hpp" | "hxx" => Some("cpp"),
+        "java" => Some("java"),
+        "kt" | "kts" => Some("kotlin"),
+        "swift" => Some("swift"),
+        "rb" => Some("ruby"),
+        "php" => Some("php"),
+        "cs" => Some("csharp"),
+        "fs" | "fsx" => Some("fsharp"),
+        "scala" => Some("scala"),
+        "lua" => Some("lua"),
+        "sh" | "bash" | "zsh" => Some("bash"),
+        "ps1" => Some("powershell"),
+        "sql" => Some("sql"),
+        "html" | "htm" => Some("html"),
+        "css" => Some("css"),
+        "scss" | "sass" => Some("scss"),
+        "less" => Some("less"),
+        "json" => Some("json"),
+        "yaml" | "yml" => Some("yaml"),
+        "toml" => Some("toml"),
+        "xml" => Some("xml"),
+        "vue" => Some("vue"),
+        "svelte" => Some("svelte"),
+        "zig" => Some("zig"),
+        "nim" => Some("nim"),
+        "ex" | "exs" => Some("elixir"),
+        "erl" | "hrl" => Some("erlang"),
+        "hs" => Some("haskell"),
+        "ml" | "mli" => Some("ocaml"),
+        "clj" | "cljs" => Some("clojure"),
+        "lisp" | "cl" => Some("lisp"),
+        "r" => Some("r"),
+        "jl" => Some("julia"),
+        "dart" => Some("dart"),
+        "v" => Some("v"),
+        "asm" | "s" => Some("asm"),
+        "dockerfile" => Some("dockerfile"),
+        "makefile" | "mk" => Some("makefile"),
+        _ => None,
+    }
 }
 
 /// Extract YouTube video ID from various URL formats
@@ -99,6 +158,7 @@ impl ItemContent {
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
             ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
+            ItemContent::Code { .. } => (200.0, 36.0), // Simple filename button like markdown
         }
     }
 
@@ -119,6 +179,11 @@ impl ItemContent {
             ItemContent::YouTube(id) => format!("YouTube: {}", id),
             ItemContent::SpotifyApp => "Spotify".to_string(),
             ItemContent::Markdown { title, .. } => title.clone(),
+            ItemContent::Code { path, .. } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown")
+                .to_string(),
         }
     }
 
@@ -133,6 +198,24 @@ impl ItemContent {
             ItemContent::YouTube(_) => "YOUTUBE",
             ItemContent::SpotifyApp => "SPOTIFY",
             ItemContent::Markdown { .. } => "MARKDOWN",
+            ItemContent::Code { language, .. } => match language.as_str() {
+                "rust" => "RUST",
+                "python" => "PYTHON",
+                "javascript" | "typescript" => "JS/TS",
+                "go" => "GO",
+                "c" | "cpp" => "C/C++",
+                "java" => "JAVA",
+                "swift" => "SWIFT",
+                "ruby" => "RUBY",
+                "php" => "PHP",
+                "html" => "HTML",
+                "css" | "scss" => "CSS",
+                "json" => "JSON",
+                "yaml" => "YAML",
+                "toml" => "TOML",
+                "bash" => "SHELL",
+                _ => "CODE",
+            },
         }
     }
 
@@ -164,7 +247,14 @@ impl ItemContent {
                         content,
                     }
                 }
-                "txt" | "rs" | "js" | "json" | "html" | "css" => {
+                ext if language_from_extension(ext).is_some() => {
+                    let language = language_from_extension(ext).unwrap().to_string();
+                    ItemContent::Code {
+                        path: path.clone(),
+                        language,
+                    }
+                }
+                "txt" => {
                     ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy()))
                 }
                 _ => ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy())),

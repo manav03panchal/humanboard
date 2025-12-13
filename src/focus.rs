@@ -26,6 +26,8 @@ pub enum FocusContext {
     Modal,
     /// Command palette - captures keyboard input
     CommandPalette,
+    /// Code editor in edit mode - captures undo/redo/save
+    CodeEditor,
     /// Preview panel (markdown editor)
     Preview,
     /// Landing page (board name editing)
@@ -40,6 +42,7 @@ impl FocusContext {
         match self {
             FocusContext::Modal => "Modal",
             FocusContext::CommandPalette => "CommandPalette",
+            FocusContext::CodeEditor => "CodeEditor",
             FocusContext::Preview => "Preview",
             FocusContext::Landing => "Landing",
             FocusContext::Canvas => "Canvas",
@@ -49,8 +52,9 @@ impl FocusContext {
     /// Returns the priority of this context (higher = more important)
     pub fn priority(&self) -> u8 {
         match self {
-            FocusContext::Modal => 5,
-            FocusContext::CommandPalette => 4,
+            FocusContext::Modal => 6,
+            FocusContext::CommandPalette => 5,
+            FocusContext::CodeEditor => 4,
             FocusContext::Preview => 3,
             FocusContext::Landing => 2,
             FocusContext::Canvas => 1,
@@ -67,6 +71,8 @@ pub struct FocusManager {
     pub canvas: FocusHandle,
     /// Focus handle for the command palette
     pub command_palette: FocusHandle,
+    /// Focus handle for the code editor
+    pub code_editor: FocusHandle,
     /// Focus handle for the preview panel
     pub preview: FocusHandle,
     /// Focus handle for the landing page inputs
@@ -85,6 +91,7 @@ impl FocusManager {
         Self {
             canvas: cx.focus_handle(),
             command_palette: cx.focus_handle(),
+            code_editor: cx.focus_handle(),
             preview: cx.focus_handle(),
             landing: cx.focus_handle(),
             modal: cx.focus_handle(),
@@ -103,6 +110,7 @@ impl FocusManager {
         match context {
             FocusContext::Canvas => &self.canvas,
             FocusContext::CommandPalette => &self.command_palette,
+            FocusContext::CodeEditor => &self.code_editor,
             FocusContext::Preview => &self.preview,
             FocusContext::Landing => &self.landing,
             FocusContext::Modal => &self.modal,
@@ -124,7 +132,7 @@ impl FocusManager {
     pub fn is_input_active(&self) -> bool {
         matches!(
             self.active_context,
-            FocusContext::CommandPalette | FocusContext::Preview | FocusContext::Landing | FocusContext::Modal
+            FocusContext::CommandPalette | FocusContext::CodeEditor | FocusContext::Preview | FocusContext::Landing | FocusContext::Modal
         )
     }
 
@@ -221,7 +229,8 @@ mod tests {
     #[test]
     fn test_focus_context_priority() {
         assert!(FocusContext::Modal.priority() > FocusContext::CommandPalette.priority());
-        assert!(FocusContext::CommandPalette.priority() > FocusContext::Preview.priority());
+        assert!(FocusContext::CommandPalette.priority() > FocusContext::CodeEditor.priority());
+        assert!(FocusContext::CodeEditor.priority() > FocusContext::Preview.priority());
         assert!(FocusContext::Preview.priority() > FocusContext::Landing.priority());
         assert!(FocusContext::Landing.priority() > FocusContext::Canvas.priority());
     }
@@ -230,6 +239,7 @@ mod tests {
     fn test_key_context_strings() {
         assert_eq!(FocusContext::Canvas.key_context(), "Canvas");
         assert_eq!(FocusContext::CommandPalette.key_context(), "CommandPalette");
+        assert_eq!(FocusContext::CodeEditor.key_context(), "CodeEditor");
         assert_eq!(FocusContext::Modal.key_context(), "Modal");
     }
 }

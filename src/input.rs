@@ -34,7 +34,25 @@ impl Humanboard {
                 cx.notify();
                 return;
             }
+
+            // Check if click is in preview panel area - if so, don't handle here
+            let in_preview = match preview.split {
+                SplitDirection::Vertical => {
+                    let preview_start = (1.0 - preview.size) * f32::from(window_size.width);
+                    f32::from(mouse_pos.x) > preview_start
+                }
+                SplitDirection::Horizontal => {
+                    let preview_start = (1.0 - preview.size) * f32::from(window_size.height);
+                    f32::from(mouse_pos.y) > preview_start
+                }
+            };
+            if in_preview {
+                return; // Let preview panel handle its own clicks
+            }
         }
+
+        // Clicking on canvas - reset focus to canvas
+        self.focus.force_canvas_focus(window);
 
         // Check if clicking on an item (in reverse order so top items are checked first)
         // Extract only the ID to avoid cloning the entire item
@@ -76,13 +94,14 @@ impl Humanboard {
                 self.selected_items.insert(item_id);
             }
 
-            // Handle double-click for PDF/Markdown preview
+            // Handle double-click for PDF/Markdown/Code preview
             if event.click_count == 2 {
                 let content_path = board
                     .get_item(item_id)
                     .and_then(|item| match &item.content {
                         ItemContent::Pdf { path, .. } => Some(path.clone()),
                         ItemContent::Markdown { path, .. } => Some(path.clone()),
+                        ItemContent::Code { path, .. } => Some(path.clone()),
                         _ => None,
                     });
 

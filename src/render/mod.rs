@@ -23,8 +23,8 @@ pub use preview::{
 use crate::actions::{
     CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
     GoHome, NewBoard, NextPage, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SelectAll,
-    ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SaveCode,
+    SelectAll, ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -160,9 +160,10 @@ impl Humanboard {
             }
         }
 
-        // Ensure WebViews are created if preview is active
+        // Ensure WebViews and editors are created if preview is active
         if self.preview.is_some() {
             self.ensure_pdf_webview(window, cx);
+            self.ensure_code_editors(window, cx);
         }
 
         // Ensure YouTube WebViews are created for any YouTube items
@@ -283,6 +284,7 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &NudgeRight, _, cx| this.nudge_right(cx)))
             .on_action(cx.listener(|this, _: &Undo, _, cx| this.undo(cx)))
             .on_action(cx.listener(|this, _: &Redo, _, cx| this.redo(cx)))
+            .on_action(cx.listener(|this, _: &SaveCode, _, cx| this.save_code(cx)))
             .on_action(cx.listener(|this, _: &ClosePreview, _, cx| this.close_preview(cx)))
             .on_action(cx.listener(|this, _: &ToggleSplit, _, cx| this.toggle_split_direction(cx)))
             .on_action(cx.listener(|this, _: &NextPage, _, cx| this.next_page(cx)))

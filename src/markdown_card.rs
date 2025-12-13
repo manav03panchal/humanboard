@@ -4,6 +4,62 @@ use gpui_component::{Icon, IconName};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::path::PathBuf;
 
+/// Render a collapsed code file card (similar to markdown)
+/// Takes theme colors as parameters for proper theming support
+pub fn render_collapsed_code(
+    filename: &str,
+    language: &str,
+    zoom: f32,
+    bg: Hsla,
+    border: Hsla,
+    hover_bg: Hsla,
+    hover_border: Hsla,
+    icon_color: Hsla,
+    text_color: Hsla,
+    badge_bg: Hsla,
+    badge_text: Hsla,
+) -> Div {
+    div()
+        .size_full()
+        .bg(bg)
+        .rounded(px(6.0 * zoom))
+        .border(px(1.0 * zoom))
+        .border_color(border)
+        .cursor(CursorStyle::PointingHand)
+        .hover(move |s| s.bg(hover_bg).border_color(hover_border))
+        .flex()
+        .items_center()
+        .gap(px(8.0 * zoom))
+        .px(px(12.0 * zoom))
+        .child(
+            Icon::new(IconName::SquareTerminal)
+                .size(px(16.0 * zoom))
+                .text_color(icon_color),
+        )
+        .child(
+            div()
+                .flex_1()
+                .text_size(px(12.0 * zoom))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(text_color)
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .child(filename.to_string()),
+        )
+        .child(
+            // Language badge
+            div()
+                .px(px(6.0 * zoom))
+                .py(px(2.0 * zoom))
+                .bg(badge_bg)
+                .rounded(px(3.0 * zoom))
+                .text_size(px(9.0 * zoom))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(badge_text)
+                .child(language.to_uppercase()),
+        )
+}
+
 /// Native markdown card with rich preview (no WebView)
 pub struct MarkdownCard {
     pub path: PathBuf,

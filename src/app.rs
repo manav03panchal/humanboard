@@ -53,6 +53,14 @@ pub enum PreviewTab {
         editing: bool,
         editor: Option<Entity<InputState>>,
     },
+    Code {
+        path: PathBuf,
+        language: String,
+        content: String,
+        editing: bool,
+        dirty: bool,
+        editor: Option<Entity<InputState>>,
+    },
 }
 
 impl PreviewTab {
@@ -60,6 +68,7 @@ impl PreviewTab {
         match self {
             PreviewTab::Pdf { path, .. } => path,
             PreviewTab::Markdown { path, .. } => path,
+            PreviewTab::Code { path, .. } => path,
         }
     }
 
@@ -83,7 +92,20 @@ impl PreviewTab {
                 .and_then(|n| n.to_str())
                 .unwrap_or("Untitled")
                 .to_string(),
+            PreviewTab::Code { path, .. } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Untitled")
+                .to_string(),
         }
+    }
+
+    pub fn is_editing(&self) -> bool {
+        matches!(self, PreviewTab::Code { editing: true, .. })
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        matches!(self, PreviewTab::Code { dirty: true, .. })
     }
 }
 
@@ -236,6 +258,15 @@ impl Humanboard {
             cmd_palette_scroll: ScrollHandle::new(),
             pan_animation: None,
         }
+    }
+
+    /// Returns true if a code editor is currently in edit mode
+    pub fn is_code_editing(&self) -> bool {
+        self.preview
+            .as_ref()
+            .and_then(|p| p.tabs.get(p.active_tab))
+            .map(|tab| tab.is_editing())
+            .unwrap_or(false)
     }
 
     pub fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1046,7 +1077,9 @@ impl Humanboard {
 
     pub fn open_preview(&mut self, path: PathBuf, _window: &mut Window, cx: &mut Context<Self>) {
         // Determine tab type based on extension
-        let tab = if path.extension().and_then(|e| e.to_str()) == Some("md") {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+        let tab = if ext == "md" {
             // Load markdown content
             let content = std::fs::read_to_string(&path).unwrap_or_default();
             PreviewTab::Markdown {
@@ -1055,7 +1088,24 @@ impl Humanboard {
                 editing: false,
                 editor: None,
             }
+        } else if ext == "pdf" {
+            PreviewTab::Pdf {
+                path: path.clone(),
+                webview: None,
+            }
+        } else if let Some(language) = crate::types::language_from_extension(ext) {
+            // Code file - load content
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            PreviewTab::Code {
+                path: path.clone(),
+                language: language.to_string(),
+                content,
+                editing: true, // Always editable
+                dirty: false,
+                editor: None,
+            }
         } else {
+            // Default to PDF for unknown types (or could be Text)
             PreviewTab::Pdf {
                 path: path.clone(),
                 webview: None,
@@ -1110,6 +1160,38 @@ impl Humanboard {
                         } else {
                             wv.webview().update(cx, |view, _| view.hide());
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ensure code editors are created for code tabs (for syntax-highlighted viewing)
+    pub fn ensure_code_editors(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            for tab in preview.tabs.iter_mut() {
+                if let PreviewTab::Code {
+                    content,
+                    language,
+                    editor,
+                    dirty,
+                    ..
+                } = tab
+                {
+                    if editor.is_none() {
+                        // Create editor with syntax highlighting
+                        let content_clone = content.clone();
+                        let lang = language.clone();
+                        *editor = Some(cx.new(|cx| {
+                            InputState::new(_window, cx)
+                                .code_editor(lang)
+                                .line_number(true)
+                                .default_value(content_clone)
+                        }));
+                    } else if let Some(ed) = editor {
+                        // Check if content changed (for dirty indicator)
+                        let editor_content = ed.read(cx).text().to_string();
+                        *dirty = editor_content != *content;
                     }
                 }
             }
@@ -1192,6 +1274,34 @@ impl Humanboard {
                             }
                         }
                         *editing = false;
+                    }
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    pub fn save_code(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
+                if let PreviewTab::Code {
+                    path,
+                    content,
+                    editor,
+                    dirty,
+                    ..
+                } = tab
+                {
+                    if let Some(ed) = editor {
+                        let new_content = ed.read(cx).text().to_string();
+                        *content = new_content.clone();
+                        // Save to file
+                        let path_clone = path.clone();
+                        if let Err(e) = std::fs::write(&path_clone, &new_content) {
+                            eprintln!("Failed to save code file: {}", e);
+                        }
+                        *dirty = false;
+                        // Keep editor for viewing
                     }
                 }
             }
