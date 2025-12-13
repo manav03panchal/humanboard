@@ -763,8 +763,8 @@ impl Humanboard {
             } else if command == "md" {
                 self.create_markdown_note("Untitled".to_string(), window, cx);
             } else if command == "spotify" {
-                // Open Spotify app/website
-                let _ = open::that("https://open.spotify.com");
+                // Add Spotify player to canvas
+                self.add_spotify_webview(window, cx);
             }
         }
     }
