@@ -486,10 +486,8 @@ impl Humanboard {
             |this, input, event: &gpui_component::input::InputEvent, cx| {
                 match event {
                     gpui_component::input::InputEvent::PressEnter { .. } => {
-                        // Note: Enter is handled by the action handler on the container
-                        // which runs before this subscription. Don't double-handle.
-                        // Only handle if pending_command wasn't already set by action handler.
-                        if this.pending_command.is_none() && this.command_palette.is_some() {
+                        // Execute the command when Enter is pressed
+                        if this.command_palette.is_some() {
                             this.execute_command_from_subscription(cx);
                         }
                     }

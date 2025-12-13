@@ -7,13 +7,13 @@
 //! - Command palette popup
 //! - Settings modal
 
-use crate::actions::{CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, OpenSettings};
+use crate::actions::{CmdPaletteDown, CmdPaletteUp, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::settings::Settings;
 use crate::spotify_auth;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{Enter, Input, InputState, MoveDown, MoveUp};
+use gpui_component::input::{Input, InputState, MoveDown, MoveUp};
 use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 
 /// Render the header bar with navigation and integrated command palette
@@ -92,24 +92,19 @@ pub fn render_header_bar(
                 .relative()
                 .track_focus(palette_focus)
                 .key_context("CommandPalette")
-                // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                // Intercept Input's MoveUp/MoveDown actions to navigate results
+                // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                 .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
                     this.select_prev_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
                     this.select_next_result(cx);
                 }))
-                .on_action(cx.listener(|this, _: &Enter, _, cx| {
-                    this.execute_command_from_action(cx);
-                }))
                 .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
                     this.select_prev_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                     this.select_next_result(cx);
-                }))
-                .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
-                    this.execute_command_from_action(cx);
                 }))
                 // Search trigger button / input
                 .child(
@@ -788,24 +783,19 @@ pub fn render_command_palette(
                     .shadow_lg()
                     .overflow_hidden()
                     .key_context("CommandPalette")
-                    // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                    // Intercept Input's MoveUp/MoveDown actions to navigate results
+                    // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                     .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
                         this.select_prev_result(cx);
                     }))
                     .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
                         this.select_next_result(cx);
                     }))
-                    .on_action(cx.listener(|this, _: &Enter, _, cx| {
-                        this.execute_command_from_action(cx);
-                    }))
                     .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
                         this.select_prev_result(cx);
                     }))
                     .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                         this.select_next_result(cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
-                        this.execute_command_from_action(cx);
                     }))
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .on_scroll_wheel(|_, _, _| {})
