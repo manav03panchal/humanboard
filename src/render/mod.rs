@@ -498,6 +498,7 @@ impl Humanboard {
             self.selected_result,
             &self.cmd_palette_scroll,
             self.cmd_palette_mode,
+            &self.focus.command_palette,
             cx,
         ));
 

@@ -24,6 +24,7 @@ pub fn render_header_bar(
     selected_result: usize,
     scroll_handle: &ScrollHandle,
     palette_mode: crate::app::CmdPaletteMode,
+    palette_focus: &FocusHandle,
     cx: &mut Context<Humanboard>,
 ) -> Div {
     let has_results = !search_results.is_empty();
@@ -89,6 +90,7 @@ pub fn render_header_bar(
                 .id("cmd-palette-container")
                 .w(px(400.0))
                 .relative()
+                .track_focus(palette_focus)
                 .key_context("CommandPalette")
                 // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
                 .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
