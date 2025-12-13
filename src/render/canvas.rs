@@ -13,7 +13,8 @@ use crate::types::{CanvasItem, ItemContent};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
-use gpui::*;
+use gpui::{PathBuilder, *};
+use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme as _, h_flex, v_flex};
 use std::collections::HashMap;
 
@@ -42,10 +43,15 @@ fn render_item_backgrounds(
     zoom: f32,
 ) {
     for item in items {
-        // Skip items that render themselves (images, markdown cards, code files)
+        // Skip items that render themselves (images, markdown cards, code files, shapes, arrows, textboxes)
         if matches!(
             &item.content,
-            ItemContent::Image(_) | ItemContent::Markdown { .. } | ItemContent::Code { .. }
+            ItemContent::Image(_)
+                | ItemContent::Markdown { .. }
+                | ItemContent::Code { .. }
+                | ItemContent::TextBox { .. }
+                | ItemContent::Arrow { .. }
+                | ItemContent::Shape { .. }
         ) {
             continue;
         }
@@ -90,6 +96,8 @@ fn render_item_content(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
+    editing_textbox_id: Option<u64>,
+    textbox_input: Option<&Entity<InputState>>,
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -481,7 +489,213 @@ fn render_item_content(
                 badge_text,
             )
         }
+
+        ItemContent::TextBox {
+            text,
+            font_size,
+            color,
+        } => {
+            // Parse color from hex string, fallback to theme foreground
+            let text_color = parse_hex_color(color).unwrap_or(fg);
+            let scaled_font = font_size * zoom;
+
+            // Check if this textbox is being edited
+            let is_editing = editing_textbox_id == Some(item.id);
+
+            if is_editing {
+                if let Some(input) = textbox_input {
+                    // Render the input field for inline editing (multiline)
+                    // No background - transparent textbox with just a border
+                    div()
+                        .size_full()
+                        .rounded(px(4.0 * zoom))
+                        .border_1()
+                        .border_color(fg.opacity(0.3))
+                        .overflow_hidden()
+                        .child(Input::new(input).appearance(false).size_full())
+                } else {
+                    // Fallback to static text if input not available
+                    div()
+                        .size_full()
+                        .rounded(px(4.0 * zoom))
+                        .p(px(8.0 * zoom))
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                        .children(text.lines().map(|line| {
+                            div()
+                                .text_size(px(scaled_font))
+                                .text_color(text_color)
+                                .child(if line.is_empty() {
+                                    " ".to_string() // Preserve empty lines
+                                } else {
+                                    line.to_string()
+                                })
+                        }))
+                }
+            } else {
+                // Normal display mode - just text, no background
+                div()
+                    .size_full()
+                    .rounded(px(4.0 * zoom))
+                    .p(px(8.0 * zoom))
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .children(text.lines().map(|line| {
+                        div()
+                            .text_size(px(scaled_font))
+                            .text_color(text_color)
+                            .child(if line.is_empty() {
+                                " ".to_string() // Preserve empty lines
+                            } else {
+                                line.to_string()
+                            })
+                    }))
+            }
+        }
+
+        ItemContent::Arrow {
+            color,
+            thickness,
+            end_offset,
+            head_style,
+        } => {
+            // Parse color from hex string
+            let arrow_color = parse_hex_color(color).unwrap_or(fg);
+            let scaled_thickness = *thickness * zoom;
+            let dx = end_offset.0 * zoom;
+            let dy = end_offset.1 * zoom;
+            let head = *head_style;
+            let item_w = item.size.0 * zoom;
+            let item_h = item.size.1 * zoom;
+
+            // Use a canvas element to draw the arrow with PathBuilder
+            div().size_full().child(
+                canvas(
+                    move |_, _, _| {},
+                    move |bounds, _, window, _| {
+                        // Arrow start point depends on direction of end_offset
+                        // If dx >= 0, start is on left; if dx < 0, start is on right
+                        // If dy >= 0, start is on top; if dy < 0, start is on bottom
+                        let start_x = if dx >= 0.0 {
+                            bounds.origin.x
+                        } else {
+                            bounds.origin.x + px(item_w)
+                        };
+                        let start_y = if dy >= 0.0 {
+                            bounds.origin.y
+                        } else {
+                            bounds.origin.y + px(item_h)
+                        };
+                        let start = point(start_x, start_y);
+                        let end = point(start.x + px(dx), start.y + px(dy));
+
+                        // Draw the line
+                        let mut path = PathBuilder::stroke(px(scaled_thickness));
+                        path.move_to(start);
+                        path.line_to(end);
+                        if let Ok(built_path) = path.build() {
+                            window.paint_path(built_path, arrow_color);
+                        }
+
+                        // Draw arrow head if needed
+                        if head != crate::types::ArrowHead::None {
+                            let angle = dy.atan2(dx);
+                            let head_size = (scaled_thickness * 4.0).max(8.0);
+                            let head_angle = 0.5; // ~30 degrees
+
+                            // Calculate arrow head points
+                            let angle1 = angle + std::f32::consts::PI - head_angle;
+                            let angle2 = angle + std::f32::consts::PI + head_angle;
+
+                            let p1 = point(
+                                end.x + px(head_size * angle1.cos()),
+                                end.y + px(head_size * angle1.sin()),
+                            );
+                            let p2 = point(
+                                end.x + px(head_size * angle2.cos()),
+                                end.y + px(head_size * angle2.sin()),
+                            );
+
+                            // Draw arrow head as filled triangle
+                            let mut head_path = PathBuilder::fill();
+                            head_path.move_to(end);
+                            head_path.line_to(p1);
+                            head_path.line_to(p2);
+                            head_path.close();
+                            if let Ok(built_head) = head_path.build() {
+                                window.paint_path(built_head, arrow_color);
+                            }
+                        }
+                    },
+                )
+                .size_full(),
+            )
+        }
+
+        ItemContent::Shape {
+            shape_type,
+            fill_color,
+            border_color,
+            border_width,
+        } => {
+            let fill = fill_color.as_ref().and_then(|c| parse_hex_color(c));
+            let stroke = parse_hex_color(border_color).unwrap_or(fg);
+            let scaled_border = (border_width * zoom).max(1.0);
+
+            let radius = match shape_type {
+                crate::types::ShapeType::Rectangle => px(0.0),
+                crate::types::ShapeType::RoundedRect => px(8.0 * zoom),
+                crate::types::ShapeType::Ellipse => px(9999.0),
+            };
+
+            div()
+                .size_full()
+                .rounded(radius)
+                .border(px(scaled_border))
+                .border_color(stroke)
+                .when_some(fill, |d, c| d.bg(c))
+        }
     }
+}
+
+/// Parse a hex color string like "#ffffff" into an Hsla color
+fn parse_hex_color(hex: &str) -> Option<Hsla> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+
+    // Convert RGB to HSL
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+
+    if max == min {
+        return Some(hsla(0.0, 0.0, l, 1.0));
+    }
+
+    let d = max - min;
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
+
+    let h = if max == r {
+        ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
+    } else if max == g {
+        ((b - r) / d + 2.0) / 6.0
+    } else {
+        ((r - g) / d + 4.0) / 6.0
+    };
+
+    Some(hsla(h, s, l, 1.0))
 }
 
 /// Render all canvas items with positioning and selection
@@ -494,6 +708,8 @@ pub fn render_items(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
+    editing_textbox_id: Option<u64>,
+    textbox_input: Option<&Entity<InputState>>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     let offset_x = f32::from(canvas_offset.x);
@@ -527,6 +743,8 @@ pub fn render_items(
                     audio_webviews,
                     video_webviews,
                     spotify_app_webviews,
+                    editing_textbox_id,
+                    textbox_input,
                     fg,
                     muted_fg,
                     muted_bg,
@@ -565,11 +783,15 @@ pub fn render_canvas_area(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
+    editing_textbox_id: Option<u64>,
+    textbox_input: Option<&Entity<InputState>>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
+    drawing_preview: Option<(Point<Pixels>, Point<Pixels>, crate::types::ToolType)>,
     cx: &Context<Humanboard>,
 ) -> Div {
     let bg = cx.theme().background;
     let primary = cx.theme().primary;
+    let fg = cx.theme().foreground;
 
     div()
         .size_full()
@@ -586,6 +808,8 @@ pub fn render_canvas_area(
             audio_webviews,
             video_webviews,
             spotify_app_webviews,
+            editing_textbox_id,
+            textbox_input,
             cx,
         ))
         // Render marquee selection rectangle
@@ -611,6 +835,117 @@ pub fn render_canvas_area(
                         .bg(primary.opacity(0.1))
                         .rounded(px(2.0)),
                 )
+            } else {
+                d
+            }
+        })
+        // Render drawing preview (for TextBox, Shape, Arrow while dragging)
+        .when_some(drawing_preview, |d, (start, current, tool)| {
+            // Account for dock width (44px) since mouse coords are in window space
+            // but we're rendering in canvas space (after dock)
+            let dock_offset = crate::render::dock::DOCK_WIDTH;
+            let start_x = f32::from(start.x) - dock_offset;
+            let start_y = f32::from(start.y);
+            let current_x = f32::from(current.x) - dock_offset;
+            let current_y = f32::from(current.y);
+
+            let min_x = start_x.min(current_x);
+            let max_x = start_x.max(current_x);
+            let min_y = start_y.min(current_y);
+            let max_y = start_y.max(current_y);
+            let width = max_x - min_x;
+            let height = max_y - min_y;
+
+            // Only show if has some size
+            if width > 5.0 || height > 5.0 {
+                match tool {
+                    crate::types::ToolType::Text | crate::types::ToolType::Shape => {
+                        // Rectangle preview for TextBox and Shape
+                        d.child(
+                            div()
+                                .absolute()
+                                .left(px(min_x))
+                                .top(px(min_y - 40.0)) // Account for header offset
+                                .w(px(width.max(20.0)))
+                                .h(px(height.max(20.0)))
+                                .border_2()
+                                .border_color(fg.opacity(0.8))
+                                .bg(fg.opacity(0.05))
+                                .rounded(px(4.0)),
+                        )
+                    }
+                    crate::types::ToolType::Arrow => {
+                        // Arrow preview - line from start to current
+                        let arrow_start_x = start_x;
+                        let arrow_start_y = start_y - 40.0; // Account for header
+                        let arrow_end_x = current_x;
+                        let arrow_end_y = current_y - 40.0;
+
+                        d.child(
+                            div()
+                                .absolute()
+                                .left(px(0.0))
+                                .top(px(0.0))
+                                .size_full()
+                                .child(
+                                    canvas(
+                                        move |_, _, _| {},
+                                        move |bounds, _, window, _| {
+                                            let start_pt = point(
+                                                bounds.origin.x + px(arrow_start_x),
+                                                bounds.origin.y + px(arrow_start_y),
+                                            );
+                                            let end_pt = point(
+                                                bounds.origin.x + px(arrow_end_x),
+                                                bounds.origin.y + px(arrow_end_y),
+                                            );
+
+                                            // Draw line
+                                            let mut path = PathBuilder::stroke(px(2.0));
+                                            path.move_to(start_pt);
+                                            path.line_to(end_pt);
+                                            if let Ok(built) = path.build() {
+                                                window.paint_path(built, fg.opacity(0.8));
+                                            }
+
+                                            // Draw arrow head
+                                            let dx = f32::from(end_pt.x - start_pt.x);
+                                            let dy = f32::from(end_pt.y - start_pt.y);
+                                            let len = (dx * dx + dy * dy).sqrt();
+                                            if len > 10.0 {
+                                                let nx = dx / len;
+                                                let ny = dy / len;
+                                                let head_size = 12.0;
+                                                let p1 = point(
+                                                    end_pt.x
+                                                        - px(nx * head_size - ny * head_size * 0.5),
+                                                    end_pt.y
+                                                        - px(ny * head_size + nx * head_size * 0.5),
+                                                );
+                                                let p2 = point(
+                                                    end_pt.x
+                                                        - px(nx * head_size + ny * head_size * 0.5),
+                                                    end_pt.y
+                                                        - px(ny * head_size - nx * head_size * 0.5),
+                                                );
+
+                                                let mut head = PathBuilder::fill();
+                                                head.move_to(end_pt);
+                                                head.line_to(p1);
+                                                head.line_to(p2);
+                                                head.close();
+                                                if let Ok(built) = head.build() {
+                                                    window.paint_path(built, fg.opacity(0.8));
+                                                }
+                                            }
+                                        },
+                                    )
+                                    .size_full(),
+                                ),
+                        )
+                    }
+                    _ => d,
+                }
             } else {
                 d
             }

@@ -2,15 +2,18 @@
 //!
 //! This module is split into submodules for maintainability:
 //! - `canvas`: Canvas and item rendering
+//! - `dock`: Tool dock (left sidebar)
 //! - `preview`: Preview panel, tabs, splitter
 //! - `overlays`: Header, footer, shortcuts, command palette
 
 pub mod canvas;
+pub mod dock;
 pub mod overlays;
 pub mod preview;
 
 // Re-export commonly used items
 pub use canvas::{render_canvas, render_canvas_area, render_items};
+pub use dock::render_tool_dock;
 pub use overlays::{
     render_command_palette, render_footer_bar, render_header_bar, render_settings_modal,
     render_shortcuts_overlay,
@@ -21,10 +24,11 @@ pub use preview::{
 };
 
 use crate::actions::{
-    CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected, DuplicateSelected,
-    GoHome, NewBoard, NextPage, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SaveCode,
-    SelectAll, ShowShortcuts, ToggleCommandPalette, ToggleSplit, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
+    DuplicateSelected, GoHome, NewBoard, NextPage, NextTab, NudgeDown, NudgeLeft, NudgeRight,
+    NudgeUp, OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab,
+    Redo, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, ToggleSplit, ToolArrow,
+    ToolSelect, ToolShape, ToolText, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -131,13 +135,32 @@ impl Humanboard {
                     MouseButton::Left,
                     cx.listener(|this, _, window, _| {
                         // Use try_focus to respect focus hierarchy
-                        this.focus.try_focus(crate::focus::FocusContext::Landing, window);
+                        this.focus
+                            .try_focus(crate::focus::FocusContext::Landing, window);
                     }),
                 )
             })
             .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
-            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ToolSelect, _, cx| {
+                this.selected_tool = crate::types::ToolType::Select;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolText, _, cx| {
+                this.selected_tool = crate::types::ToolType::Text;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolArrow, _, cx| {
+                this.selected_tool = crate::types::ToolType::Arrow;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolShape, _, cx| {
+                this.selected_tool = crate::types::ToolType::Shape;
+                cx.notify();
+            }))
             .child(render_landing_page(
                 &self.board_index,
                 self.editing_board_id.as_deref(),
@@ -215,6 +238,12 @@ impl Humanboard {
             _ => None,
         };
 
+        // Drawing preview state (for TextBox, Shape, Arrow while dragging)
+        let drawing_preview = match (self.drawing_start, self.drawing_current) {
+            (Some(start), Some(current)) => Some((start, current, self.selected_tool)),
+            _ => None,
+        };
+
         // Get board name from index
         let board_name = if let AppView::Board(ref id) = self.view {
             self.board_index.get_board(id).map(|m| m.name.clone())
@@ -231,7 +260,11 @@ impl Humanboard {
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
         let input_active = self.focus.is_input_active();
-        let key_context = if input_active { "CanvasInputActive" } else { "Canvas" };
+        let key_context = if input_active {
+            "CanvasInputActive"
+        } else {
+            "Canvas"
+        };
 
         let base = div()
             .size_full()
@@ -307,10 +340,33 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
                 this.toggle_command_palette(window, cx)
             }))
+            .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
+                this.close_command_palette(window, cx)
+            }))
             .on_action(
-                cx.listener(|this, _: &CloseCommandPalette, window, cx| this.close_command_palette(window, cx)),
+                cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)),
             )
-            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)))
+            .on_action(cx.listener(|this, _: &ToolSelect, _, cx| {
+                this.selected_tool = crate::types::ToolType::Select;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolText, _, cx| {
+                this.selected_tool = crate::types::ToolType::Text;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolArrow, _, cx| {
+                this.selected_tool = crate::types::ToolType::Arrow;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToolShape, _, cx| {
+                this.selected_tool = crate::types::ToolType::Shape;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &CancelTextboxEdit, _, cx| {
+                if this.editing_textbox_id.is_some() {
+                    this.cancel_textbox_editing(cx);
+                }
+            }))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 let all_paths: Vec<_> = paths.paths().to_vec();
                 if all_paths.is_empty() {
@@ -361,6 +417,7 @@ impl Humanboard {
                 cx.notify();
             }));
 
+        let selected_tool = self.selected_tool;
         let content = match preview_info {
             Some((split, size, tabs, active_tab)) => {
                 let canvas_size = 1.0 - size;
@@ -372,6 +429,14 @@ impl Humanboard {
                         .flex_row()
                         .pt(px(40.0))
                         .pb(px(28.0))
+                        .child(render_tool_dock(
+                            selected_tool,
+                            |this, tool, _, cx| {
+                                this.selected_tool = tool;
+                                cx.notify();
+                            },
+                            cx,
+                        ))
                         .child(
                             div()
                                 .flex_shrink_0()
@@ -386,7 +451,10 @@ impl Humanboard {
                                     &self.audio_webviews,
                                     &self.video_webviews,
                                     &self.spotify_app_webviews,
+                                    self.editing_textbox_id,
+                                    self.textbox_input.as_ref(),
                                     marquee,
+                                    drawing_preview,
                                     cx,
                                 )),
                         )
@@ -421,70 +489,107 @@ impl Humanboard {
                         }),
                     SplitDirection::Horizontal => base
                         .flex()
-                        .flex_col()
+                        .flex_row()
                         .pt(px(40.0))
                         .pb(px(28.0))
+                        .child(render_tool_dock(
+                            selected_tool,
+                            |this, tool, _, cx| {
+                                this.selected_tool = tool;
+                                cx.notify();
+                            },
+                            cx,
+                        ))
                         .child(
                             div()
-                                .flex_shrink_0()
-                                .h(Fraction(canvas_size))
-                                .w_full()
-                                .child(render_canvas_area(
-                                    canvas_offset,
-                                    zoom,
-                                    &items,
-                                    &selected_items,
-                                    &self.youtube_webviews,
-                                    &self.audio_webviews,
-                                    &self.video_webviews,
-                                    &self.spotify_app_webviews,
-                                    marquee,
-                                    cx,
-                                )),
-                        )
-                        .child(render_splitter(SplitDirection::Horizontal, cx))
-                        .child({
-                            let bg = cx.theme().background;
-                            div()
-                                .flex_shrink_0()
-                                .h(Fraction(preview_size))
-                                .w_full()
-                                .bg(bg)
+                                .flex_1()
+                                .h_full()
                                 .flex()
                                 .flex_col()
-                                .overflow_hidden()
-                                .child(render_tab_bar(
-                                    tabs,
-                                    active_tab,
-                                    &self.preview_tab_scroll,
-                                    cx,
-                                ))
                                 .child(
                                     div()
-                                        .id(ElementId::Name(
-                                            format!("tab-container-h-{}", active_tab).into(),
-                                        ))
-                                        .flex_1()
-                                        .overflow_hidden()
-                                        .when_some(tabs.get(active_tab), |d, tab| {
-                                            d.child(render_tab_content(tab, true, active_tab, cx))
-                                        }),
+                                        .flex_shrink_0()
+                                        .h(Fraction(canvas_size))
+                                        .w_full()
+                                        .child(render_canvas_area(
+                                            canvas_offset,
+                                            zoom,
+                                            &items,
+                                            &selected_items,
+                                            &self.youtube_webviews,
+                                            &self.audio_webviews,
+                                            &self.video_webviews,
+                                            &self.spotify_app_webviews,
+                                            self.editing_textbox_id,
+                                            self.textbox_input.as_ref(),
+                                            marquee,
+                                            drawing_preview,
+                                            cx,
+                                        )),
                                 )
-                        }),
+                                .child(render_splitter(SplitDirection::Horizontal, cx))
+                                .child({
+                                    let bg = cx.theme().background;
+                                    div()
+                                        .flex_shrink_0()
+                                        .h(Fraction(preview_size))
+                                        .w_full()
+                                        .bg(bg)
+                                        .flex()
+                                        .flex_col()
+                                        .overflow_hidden()
+                                        .child(render_tab_bar(
+                                            tabs,
+                                            active_tab,
+                                            &self.preview_tab_scroll,
+                                            cx,
+                                        ))
+                                        .child(
+                                            div()
+                                                .id(ElementId::Name(
+                                                    format!("tab-container-h-{}", active_tab)
+                                                        .into(),
+                                                ))
+                                                .flex_1()
+                                                .overflow_hidden()
+                                                .when_some(tabs.get(active_tab), |d, tab| {
+                                                    d.child(render_tab_content(
+                                                        tab, true, active_tab, cx,
+                                                    ))
+                                                }),
+                                        )
+                                }),
+                        ),
                 }
             }
-            None => base.pt(px(40.0)).pb(px(28.0)).child(render_canvas_area(
-                canvas_offset,
-                zoom,
-                &items,
-                &selected_items,
-                &self.youtube_webviews,
-                &self.audio_webviews,
-                &self.video_webviews,
-                &self.spotify_app_webviews,
-                marquee,
-                cx,
-            )),
+            None => base
+                .flex()
+                .flex_row()
+                .pt(px(40.0))
+                .pb(px(28.0))
+                .child(render_tool_dock(
+                    selected_tool,
+                    |this, tool, _, cx| {
+                        this.selected_tool = tool;
+                        cx.notify();
+                    },
+                    cx,
+                ))
+                .child(div().flex_1().h_full().child(render_canvas_area(
+                    canvas_offset,
+                    zoom,
+                    &items,
+                    &selected_items,
+                    &self.youtube_webviews,
+                    &self.audio_webviews,
+                    &self.video_webviews,
+                    &self.spotify_app_webviews,
+                    self.editing_textbox_id,
+                    self.textbox_input.as_ref(),
+                    marquee,
+                    drawing_preview,
+                    cx,
+                ))),
         }
         .child(render_footer_bar(
             fps,

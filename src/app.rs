@@ -7,6 +7,7 @@ use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
 use crate::spotify_auth::SpotifyAuthFlow;
 use crate::spotify_webview::SpotifyAppWebView;
+use crate::types::{ItemContent, ToolType};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
@@ -195,6 +196,13 @@ pub struct Humanboard {
 
     // Pan animation state
     pub pan_animation: Option<PanAnimation>,
+
+    // Tool dock state
+    pub selected_tool: ToolType,
+    pub drawing_start: Option<Point<Pixels>>, // Start position for drawing shapes/arrows
+    pub drawing_current: Option<Point<Pixels>>, // Current position while drawing (for preview)
+    pub editing_textbox_id: Option<u64>,      // ID of textbox being edited
+    pub textbox_input: Option<Entity<gpui_component::input::InputState>>, // Input for editing textbox
 }
 
 /// Animation state for smooth panning to a target position
@@ -257,6 +265,11 @@ impl Humanboard {
             preview_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
             pan_animation: None,
+            selected_tool: ToolType::default(),
+            drawing_start: None,
+            drawing_current: None,
+            editing_textbox_id: None,
+            textbox_input: None,
         }
     }
 
@@ -355,7 +368,10 @@ impl Humanboard {
     }
 
     pub fn toggle_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         } else {
             cx.set_global(crate::render::overlays::ThemeDropdownOpen);
@@ -364,7 +380,10 @@ impl Humanboard {
     }
 
     pub fn close_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         }
         cx.notify();
@@ -380,9 +399,11 @@ impl Humanboard {
 
         // Open the auth URL in the browser
         if let Err(e) = open::that(&auth_url) {
-            self.toast_manager.push(crate::notifications::Toast::error(
-                format!("Failed to open browser: {}", e),
-            ));
+            self.toast_manager
+                .push(crate::notifications::Toast::error(format!(
+                    "Failed to open browser: {}",
+                    e
+                )));
             return;
         }
 
@@ -415,15 +436,18 @@ impl Humanboard {
                                     format!("Failed to save tokens: {}", e),
                                 ));
                             } else {
-                                self.toast_manager.push(crate::notifications::Toast::success(
-                                    "Connected to Spotify!".to_string(),
-                                ));
+                                self.toast_manager
+                                    .push(crate::notifications::Toast::success(
+                                        "Connected to Spotify!".to_string(),
+                                    ));
                             }
                         }
                         Err(e) => {
-                            self.toast_manager.push(crate::notifications::Toast::error(
-                                format!("Token exchange failed: {}", e),
-                            ));
+                            self.toast_manager
+                                .push(crate::notifications::Toast::error(format!(
+                                    "Token exchange failed: {}",
+                                    e
+                                )));
                         }
                     }
                 }
@@ -433,9 +457,11 @@ impl Humanboard {
             }
             Some(Err(e)) => {
                 // Auth failed
-                self.toast_manager.push(crate::notifications::Toast::error(
-                    format!("Spotify auth failed: {}", e),
-                ));
+                self.toast_manager
+                    .push(crate::notifications::Toast::error(format!(
+                        "Spotify auth failed: {}",
+                        e
+                    )));
                 self.spotify_auth_flow = None;
                 self.spotify_connecting = false;
                 cx.notify();
@@ -449,13 +475,16 @@ impl Humanboard {
 
     pub fn disconnect_spotify(&mut self, cx: &mut Context<Self>) {
         if let Err(e) = crate::spotify_auth::disconnect() {
-            self.toast_manager.push(crate::notifications::Toast::error(
-                format!("Failed to disconnect: {}", e),
-            ));
+            self.toast_manager
+                .push(crate::notifications::Toast::error(format!(
+                    "Failed to disconnect: {}",
+                    e
+                )));
         } else {
-            self.toast_manager.push(crate::notifications::Toast::success(
-                "Disconnected from Spotify".to_string(),
-            ));
+            self.toast_manager
+                .push(crate::notifications::Toast::success(
+                    "Disconnected from Spotify".to_string(),
+                ));
         }
         cx.notify();
     }
@@ -477,9 +506,10 @@ impl Humanboard {
 
         if let Some(ref mut board) = self.board {
             // Check if there's already a SpotifyApp item on the board
-            let has_spotify_app = board.items.iter().any(|item| {
-                matches!(item.content, crate::types::ItemContent::SpotifyApp)
-            });
+            let has_spotify_app = board
+                .items
+                .iter()
+                .any(|item| matches!(item.content, crate::types::ItemContent::SpotifyApp));
 
             if has_spotify_app {
                 self.toast_manager.push(crate::notifications::Toast::info(
@@ -1504,12 +1534,8 @@ impl Humanboard {
         // Account for preview panel if open
         let (canvas_width, canvas_height) = if let Some(ref preview) = self.preview {
             match preview.split {
-                SplitDirection::Vertical => {
-                    ((1.0 - preview.size) * window_width, window_height)
-                }
-                SplitDirection::Horizontal => {
-                    (window_width, (1.0 - preview.size) * window_height)
-                }
+                SplitDirection::Vertical => ((1.0 - preview.size) * window_width, window_height),
+                SplitDirection::Horizontal => (window_width, (1.0 - preview.size) * window_height),
             }
         } else {
             (window_width, window_height)
@@ -1540,7 +1566,8 @@ impl Humanboard {
             let overlaps_left = item_x < 0.0;
             let overlaps_right = item_x + item_w > canvas_width;
 
-            let is_visible = !overlaps_header && !overlaps_footer && !overlaps_left && !overlaps_right;
+            let is_visible =
+                !overlaps_header && !overlaps_footer && !overlaps_left && !overlaps_right;
 
             // Update YouTube webview visibility
             if let Some(webview) = self.youtube_webviews.get(&item.id) {
@@ -1719,5 +1746,121 @@ impl Humanboard {
 
     pub fn pdf_zoom_reset(&mut self, _cx: &mut Context<Self>) {
         // WebView handles PDF zoom internally
+    }
+
+    // ==================== TextBox Editing Methods ====================
+
+    /// Start editing a textbox inline on the canvas
+    pub fn start_textbox_editing(
+        &mut self,
+        item_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Get the current text from the item
+        let current_text = if let Some(ref board) = self.board {
+            board.get_item(item_id).and_then(|item| {
+                if let ItemContent::TextBox { text, .. } = &item.content {
+                    Some(text.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+
+        if let Some(text) = current_text {
+            // Count lines to position cursor at end
+            let lines: Vec<&str> = text.lines().collect();
+            let last_line = lines.len().saturating_sub(1) as u32;
+            let last_char = lines.last().map(|l| l.len() as u32).unwrap_or(0);
+
+            // Create the input with multiline support (code_editor enables multiline)
+            let input = cx.new(|cx| {
+                InputState::new(window, cx)
+                    .code_editor("plaintext") // Enable multiline editing
+                    .line_number(false) // No line numbers for textbox
+                    .soft_wrap(true) // Wrap long lines
+                    .default_value(text)
+            });
+
+            // Focus the input and move cursor to end
+            input.update(cx, |state, cx| {
+                state.focus(window, cx);
+                // Move cursor to end of text (last line, last character)
+                state.set_cursor_position(
+                    gpui_component::input::Position {
+                        line: last_line,
+                        character: last_char,
+                    },
+                    window,
+                    cx,
+                );
+            });
+
+            // Subscribe to input events
+            // Note: PressEnter is NOT handled here - Enter creates new lines in multiline mode
+            // Use Escape or click outside to finish editing
+            cx.subscribe(
+                &input,
+                |this, input, event: &gpui_component::input::InputEvent, cx| {
+                    match event {
+                        gpui_component::input::InputEvent::Change { .. } => {
+                            // Update text as user types
+                            if let Some(item_id) = this.editing_textbox_id {
+                                let new_text = input.read(cx).text().to_string();
+                                if let Some(ref mut board) = this.board {
+                                    if let Some(item) = board.get_item_mut(item_id) {
+                                        if let ItemContent::TextBox { text, .. } = &mut item.content
+                                        {
+                                            *text = new_text;
+                                        }
+                                    }
+                                    board.mark_dirty();
+                                }
+                            }
+                        }
+                        gpui_component::input::InputEvent::Blur => {
+                            // Save on blur (click outside)
+                            this.finish_textbox_editing(cx);
+                        }
+                        _ => {}
+                    }
+                },
+            )
+            .detach();
+
+            self.editing_textbox_id = Some(item_id);
+            self.textbox_input = Some(input);
+            cx.notify();
+        }
+    }
+
+    /// Finish editing and save the textbox content
+    pub fn finish_textbox_editing(&mut self, cx: &mut Context<Self>) {
+        if let Some(item_id) = self.editing_textbox_id.take() {
+            if let Some(input) = self.textbox_input.take() {
+                let new_text = input.read(cx).text().to_string();
+
+                if let Some(ref mut board) = self.board {
+                    if let Some(item) = board.get_item_mut(item_id) {
+                        if let ItemContent::TextBox { text, .. } = &mut item.content {
+                            *text = new_text;
+                        }
+                    }
+                    board.push_history();
+                    board.flush_save();
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    /// Cancel textbox editing without saving
+    pub fn cancel_textbox_editing(&mut self, cx: &mut Context<Self>) {
+        self.editing_textbox_id = None;
+        self.textbox_input = None;
+        cx.notify();
     }
 }

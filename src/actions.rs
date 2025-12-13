@@ -42,7 +42,14 @@ actions!(
         // Command palette navigation
         CmdPaletteUp,
         CmdPaletteDown,
-        CmdPaletteSelect
+        CmdPaletteSelect,
+        // Tool selection
+        ToolSelect,
+        ToolText,
+        ToolArrow,
+        ToolShape,
+        // TextBox editing
+        CancelTextboxEdit
     ]
 );
 
@@ -115,6 +122,7 @@ impl Humanboard {
                     .filter_map(|item| match &item.content {
                         crate::types::ItemContent::Pdf { path, .. } => Some(path.clone()),
                         crate::types::ItemContent::Markdown { path, .. } => Some(path.clone()),
+                        crate::types::ItemContent::Code { path, .. } => Some(path.clone()),
                         _ => None,
                     })
                     .collect();

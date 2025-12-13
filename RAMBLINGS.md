@@ -2,3 +2,7 @@ How about this? have a toggle button on the bottom to HIDE THE CANVAS ITSELF? th
 
 
 The Canvas is updated live as well with files being added and shit but gives the user a visual aid on how to do things...
+
+
+the code files preview's dont go away when asset is removed from canvas.
+like markdown files and pdfs do...

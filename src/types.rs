@@ -11,6 +11,35 @@ pub struct CanvasItem {
     pub content: ItemContent,
 }
 
+/// Tool types for the Miro-style tool dock
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToolType {
+    #[default]
+    Select,
+    Text,
+    Arrow,
+    Shape,
+}
+
+/// Shape types for the Shape tool
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShapeType {
+    #[default]
+    Rectangle,
+    RoundedRect,
+    Ellipse,
+}
+
+/// Arrow head styles
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ArrowHead {
+    None,
+    #[default]
+    Arrow,
+    Diamond,
+    Circle,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ItemContent {
     Image(PathBuf),
@@ -23,7 +52,7 @@ pub enum ItemContent {
     },
     Link(String),
     YouTube(String), // Video ID
-    SpotifyApp, // Full Spotify web player
+    SpotifyApp,      // Full Spotify web player
     Markdown {
         path: PathBuf,
         title: String,
@@ -32,6 +61,26 @@ pub enum ItemContent {
     Code {
         path: PathBuf,
         language: String, // e.g., "rust", "python", "javascript"
+    },
+    /// Editable text box (Miro-style)
+    TextBox {
+        text: String,
+        font_size: f32,
+        color: String, // hex color like "#ffffff"
+    },
+    /// Arrow/line connecting points
+    Arrow {
+        end_offset: (f32, f32), // relative offset from item position to end point
+        color: String,
+        thickness: f32,
+        head_style: ArrowHead,
+    },
+    /// Shape with optional fill and border
+    Shape {
+        shape_type: ShapeType,
+        fill_color: Option<String>,
+        border_color: String,
+        border_width: f32,
     },
 }
 
@@ -159,6 +208,14 @@ impl ItemContent {
             ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
             ItemContent::Code { .. } => (200.0, 36.0), // Simple filename button like markdown
+            ItemContent::TextBox { .. } => (200.0, 100.0), // Default text box size
+            ItemContent::Arrow { end_offset, .. } => {
+                // Size based on arrow length
+                let w = end_offset.0.abs().max(50.0);
+                let h = end_offset.1.abs().max(20.0);
+                (w, h)
+            }
+            ItemContent::Shape { .. } => (150.0, 100.0), // Default shape size
         }
     }
 
@@ -184,6 +241,13 @@ impl ItemContent {
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
                 .to_string(),
+            ItemContent::TextBox { .. } => "TextBox".to_string(),
+            ItemContent::Arrow { .. } => "Arrow".to_string(),
+            ItemContent::Shape { shape_type, .. } => match shape_type {
+                ShapeType::Rectangle => "Rectangle".to_string(),
+                ShapeType::RoundedRect => "Rounded Rect".to_string(),
+                ShapeType::Ellipse => "Ellipse".to_string(),
+            },
         }
     }
 
@@ -215,6 +279,13 @@ impl ItemContent {
                 "toml" => "TOML",
                 "bash" => "SHELL",
                 _ => "CODE",
+            },
+            ItemContent::TextBox { .. } => "TEXT",
+            ItemContent::Arrow { .. } => "ARROW",
+            ItemContent::Shape { shape_type, .. } => match shape_type {
+                ShapeType::Rectangle => "RECT",
+                ShapeType::RoundedRect => "RRECT",
+                ShapeType::Ellipse => "ELLIPSE",
             },
         }
     }

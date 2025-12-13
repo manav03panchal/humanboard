@@ -1,9 +1,9 @@
 use gpui::*;
 use humanboard::actions::{
-    CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
-    DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab, NudgeDown, NudgeLeft, NudgeRight,
-    NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo, SaveCode, SelectAll, ShowShortcuts,
-    ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown,
+    CmdPaletteSelect, CmdPaletteUp, DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab,
+    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo,
+    SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use std::borrow::Cow;
@@ -122,9 +122,7 @@ fn main() {
         ]);
 
         // Code editor shortcuts (only active when editing code)
-        cx.bind_keys([
-            KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor")),
-        ]);
+        cx.bind_keys([KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor"))]);
 
         // Canvas-only shortcuts (not active when text input is focused)
         // These use "Canvas" context which is only set when no input is active
@@ -148,13 +146,16 @@ fn main() {
         // These are safe shortcuts that don't conflict with text input
         cx.bind_keys([
             KeyBinding::new("escape", CloseCommandPalette, Some("CanvasInputActive")),
+            KeyBinding::new("escape", CancelTextboxEdit, Some("CanvasInputActive")),
             KeyBinding::new("cmd-k", ToggleCommandPalette, Some("CanvasInputActive")),
         ]);
 
         // Landing page shortcuts
-        cx.bind_keys([
-            KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Landing")),
-        ]);
+        cx.bind_keys([KeyBinding::new(
+            "cmd-k",
+            ToggleCommandPalette,
+            Some("Landing"),
+        )]);
 
         // Command palette navigation (higher priority than Input context)
         cx.bind_keys([

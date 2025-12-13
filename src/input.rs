@@ -1,5 +1,6 @@
 use crate::app::{Humanboard, SplitDirection};
-use crate::types::ItemContent;
+use crate::render::dock::DOCK_WIDTH;
+use crate::types::{ArrowHead, ItemContent, ShapeType, ToolType};
 use gpui::*;
 
 impl Humanboard {
@@ -54,16 +55,32 @@ impl Humanboard {
         // Clicking on canvas - reset focus to canvas
         self.focus.force_canvas_focus(window);
 
+        // If a drawing tool is selected, prioritize drawing over item selection
+        let header_offset = 40.0;
+        let dock_offset = DOCK_WIDTH;
+
+        if matches!(
+            self.selected_tool,
+            ToolType::Text | ToolType::Arrow | ToolType::Shape
+        ) {
+            // Start drawing regardless of what's under the cursor
+            self.drawing_start = Some(mouse_pos);
+            self.drawing_current = Some(mouse_pos);
+            self.selected_items.clear();
+            cx.notify();
+            return;
+        }
+
         // Check if clicking on an item (in reverse order so top items are checked first)
         // Extract only the ID to avoid cloning the entire item
-        // Account for 40px header offset
-        let header_offset = 40.0;
+        // Account for 40px header offset and dock width
         let clicked_item_id = board
             .items
             .iter()
             .rev()
             .find(|item| {
-                let scaled_x = item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
+                let scaled_x =
+                    item.position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
                 let scaled_y =
                     item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
                 let scaled_width = item.size.0 * board.zoom;
@@ -94,8 +111,19 @@ impl Humanboard {
                 self.selected_items.insert(item_id);
             }
 
-            // Handle double-click for PDF/Markdown/Code preview
+            // Handle double-click for PDF/Markdown/Code preview or TextBox editing
             if event.click_count == 2 {
+                // Check if it's a TextBox - start editing
+                let is_textbox = board
+                    .get_item(item_id)
+                    .map(|item| matches!(&item.content, ItemContent::TextBox { .. }))
+                    .unwrap_or(false);
+
+                if is_textbox {
+                    self.start_textbox_editing(item_id, window, cx);
+                    return;
+                }
+
                 let content_path = board
                     .get_item(item_id)
                     .and_then(|item| match &item.content {
@@ -119,7 +147,8 @@ impl Humanboard {
 
             if let Some((position, size, _content)) = item_info {
                 let is_resizable = true;
-                let scaled_x = position.0 * board.zoom + f32::from(board.canvas_offset.x);
+                let scaled_x =
+                    position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
                 let scaled_y =
                     position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
                 let scaled_width = size.0 * board.zoom;
@@ -148,13 +177,34 @@ impl Humanboard {
                 }
             }
         } else {
-            // Clicked on empty canvas - start marquee selection
-            self.marquee_start = Some(mouse_pos);
-            self.marquee_current = Some(mouse_pos);
+            // Clicked on empty canvas
+            // Check if we have a drawing tool selected
+            match self.selected_tool {
+                ToolType::Select => {
+                    // Start marquee selection
+                    self.marquee_start = Some(mouse_pos);
+                    self.marquee_current = Some(mouse_pos);
 
-            // Clear selection unless shift is held
-            if !event.modifiers.shift {
-                self.selected_items.clear();
+                    // Clear selection unless shift is held
+                    if !event.modifiers.shift {
+                        self.selected_items.clear();
+                    }
+                }
+                ToolType::Text => {
+                    // Start drawing a text box (drag to size)
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
+                ToolType::Arrow => {
+                    // Start drawing an arrow
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
+                ToolType::Shape => {
+                    // Start drawing a shape
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
             }
         }
 
@@ -164,7 +214,7 @@ impl Humanboard {
     pub fn handle_mouse_up(
         &mut self,
         event: &MouseUpEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         // Only push history on mouse up if we were dragging/resizing
@@ -193,8 +243,9 @@ impl Humanboard {
                 if (max_x - min_x) > 5.0 || (max_y - min_y) > 5.0 {
                     // Find all items that intersect with marquee
                     for item in &board.items {
-                        let item_x =
-                            item.position.0 * board.zoom + f32::from(board.canvas_offset.x);
+                        let item_x = item.position.0 * board.zoom
+                            + f32::from(board.canvas_offset.x)
+                            + DOCK_WIDTH;
                         let item_y = item.position.1 * board.zoom
                             + f32::from(board.canvas_offset.y)
                             + header_offset;
@@ -224,6 +275,121 @@ impl Humanboard {
             }
         }
 
+        // Finalize arrow/shape drawing
+        if let Some(start) = self.drawing_start {
+            let end = event.position;
+            let header_offset = 40.0;
+
+            // Calculate screen distance first (before converting to canvas coords)
+            let screen_width = (f32::from(end.x) - f32::from(start.x)).abs();
+            let screen_height = (f32::from(end.y) - f32::from(start.y)).abs();
+
+            // Only create if dragged at least 10 pixels
+            if screen_width < 10.0 && screen_height < 10.0 {
+                self.drawing_start = None;
+                self.drawing_current = None;
+                self.selected_tool = ToolType::Select;
+                cx.notify();
+                return;
+            }
+
+            // Calculate canvas positions
+            let start_canvas = self.screen_to_canvas(start, header_offset);
+            let end_canvas = self.screen_to_canvas(end, header_offset);
+
+            let start_x = f32::from(start_canvas.x);
+            let start_y = f32::from(start_canvas.y);
+            let end_x = f32::from(end_canvas.x);
+            let end_y = f32::from(end_canvas.y);
+
+            // Calculate size in canvas coords
+            let width = (end_x - start_x).abs().max(20.0);
+            let height = (end_y - start_y).abs().max(20.0);
+
+            // Get top-left corner for item position
+            let pos_x = start_x.min(end_x);
+            let pos_y = start_y.min(end_y);
+
+            match self.selected_tool {
+                ToolType::Arrow => {
+                    if let Some(ref mut board) = self.board {
+                        // Arrow: position is top-left of bounding box
+                        // start_offset/end_offset are relative to the bounding box origin
+                        let box_x = start_x.min(end_x);
+                        let box_y = start_y.min(end_y);
+                        let box_w = (end_x - start_x).abs().max(20.0);
+                        let box_h = (end_y - start_y).abs().max(20.0);
+
+                        // Calculate arrow start/end relative to bounding box top-left
+                        let arrow_start = (start_x - box_x, start_y - box_y);
+                        let arrow_end = (end_x - box_x, end_y - box_y);
+                        // end_offset is vector from start to end (for rendering)
+                        let end_offset = (arrow_end.0 - arrow_start.0, arrow_end.1 - arrow_start.1);
+
+                        let id = board.add_item(
+                            point(px(box_x), px(box_y)),
+                            ItemContent::Arrow {
+                                end_offset,
+                                color: "".to_string(), // Empty = use theme foreground
+                                thickness: 2.0,
+                                head_style: ArrowHead::Arrow,
+                            },
+                        );
+                        if let Some(item) = board.get_item_mut(id) {
+                            item.size = (box_w, box_h);
+                        }
+                        self.selected_items.clear();
+                        self.selected_items.insert(id);
+                    }
+                }
+                ToolType::Shape => {
+                    if let Some(ref mut board) = self.board {
+                        let id = board.add_item(
+                            point(px(pos_x), px(pos_y)),
+                            ItemContent::Shape {
+                                shape_type: ShapeType::Rectangle,
+                                fill_color: None,
+                                border_color: "".to_string(), // Empty = use theme foreground
+                                border_width: 2.0,
+                            },
+                        );
+                        // Update size based on drawn dimensions
+                        if let Some(item) = board.get_item_mut(id) {
+                            item.size = (width, height);
+                        }
+                        self.selected_items.clear();
+                        self.selected_items.insert(id);
+                    }
+                }
+                ToolType::Text => {
+                    if let Some(ref mut board) = self.board {
+                        let id = board.add_item(
+                            point(px(pos_x), px(pos_y)),
+                            ItemContent::TextBox {
+                                text: "".to_string(),
+                                font_size: 16.0,
+                                color: "".to_string(), // Empty = use theme foreground
+                            },
+                        );
+                        // Update size based on drawn dimensions
+                        if let Some(item) = board.get_item_mut(id) {
+                            item.size = (width.max(100.0), height.max(40.0));
+                        }
+                        self.selected_items.clear();
+                        self.selected_items.insert(id);
+                        // Start editing immediately
+                        self.start_textbox_editing(id, window, cx);
+                    }
+                }
+                _ => {}
+            }
+
+            // Switch back to select tool after drawing
+            self.selected_tool = ToolType::Select;
+            self.drawing_start = None;
+            self.drawing_current = None;
+        }
+
         self.dragging = false;
         self.last_mouse_pos = None;
         self.dragging_item = None;
@@ -236,6 +402,19 @@ impl Humanboard {
         self.marquee_start = None;
         self.marquee_current = None;
         cx.notify();
+    }
+
+    /// Convert screen position to canvas position (returns Point<Pixels>)
+    fn screen_to_canvas(&self, pos: Point<Pixels>, header_offset: f32) -> Point<Pixels> {
+        if let Some(ref board) = self.board {
+            // Account for dock width on the left side
+            let x = (f32::from(pos.x) - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
+            let y =
+                (f32::from(pos.y) - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
+            point(px(x), px(y))
+        } else {
+            pos
+        }
     }
 
     pub fn handle_mouse_move(
@@ -281,29 +460,51 @@ impl Humanboard {
                     let delta_x = f32::from(event.position.x - start_pos.x) / zoom;
                     let delta_y = f32::from(event.position.y - start_pos.y) / zoom;
 
-                    // Check if this is a markdown item - if so, maintain aspect ratio
-                    let is_markdown = board
-                        .get_item(item_id)
-                        .map(|item| matches!(&item.content, ItemContent::Markdown { .. }))
-                        .unwrap_or(false);
+                    // Check item type for special resize handling
+                    let item_type = board.get_item(item_id).map(|item| match &item.content {
+                        ItemContent::Markdown { .. } => "markdown",
+                        ItemContent::Arrow { end_offset, .. } => {
+                            // Store arrow direction for later
+                            if end_offset.0 >= 0.0 && end_offset.1 >= 0.0 {
+                                "arrow_pp" // positive-positive (top-left to bottom-right)
+                            } else if end_offset.0 < 0.0 && end_offset.1 >= 0.0 {
+                                "arrow_np" // negative-positive
+                            } else if end_offset.0 >= 0.0 && end_offset.1 < 0.0 {
+                                "arrow_pn" // positive-negative
+                            } else {
+                                "arrow_nn" // negative-negative
+                            }
+                        }
+                        _ => "other",
+                    });
 
-                    let (new_width, new_height) = if is_markdown {
-                        // Markdown cards have fixed aspect ratio of 200:36 (5.56:1)
-                        const MD_ASPECT_RATIO: f32 = 200.0 / 36.0;
-                        // Use width change to determine size, maintain aspect ratio
-                        let width = (start_size.0 + delta_x).max(100.0);
-                        let height = width / MD_ASPECT_RATIO;
-                        (width, height)
-                    } else {
-                        // Other items can resize freely
-                        let width = (start_size.0 + delta_x).max(50.0);
-                        let height = (start_size.1 + delta_y).max(50.0);
-                        (width, height)
+                    let (new_width, new_height) = match item_type.as_deref() {
+                        Some("markdown") => {
+                            // Markdown cards have fixed aspect ratio of 200:36 (5.56:1)
+                            const MD_ASPECT_RATIO: f32 = 200.0 / 36.0;
+                            let width = (start_size.0 + delta_x).max(100.0);
+                            let height = width / MD_ASPECT_RATIO;
+                            (width, height)
+                        }
+                        _ => {
+                            // Other items can resize freely
+                            let width = (start_size.0 + delta_x).max(50.0);
+                            let height = (start_size.1 + delta_y).max(50.0);
+                            (width, height)
+                        }
                     };
 
                     // Use get_item_mut for O(1) lookup
                     if let Some(item) = board.get_item_mut(item_id) {
                         item.size = (new_width, new_height);
+
+                        // For arrows, also update end_offset to match new size
+                        if let ItemContent::Arrow { end_offset, .. } = &mut item.content {
+                            // Preserve direction (sign) while updating magnitude
+                            let sign_x = if end_offset.0 >= 0.0 { 1.0 } else { -1.0 };
+                            let sign_y = if end_offset.1 >= 0.0 { 1.0 } else { -1.0 };
+                            *end_offset = (new_width * sign_x, new_height * sign_y);
+                        }
                     }
                     // Mark dirty but don't save immediately (debounced)
                     board.mark_dirty();
@@ -317,7 +518,8 @@ impl Humanboard {
                 let canvas_offset_x = f32::from(board.canvas_offset.x);
                 let canvas_offset_y = f32::from(board.canvas_offset.y);
                 let header_offset = 40.0; // Account for header bar
-                let new_x = (f32::from(event.position.x - offset.x) - canvas_offset_x) / zoom;
+                let new_x =
+                    (f32::from(event.position.x - offset.x) - DOCK_WIDTH - canvas_offset_x) / zoom;
                 let new_y =
                     (f32::from(event.position.y - offset.y) - canvas_offset_y - header_offset)
                         / zoom;
@@ -363,6 +565,10 @@ impl Humanboard {
         } else if self.marquee_start.is_some() {
             // Update marquee selection rectangle
             self.marquee_current = Some(event.position);
+            cx.notify();
+        } else if self.drawing_start.is_some() {
+            // Update drawing preview position
+            self.drawing_current = Some(event.position);
             cx.notify();
         }
     }
