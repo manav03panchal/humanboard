@@ -92,8 +92,40 @@ impl AssetSource for Assets {
     }
 }
 
+fn open_main_window(cx: &mut App) {
+    cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::new(px(100.0), px(100.0)),
+                size: Size {
+                    width: px(1400.0),
+                    height: px(900.0),
+                },
+            })),
+            titlebar: Some(TitlebarOptions {
+                title: Some("Humanboard".into()),
+                appears_transparent: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        |window, cx| {
+            let app_view = cx.new(Humanboard::new);
+            cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
+        },
+    )
+    .unwrap();
+}
+
 fn main() {
-    Application::new().with_assets(Assets).run(|cx: &mut App| {
+    let app = Application::new().with_assets(Assets);
+    app.on_reopen(|cx| {
+        // Reopen window when dock icon is clicked and no windows are open
+        if cx.windows().is_empty() {
+            open_main_window(cx);
+        }
+    });
+    app.run(|cx: &mut App| {
         cx.activate(true);
         gpui_component::init(cx);
 
@@ -173,27 +205,6 @@ fn main() {
             KeyBinding::new("escape", OpenSettings, Some("Modal")), // Escape closes settings
         ]);
 
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: Point::new(px(100.0), px(100.0)),
-                    size: Size {
-                        width: px(1400.0),
-                        height: px(900.0),
-                    },
-                })),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Humanboard".into()),
-                    appears_transparent: true,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |window, cx| {
-                let app_view = cx.new(Humanboard::new);
-                cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
-            },
-        )
-        .unwrap();
+        open_main_window(cx);
     });
 }
