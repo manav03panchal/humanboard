@@ -75,6 +75,8 @@ pub struct FocusManager {
     pub modal: FocusHandle,
     /// The currently active focus context
     active_context: FocusContext,
+    /// Whether focus needs to be restored to canvas on next render
+    needs_focus_restore: bool,
 }
 
 impl FocusManager {
@@ -87,6 +89,7 @@ impl FocusManager {
             landing: cx.focus_handle(),
             modal: cx.focus_handle(),
             active_context: FocusContext::Canvas,
+            needs_focus_restore: false,
         }
     }
 
@@ -154,6 +157,29 @@ impl FocusManager {
         // Only release if this context is currently active
         if self.active_context == context {
             self.focus(FocusContext::Canvas, window);
+        }
+    }
+
+    /// Force release to canvas regardless of current context
+    ///
+    /// Used when we need to ensure canvas has focus (e.g., after blur events)
+    pub fn force_canvas_focus(&mut self, window: &mut Window) {
+        self.focus(FocusContext::Canvas, window);
+    }
+
+    /// Mark that focus should return to canvas on next opportunity
+    /// Used when window isn't available (e.g., Blur callbacks)
+    pub fn mark_needs_canvas_focus(&mut self) {
+        self.active_context = FocusContext::Canvas;
+        self.needs_focus_restore = true;
+    }
+
+    /// Check if focus needs to be restored and do so if needed
+    /// Call this at the start of render when window is available
+    pub fn restore_focus_if_needed(&mut self, window: &mut Window) {
+        if self.needs_focus_restore {
+            self.canvas.focus(window);
+            self.needs_focus_restore = false;
         }
     }
 

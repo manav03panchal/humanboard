@@ -53,6 +53,9 @@ impl Render for Humanboard {
             window.request_animation_frame();
         }
 
+        // Restore focus to canvas if needed (e.g., after closing command palette via blur)
+        self.focus.restore_focus_if_needed(window);
+
         // Route based on current view
         let content = match &self.view {
             AppView::Landing => self.render_landing_view(cx),

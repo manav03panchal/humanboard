@@ -532,6 +532,8 @@ impl Humanboard {
         self.search_results.clear();
         self.selected_result = 0;
         self.cmd_palette_mode = CmdPaletteMode::Items;
+        // Mark that focus should return to canvas (actual focus happens in render)
+        self.focus.mark_needs_canvas_focus();
         cx.notify();
     }
 
