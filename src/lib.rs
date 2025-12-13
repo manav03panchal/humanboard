@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod app;
+pub mod focus;
 pub mod audio_webview;
 pub mod board;
 pub mod board_index;

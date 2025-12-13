@@ -7,13 +7,13 @@
 //! - Command palette popup
 //! - Settings modal
 
-use crate::actions::{CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp};
+use crate::actions::{CmdPaletteDown, CmdPaletteUp, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::settings::Settings;
 use crate::spotify_auth;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{Enter, Input, InputState, MoveDown, MoveUp};
+use gpui_component::input::{Input, InputState, MoveDown, MoveUp};
 use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 
 /// Render the header bar with navigation and integrated command palette
@@ -24,6 +24,7 @@ pub fn render_header_bar(
     selected_result: usize,
     scroll_handle: &ScrollHandle,
     palette_mode: crate::app::CmdPaletteMode,
+    palette_focus: &FocusHandle,
     cx: &mut Context<Humanboard>,
 ) -> Div {
     let has_results = !search_results.is_empty();
@@ -89,25 +90,21 @@ pub fn render_header_bar(
                 .id("cmd-palette-container")
                 .w(px(400.0))
                 .relative()
+                .track_focus(palette_focus)
                 .key_context("CommandPalette")
-                // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                // Intercept Input's MoveUp/MoveDown actions to navigate results
+                // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                 .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
                     this.select_prev_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
                     this.select_next_result(cx);
                 }))
-                .on_action(cx.listener(|this, _: &Enter, _, cx| {
-                    this.execute_command_from_action(cx);
-                }))
                 .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
                     this.select_prev_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                     this.select_next_result(cx);
-                }))
-                .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
-                    this.execute_command_from_action(cx);
                 }))
                 // Search trigger button / input
                 .child(
@@ -375,7 +372,7 @@ pub fn render_header_bar(
                                                 MouseButton::Left,
                                                 cx.listener(|this, _, window, cx| {
                                                     this.add_spotify_webview(window, cx);
-                                                    this.hide_command_palette(cx);
+                                                    this.hide_command_palette(window, cx);
                                                 }),
                                             )
                                             .child(
@@ -496,8 +493,8 @@ pub fn render_header_bar(
                                 .size(px(14.0))
                                 .text_color(muted_fg),
                         )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.toggle_settings(cx);
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.toggle_settings(window, cx);
                         })),
                 )
                 // Help button
@@ -771,7 +768,7 @@ pub fn render_command_palette(
             .pt(px(120.0))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| this.hide_command_palette(cx)),
+                cx.listener(|this, _, window, cx| this.hide_command_palette(window, cx)),
             )
             .on_scroll_wheel(|_, _, _| {})
             .child(
@@ -786,24 +783,19 @@ pub fn render_command_palette(
                     .shadow_lg()
                     .overflow_hidden()
                     .key_context("CommandPalette")
-                    // Intercept Input's MoveUp/MoveDown/Enter actions to navigate results
+                    // Intercept Input's MoveUp/MoveDown actions to navigate results
+                    // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                     .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
                         this.select_prev_result(cx);
                     }))
                     .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
                         this.select_next_result(cx);
                     }))
-                    .on_action(cx.listener(|this, _: &Enter, _, cx| {
-                        this.execute_command_from_action(cx);
-                    }))
                     .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
                         this.select_prev_result(cx);
                     }))
                     .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                         this.select_next_result(cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &CmdPaletteSelect, _, cx| {
-                        this.execute_command_from_action(cx);
                     }))
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .on_scroll_wheel(|_, _, _| {})
@@ -1151,6 +1143,7 @@ pub fn render_settings_modal(
     _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
     spotify_connecting: bool,
+    modal_focus: &FocusHandle,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
@@ -1182,10 +1175,12 @@ pub fn render_settings_modal(
                 this.settings_backdrop_clicked = true;
                 cx.notify();
             }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| {
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 if this.settings_backdrop_clicked {
                     this.show_settings = false;
                     this.settings_backdrop_clicked = false;
+                    // Force focus back to canvas
+                    this.focus.force_canvas_focus(window);
                 }
                 cx.notify();
             }))
@@ -1193,6 +1188,8 @@ pub fn render_settings_modal(
             .child(
                 h_flex()
                     .id("settings-modal")
+                    .track_focus(modal_focus)
+                    .key_context("Modal")
                     .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| {
                         this.settings_backdrop_clicked = false;
                     }))
@@ -1208,7 +1205,9 @@ pub fn render_settings_modal(
                     .overflow_hidden()
                     .shadow_lg()
                     .on_scroll_wheel(|_, _, _| {})
-                            .key_context("SettingsModal")
+                    .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
+                        this.toggle_settings(window, cx);
+                    }))
                             // Left sidebar
                             .child(
                                 v_flex()

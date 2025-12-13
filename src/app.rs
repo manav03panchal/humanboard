@@ -1,6 +1,7 @@
 use crate::audio_webview::AudioWebView;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
+use crate::focus::{FocusContext, FocusManager};
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
@@ -121,7 +122,8 @@ pub struct Humanboard {
     pub frame_times: Vec<Duration>,
     pub last_frame: Instant,
     pub frame_count: u64,
-    pub focus_handle: FocusHandle,
+    /// Focus manager for handling focus across different contexts
+    pub focus: FocusManager,
     pub preview: Option<PreviewPanel>,
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
@@ -205,7 +207,7 @@ impl Humanboard {
             frame_times: Vec::with_capacity(60),
             last_frame: Instant::now(),
             frame_count: 0,
-            focus_handle: cx.focus_handle(),
+            focus: FocusManager::new(cx),
             preview: None,
             dragging_splitter: false,
             splitter_drag_start: None,
@@ -236,15 +238,21 @@ impl Humanboard {
         }
     }
 
-    pub fn toggle_settings(&mut self, cx: &mut Context<Self>) {
+    pub fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
         if self.show_settings {
+            // Set focus context to Modal
+            self.focus.focus(FocusContext::Modal, window);
+
             // Initialize theme index to current theme
             let themes = crate::settings::Settings::available_themes(cx);
             self.settings_theme_index = themes
                 .iter()
                 .position(|t| t == &self.settings.theme)
                 .unwrap_or(0);
+        } else {
+            // Force focus back to canvas when closing settings
+            self.focus.force_canvas_focus(window);
         }
         cx.notify();
     }
@@ -461,6 +469,9 @@ impl Humanboard {
     }
 
     pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Set focus context to CommandPalette
+        self.focus.focus(FocusContext::CommandPalette, window);
+
         let input = cx
             .new(|cx| InputState::new(window, cx).placeholder("Type to search or use commands..."));
 
@@ -475,10 +486,8 @@ impl Humanboard {
             |this, input, event: &gpui_component::input::InputEvent, cx| {
                 match event {
                     gpui_component::input::InputEvent::PressEnter { .. } => {
-                        // Note: Enter is handled by the action handler on the container
-                        // which runs before this subscription. Don't double-handle.
-                        // Only handle if pending_command wasn't already set by action handler.
-                        if this.pending_command.is_none() && this.command_palette.is_some() {
+                        // Execute the command when Enter is pressed
+                        if this.command_palette.is_some() {
                             this.execute_command_from_subscription(cx);
                         }
                     }
@@ -488,11 +497,11 @@ impl Humanboard {
                         this.update_search_results(&text, cx);
                     }
                     gpui_component::input::InputEvent::Blur => {
-                        // Close command palette when input loses focus (click outside)
-                        // But not if we're in theme mode (user clicked theme command)
-                        if this.cmd_palette_mode != CmdPaletteMode::Themes {
-                            this.hide_command_palette(cx);
-                        }
+                        // Don't close on blur - this causes race conditions with Enter key
+                        // The palette is closed by:
+                        // - Clicking the backdrop (has its own handler)
+                        // - Pressing Escape (CloseCommandPalette action)
+                        // - Executing a command that should close it
                     }
                     _ => {}
                 }
@@ -506,11 +515,22 @@ impl Humanboard {
         self.update_search_results("", cx);
     }
 
-    pub fn hide_command_palette(&mut self, cx: &mut Context<Self>) {
+    /// Hide command palette and release focus (when window is available)
+    pub fn hide_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear_command_palette_state(cx);
+        // Release focus back to canvas
+        self.focus.release(FocusContext::CommandPalette, window);
+    }
+
+    /// Clear command palette state without focus management
+    /// Used when window is not available (e.g., from Blur callback)
+    pub fn clear_command_palette_state(&mut self, cx: &mut Context<Self>) {
         self.command_palette = None;
         self.search_results.clear();
         self.selected_result = 0;
         self.cmd_palette_mode = CmdPaletteMode::Items;
+        // Mark that focus should return to canvas (actual focus happens in render)
+        self.focus.mark_needs_canvas_focus();
         cx.notify();
     }
 
@@ -519,7 +539,7 @@ impl Humanboard {
         let text = text.trim();
 
         // Check if user typed "theme " to enter theme mode
-        if text.starts_with("theme ") || text == "theme" {
+        if text.starts_with("theme ") {
             self.cmd_palette_mode = CmdPaletteMode::Themes;
             let filter = text.strip_prefix("theme ").unwrap_or("").trim();
             let themes = Settings::available_themes(cx);
@@ -542,10 +562,17 @@ impl Humanboard {
             return;
         }
 
-        // Handle theme mode (when entered via click)
+        // Handle theme mode (when entered via click or command selection)
         if self.cmd_palette_mode == CmdPaletteMode::Themes {
             let themes = Settings::available_themes(cx);
-            if text.is_empty() {
+            // If text is just "theme" (entered via command), treat as empty filter
+            let filter = if text.eq_ignore_ascii_case("theme") {
+                ""
+            } else {
+                text
+            };
+
+            if filter.is_empty() {
                 // Show all themes
                 self.search_results = themes
                     .into_iter()
@@ -557,7 +584,7 @@ impl Humanboard {
                 self.search_results = themes
                     .into_iter()
                     .enumerate()
-                    .filter(|(_, name)| name.to_lowercase().contains(&text.to_lowercase()))
+                    .filter(|(_, name)| name.to_lowercase().contains(&filter.to_lowercase()))
                     .map(|(idx, name)| (idx as u64, name))
                     .collect();
             }
@@ -566,7 +593,31 @@ impl Humanboard {
             return;
         }
 
-        // Don't search if it's a command
+        // Check if typing a command prefix - show matching commands
+        if !text.is_empty() && text.len() <= 7 {
+            let text_lower = text.to_lowercase();
+            // Available commands with special IDs (using high numbers to avoid collision with item IDs)
+            let commands = [
+                (u64::MAX - 1, "theme", "Change theme"),
+                (u64::MAX - 2, "md", "Create markdown note"),
+                (u64::MAX - 3, "spotify", "Open Spotify player"),
+            ];
+
+            let matching_commands: Vec<(u64, String)> = commands
+                .iter()
+                .filter(|(_, cmd, _)| cmd.starts_with(&text_lower))
+                .map(|(id, cmd, desc)| (*id, format!("{} - {}", cmd, desc)))
+                .collect();
+
+            if !matching_commands.is_empty() {
+                self.search_results = matching_commands;
+                self.selected_result = 0;
+                cx.notify();
+                return;
+            }
+        }
+
+        // Check if it's a complete command
         if text.starts_with("md ") || text == "md" {
             self.search_results.clear();
             self.selected_result = 0;
@@ -642,10 +693,40 @@ impl Humanboard {
             return;
         }
 
-        // If we have search results selected, jump to that item
+        // If we have search results selected, check if it's a command or an item
         if !self.search_results.is_empty() {
-            let (item_id, _) = self.search_results[self.selected_result];
-            self.pending_command = Some(format!("__jump:{}", item_id));
+            let (item_id, _) = &self.search_results[self.selected_result];
+
+            // Check for special command IDs (u64::MAX - N for commands)
+            const CMD_THEME: u64 = u64::MAX - 1;
+            const CMD_MD: u64 = u64::MAX - 2;
+            const CMD_SPOTIFY: u64 = u64::MAX - 3;
+
+            match *item_id {
+                CMD_THEME => {
+                    // Enter theme mode directly
+                    self.cmd_palette_mode = CmdPaletteMode::Themes;
+                    let themes = Settings::available_themes(cx);
+                    self.search_results = themes
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, name)| (idx as u64, name))
+                        .collect();
+                    self.selected_result = 0;
+                    cx.notify();
+                    return; // Don't close palette, stay in theme mode
+                }
+                CMD_MD => {
+                    self.pending_command = Some("md".to_string());
+                }
+                CMD_SPOTIFY => {
+                    self.pending_command = Some("spotify".to_string());
+                }
+                _ => {
+                    // Regular item - jump to it
+                    self.pending_command = Some(format!("__jump:{}", item_id));
+                }
+            }
         } else {
             let command = self
                 .command_palette
@@ -686,8 +767,8 @@ impl Humanboard {
             } else if command == "md" {
                 self.create_markdown_note("Untitled".to_string(), window, cx);
             } else if command == "spotify" {
-                // Open Spotify app/website
-                let _ = open::that("https://open.spotify.com");
+                // Add Spotify player to canvas
+                self.add_spotify_webview(window, cx);
             }
         }
     }
@@ -910,6 +991,9 @@ impl Humanboard {
 
     pub fn start_editing_board(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(meta) = self.board_index.get_board(&id) {
+            // Set focus context to Landing for input
+            self.focus.focus(FocusContext::Landing, window);
+
             let name = meta.name.clone();
             let input = cx.new(|cx| InputState::new(window, cx).default_value(name));
             // Focus the input so user can type immediately
@@ -1045,6 +1129,9 @@ impl Humanboard {
                 {
                     *editing = !*editing;
                     if *editing {
+                        // Set focus context to Preview for editor input
+                        self.focus.focus(FocusContext::Preview, window);
+
                         if editor.is_none() {
                             // Create editor with current content - use code_editor for multiline support
                             let content_clone = content.clone();
@@ -1062,6 +1149,9 @@ impl Humanboard {
                                 state.focus(window, cx);
                             });
                         }
+                    } else {
+                        // Release focus back to canvas when exiting edit mode
+                        self.focus.release(FocusContext::Preview, window);
                     }
                 }
             }

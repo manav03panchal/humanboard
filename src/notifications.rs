@@ -203,14 +203,16 @@ pub fn render_toast(toast: &Toast) -> Div {
         .text_color(hsla(0.0, 0.0, 1.0, opacity))
         .rounded_lg()
         .shadow_lg()
-        .min_w(px(250.0))
-        .max_w(px(400.0))
-        .child(div().text_lg().font_weight(FontWeight::BOLD).child(icon))
+        .overflow_hidden()
+        .child(div().text_lg().font_weight(FontWeight::BOLD).flex_shrink_0().child(icon))
         .child(
             div()
                 .flex_1()
                 .text_sm()
                 .line_height(rems(1.4))
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
                 .child(toast.message.clone()),
         )
 }

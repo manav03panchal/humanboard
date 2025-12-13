@@ -234,15 +234,15 @@ impl Humanboard {
 
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_palette.is_some() {
-            self.hide_command_palette(cx);
+            self.hide_command_palette(window, cx);
         } else {
             self.show_command_palette(window, cx);
         }
     }
 
-    pub fn close_command_palette(&mut self, cx: &mut Context<Self>) {
+    pub fn close_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_palette.is_some() {
-            self.hide_command_palette(cx);
+            self.hide_command_palette(window, cx);
         }
     }
 

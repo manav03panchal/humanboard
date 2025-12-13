@@ -121,6 +121,7 @@ fn main() {
         ]);
 
         // Canvas-only shortcuts (not active when text input is focused)
+        // These use "Canvas" context which is only set when no input is active
         cx.bind_keys([
             KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
             KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
@@ -137,11 +138,28 @@ fn main() {
             KeyBinding::new("right", NudgeRight, Some("Canvas")),
         ]);
 
+        // Shortcuts that work even when input is active (CanvasInputActive context)
+        // These are safe shortcuts that don't conflict with text input
+        cx.bind_keys([
+            KeyBinding::new("escape", CloseCommandPalette, Some("CanvasInputActive")),
+            KeyBinding::new("cmd-k", ToggleCommandPalette, Some("CanvasInputActive")),
+        ]);
+
+        // Landing page shortcuts
+        cx.bind_keys([
+            KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Landing")),
+        ]);
+
         // Command palette navigation (higher priority than Input context)
         cx.bind_keys([
             KeyBinding::new("up", CmdPaletteUp, Some("CommandPalette")),
             KeyBinding::new("down", CmdPaletteDown, Some("CommandPalette")),
             KeyBinding::new("enter", CmdPaletteSelect, Some("CommandPalette")),
+        ]);
+
+        // Modal context shortcuts (settings, dialogs)
+        cx.bind_keys([
+            KeyBinding::new("escape", OpenSettings, Some("Modal")), // Escape closes settings
         ]);
 
         cx.open_window(

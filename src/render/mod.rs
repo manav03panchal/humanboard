@@ -53,6 +53,9 @@ impl Render for Humanboard {
             window.request_animation_frame();
         }
 
+        // Restore focus to canvas if needed (e.g., after closing command palette via blur)
+        self.focus.restore_focus_if_needed(window);
+
         // Route based on current view
         let content = match &self.view {
             AppView::Landing => self.render_landing_view(cx),
@@ -92,6 +95,7 @@ impl Render for Humanboard {
                     &self.settings_theme_scroll,
                     self.settings_tab,
                     self.spotify_connecting,
+                    &self.focus.modal,
                     cx,
                 ))
             })
@@ -119,19 +123,21 @@ impl Humanboard {
 
         div()
             .size_full()
-            .track_focus(&self.focus_handle)
+            .track_focus(&self.focus.landing)
+            .key_context("Landing")
             // Only steal focus when not editing (so Input can receive focus)
             .when(!is_editing, |d| {
                 d.on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, _, window, _| {
-                        this.focus_handle.focus(window);
+                        // Use try_focus to respect focus hierarchy
+                        this.focus.try_focus(crate::focus::FocusContext::Landing, window);
                     }),
                 )
             })
             .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
-            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)))
             .child(render_landing_page(
                 &self.board_index,
                 self.editing_board_id.as_deref(),
@@ -217,10 +223,15 @@ impl Humanboard {
             .as_ref()
             .map(|p| (p.split, p.size, &p.tabs, p.active_tab));
 
+        // Check if we should block canvas keyboard shortcuts
+        // When input is active, we use a different key context to avoid shortcut conflicts
+        let input_active = self.focus.is_input_active();
+        let key_context = if input_active { "CanvasInputActive" } else { "Canvas" };
+
         let base = div()
             .size_full()
-            .track_focus(&self.focus_handle)
-            .key_context("Canvas")
+            .track_focus(&self.focus.canvas)
+            .key_context(key_context)
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
@@ -244,8 +255,12 @@ impl Humanboard {
                     };
 
                     if !in_preview_area {
-                        this.focus_handle.focus(window);
-                        this.handle_mouse_down(event, window, cx);
+                        // Only handle canvas clicks if no modal/palette is open
+                        // (they have their own click handlers for backdrops)
+                        if this.command_palette.is_none() && !this.show_settings {
+                            this.focus.force_canvas_focus(window);
+                            this.handle_mouse_down(event, window, cx);
+                        }
                     }
                 }),
             )
@@ -287,9 +302,9 @@ impl Humanboard {
                 this.toggle_command_palette(window, cx)
             }))
             .on_action(
-                cx.listener(|this, _: &CloseCommandPalette, _, cx| this.close_command_palette(cx)),
+                cx.listener(|this, _: &CloseCommandPalette, window, cx| this.close_command_palette(window, cx)),
             )
-            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.toggle_settings(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 let all_paths: Vec<_> = paths.paths().to_vec();
                 if all_paths.is_empty() {
@@ -483,6 +498,7 @@ impl Humanboard {
             self.selected_result,
             &self.cmd_palette_scroll,
             self.cmd_palette_mode,
+            &self.focus.command_palette,
             cx,
         ));
 
