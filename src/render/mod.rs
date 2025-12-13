@@ -255,8 +255,8 @@ impl Humanboard {
                     };
 
                     if !in_preview_area {
-                        // Only focus canvas if no higher-priority input is active
-                        this.focus.try_focus(crate::focus::FocusContext::Canvas, window);
+                        // Clicking on canvas always focuses it - user intent is clear
+                        this.focus.force_canvas_focus(window);
                         this.handle_mouse_down(event, window, cx);
                     }
                 }),
