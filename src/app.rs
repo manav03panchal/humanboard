@@ -542,7 +542,7 @@ impl Humanboard {
         let text = text.trim();
 
         // Check if user typed "theme " to enter theme mode
-        if text.starts_with("theme ") || text == "theme" {
+        if text.starts_with("theme ") {
             self.cmd_palette_mode = CmdPaletteMode::Themes;
             let filter = text.strip_prefix("theme ").unwrap_or("").trim();
             let themes = Settings::available_themes(cx);
@@ -589,7 +589,31 @@ impl Humanboard {
             return;
         }
 
-        // Don't search if it's a command
+        // Check if typing a command prefix - show matching commands
+        if !text.is_empty() && text.len() <= 7 {
+            let text_lower = text.to_lowercase();
+            // Available commands with special IDs (using high numbers to avoid collision with item IDs)
+            let commands = [
+                (u64::MAX - 1, "theme", "Change theme"),
+                (u64::MAX - 2, "md", "Create markdown note"),
+                (u64::MAX - 3, "spotify", "Open Spotify player"),
+            ];
+
+            let matching_commands: Vec<(u64, String)> = commands
+                .iter()
+                .filter(|(_, cmd, _)| cmd.starts_with(&text_lower))
+                .map(|(id, cmd, desc)| (*id, format!("{} - {}", cmd, desc)))
+                .collect();
+
+            if !matching_commands.is_empty() {
+                self.search_results = matching_commands;
+                self.selected_result = 0;
+                cx.notify();
+                return;
+            }
+        }
+
+        // Check if it's a complete command
         if text.starts_with("md ") || text == "md" {
             self.search_results.clear();
             self.selected_result = 0;
@@ -665,10 +689,40 @@ impl Humanboard {
             return;
         }
 
-        // If we have search results selected, jump to that item
+        // If we have search results selected, check if it's a command or an item
         if !self.search_results.is_empty() {
-            let (item_id, _) = self.search_results[self.selected_result];
-            self.pending_command = Some(format!("__jump:{}", item_id));
+            let (item_id, _) = &self.search_results[self.selected_result];
+
+            // Check for special command IDs (u64::MAX - N for commands)
+            const CMD_THEME: u64 = u64::MAX - 1;
+            const CMD_MD: u64 = u64::MAX - 2;
+            const CMD_SPOTIFY: u64 = u64::MAX - 3;
+
+            match *item_id {
+                CMD_THEME => {
+                    // Enter theme mode directly
+                    self.cmd_palette_mode = CmdPaletteMode::Themes;
+                    let themes = Settings::available_themes(cx);
+                    self.search_results = themes
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, name)| (idx as u64, name))
+                        .collect();
+                    self.selected_result = 0;
+                    cx.notify();
+                    return; // Don't close palette, stay in theme mode
+                }
+                CMD_MD => {
+                    self.pending_command = Some("md".to_string());
+                }
+                CMD_SPOTIFY => {
+                    self.pending_command = Some("spotify".to_string());
+                }
+                _ => {
+                    // Regular item - jump to it
+                    self.pending_command = Some(format!("__jump:{}", item_id));
+                }
+            }
         } else {
             let command = self
                 .command_palette
