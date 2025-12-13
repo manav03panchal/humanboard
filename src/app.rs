@@ -1480,6 +1480,23 @@ impl Humanboard {
     pub fn update_webview_visibility(&mut self, window: &mut Window, cx: &mut App) {
         let Some(ref board) = self.board else { return };
 
+        // Hide all webviews when settings modal is open
+        if self.show_settings {
+            for (_, webview) in &self.youtube_webviews {
+                webview.webview().update(cx, |wv, _| wv.hide());
+            }
+            for (_, webview) in &self.audio_webviews {
+                webview.webview_entity.update(cx, |wv, _| wv.hide());
+            }
+            for (_, webview) in &self.video_webviews {
+                webview.webview_entity.update(cx, |wv, _| wv.hide());
+            }
+            for (_, webview) in &self.spotify_app_webviews {
+                webview.webview().update(cx, |wv, _| wv.hide());
+            }
+            return;
+        }
+
         let bounds = window.bounds();
         let window_width = f32::from(bounds.size.width);
         let window_height = f32::from(bounds.size.height);
