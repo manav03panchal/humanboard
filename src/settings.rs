@@ -8,13 +8,51 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub theme: String,
+    #[serde(default = "default_font")]
+    pub font: String,
+}
+
+fn default_font() -> String {
+    "Iosevka Nerd Font".to_string()
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "Default Dark".to_string(),
+            font: default_font(),
         }
+    }
+}
+
+impl Settings {
+    /// Curated list of fonts - Nerd Fonts + common system fonts
+    pub fn available_fonts() -> Vec<&'static str> {
+        vec![
+            // Nerd Fonts (monospace, great for code)
+            "JetBrainsMono Nerd Font",
+            "FiraCode Nerd Font",
+            "Hack Nerd Font",
+            "Iosevka Nerd Font",
+            "CaskaydiaCove Nerd Font",
+            "VictorMono Nerd Font",
+            "SourceCodePro Nerd Font",
+            "RobotoMono Nerd Font",
+            "UbuntuMono Nerd Font",
+            "Meslo Nerd Font",
+            // System fonts (always available)
+            "SF Pro",
+            "SF Mono",
+            "Futura",
+            "Helvetica Neue",
+            "Menlo",
+            "Monaco",
+            "Courier New",
+            // Generic fallbacks
+            "system-ui",
+            "sans-serif",
+            "monospace",
+        ]
     }
 }
 

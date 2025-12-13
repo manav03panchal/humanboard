@@ -121,8 +121,12 @@ fn main() {
             KeyBinding::new("cmd-shift-z", Redo, Some("Canvas")),
         ]);
 
-        // Code editor shortcuts (only active when editing code)
-        cx.bind_keys([KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor"))]);
+        // Save shortcuts for code and markdown editors
+        cx.bind_keys([
+            KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor")),
+            KeyBinding::new("cmd-s", SaveCode, Some("Canvas")),
+            KeyBinding::new("cmd-s", SaveCode, Some("CanvasInputActive")),
+        ]);
 
         // Canvas-only shortcuts (not active when text input is focused)
         // These use "Canvas" context which is only set when no input is active

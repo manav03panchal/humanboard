@@ -86,10 +86,32 @@ impl Humanboard {
                 let scaled_width = item.size.0 * board.zoom;
                 let scaled_height = item.size.1 * board.zoom;
 
-                f32::from(mouse_pos.x) >= scaled_x
-                    && f32::from(mouse_pos.x) <= scaled_x + scaled_width
-                    && f32::from(mouse_pos.y) >= scaled_y
-                    && f32::from(mouse_pos.y) <= scaled_y + scaled_height
+                let mx = f32::from(mouse_pos.x);
+                let my = f32::from(mouse_pos.y);
+
+                let in_bounds = mx >= scaled_x
+                    && mx <= scaled_x + scaled_width
+                    && my >= scaled_y
+                    && my <= scaled_y + scaled_height;
+
+                if !in_bounds {
+                    return false;
+                }
+
+                // For Shape items, only select if clicking on the border (not interior)
+                // This allows clicking through to items inside the shape
+                if let ItemContent::Shape { border_width, .. } = &item.content {
+                    let border_hit_area = (border_width * board.zoom).max(8.0); // Min 8px hit area
+                    let near_left = mx - scaled_x < border_hit_area;
+                    let near_right = (scaled_x + scaled_width) - mx < border_hit_area;
+                    let near_top = my - scaled_y < border_hit_area;
+                    let near_bottom = (scaled_y + scaled_height) - my < border_hit_area;
+
+                    // Only hit if near any edge
+                    return near_left || near_right || near_top || near_bottom;
+                }
+
+                true
             })
             .map(|item| item.id);
 
@@ -145,7 +167,7 @@ impl Humanboard {
                 .get_item(item_id)
                 .map(|item| (item.position, item.size, &item.content));
 
-            if let Some((position, size, _content)) = item_info {
+            if let Some((position, size, content)) = item_info {
                 let is_resizable = true;
                 let scaled_x =
                     position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
@@ -168,6 +190,13 @@ impl Humanboard {
                     self.resizing_item = Some(item_id);
                     self.resize_start_size = Some(size);
                     self.resize_start_pos = Some(mouse_pos);
+                    // Store font size for TextBox scaling
+                    self.resize_start_font_size =
+                        if let ItemContent::TextBox { font_size, .. } = content {
+                            Some(*font_size)
+                        } else {
+                            None
+                        };
                 } else {
                     self.dragging_item = Some(item_id);
                     self.item_drag_offset = Some(point(
@@ -397,6 +426,7 @@ impl Humanboard {
         self.resizing_item = None;
         self.resize_start_size = None;
         self.resize_start_pos = None;
+        self.resize_start_font_size = None;
         self.dragging_splitter = false;
         self.splitter_drag_start = None;
         self.marquee_start = None;
@@ -463,6 +493,7 @@ impl Humanboard {
                     // Check item type for special resize handling
                     let item_type = board.get_item(item_id).map(|item| match &item.content {
                         ItemContent::Markdown { .. } => "markdown",
+                        ItemContent::TextBox { .. } => "textbox",
                         ItemContent::Arrow { end_offset, .. } => {
                             // Store arrow direction for later
                             if end_offset.0 >= 0.0 && end_offset.1 >= 0.0 {
@@ -477,6 +508,9 @@ impl Humanboard {
                         }
                         _ => "other",
                     });
+
+                    // Use stored font size from resize start
+                    let original_font_size = self.resize_start_font_size;
 
                     let (new_width, new_height) = match item_type.as_deref() {
                         Some("markdown") => {
@@ -496,6 +530,9 @@ impl Humanboard {
 
                     // Use get_item_mut for O(1) lookup
                     if let Some(item) = board.get_item_mut(item_id) {
+                        // Calculate scale factor based on size change
+                        let scale = new_height / start_size.1;
+
                         item.size = (new_width, new_height);
 
                         // For arrows, also update end_offset to match new size
@@ -504,6 +541,13 @@ impl Humanboard {
                             let sign_x = if end_offset.0 >= 0.0 { 1.0 } else { -1.0 };
                             let sign_y = if end_offset.1 >= 0.0 { 1.0 } else { -1.0 };
                             *end_offset = (new_width * sign_x, new_height * sign_y);
+                        }
+
+                        // For textboxes, scale font size proportionally
+                        if let ItemContent::TextBox { font_size, .. } = &mut item.content {
+                            if let Some(orig_size) = original_font_size {
+                                *font_size = (orig_size * scale).max(8.0).min(200.0);
+                            }
                         }
                     }
                     // Mark dirty but don't save immediately (debounced)

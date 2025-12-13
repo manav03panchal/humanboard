@@ -302,10 +302,12 @@ impl Board {
         self.items
             .iter()
             .filter(|item| {
-                item.content
-                    .display_name()
-                    .to_lowercase()
-                    .contains(&query_lower)
+                item.content.is_searchable()
+                    && item
+                        .content
+                        .display_name()
+                        .to_lowercase()
+                        .contains(&query_lower)
             })
             .map(|item| (item.id, item.content.display_name()))
             .collect()

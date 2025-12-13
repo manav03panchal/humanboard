@@ -1026,19 +1026,8 @@ fn render_spotify_button(
                     h_flex()
                         .gap_2()
                         .items_center()
-                        .child(
-                            div()
-                                .w(px(6.0))
-                                .h(px(6.0))
-                                .rounded_full()
-                                .bg(success),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(danger_color)
-                                .child("Disconnect"),
-                        ),
+                        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(success))
+                        .child(div().text_sm().text_color(danger_color).child("Disconnect")),
                 )
                 .on_mouse_down(
                     MouseButton::Left,
@@ -1048,12 +1037,8 @@ fn render_spotify_button(
                 )
         })
         .when(connecting && !connected, |d| {
-            d.bg(muted_fg.opacity(0.1)).child(
-                div()
-                    .text_sm()
-                    .text_color(muted_fg)
-                    .child("Connecting..."),
-            )
+            d.bg(muted_fg.opacity(0.1))
+                .child(div().text_sm().text_color(muted_fg).child("Connecting..."))
         })
         .when(!connected && !connecting, |d| {
             d.bg(spotify_green)
@@ -1096,12 +1081,7 @@ fn render_setting_row(
                 .flex_1()
                 .min_w_0()
                 .gap(px(2.0))
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(fg)
-                        .child(title.to_string()),
-                )
+                .child(div().text_sm().text_color(fg).child(title.to_string()))
                 .child(
                     div()
                         .text_xs()
@@ -1109,11 +1089,7 @@ fn render_setting_row(
                         .child(description.to_string()),
                 ),
         )
-        .child(
-            div()
-                .flex_shrink_0()
-                .child(control),
-        )
+        .child(div().flex_shrink_0().child(control))
 }
 
 /// Render a section header
@@ -1139,6 +1115,7 @@ fn render_section_header(title: &str, cx: &Context<Humanboard>) -> Div {
 /// Render the settings modal
 pub fn render_settings_modal(
     current_theme: &str,
+    current_font: &str,
     _theme_index: usize,
     _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
@@ -1147,7 +1124,9 @@ pub fn render_settings_modal(
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
+    let fonts = Settings::available_fonts();
     let current_theme_display = current_theme.to_string();
+    let current_font_display = current_font.to_string();
     let spotify_connected = spotify_auth::is_connected();
 
     let bg = cx.theme().background;
@@ -1451,6 +1430,109 @@ pub fn render_settings_modal(
                                                                     )
                                                             })),
                                                     )
+                                                })
+                                                // Section: Font
+                                                .child(render_section_header("Font", cx))
+                                                .child(render_setting_row(
+                                                    "Font Family",
+                                                    "Choose a font for the interface",
+                                                    // Font dropdown
+                                                    div()
+                                                        .id("font-dropdown")
+                                                        .relative()
+                                                        .child(
+                                                            div()
+                                                                .id("font-dropdown-trigger")
+                                                                .w(px(160.0))
+                                                                .h(px(28.0))
+                                                                .px_3()
+                                                                .bg(input_bg)
+                                                                .border_1()
+                                                                .border_color(border)
+                                                                .rounded(px(6.0))
+                                                                .cursor(CursorStyle::PointingHand)
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_between()
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    cx.listener(|this, _, _, cx| {
+                                                                        this.toggle_font_dropdown(cx);
+                                                                    }),
+                                                                )
+                                                                .child(
+                                                                    div()
+                                                                        .text_sm()
+                                                                        .text_color(fg)
+                                                                        .overflow_hidden()
+                                                                        .whitespace_nowrap()
+                                                                        .child(current_font_display.clone()),
+                                                                )
+                                                                .child(
+                                                                    Icon::new(IconName::ChevronDown)
+                                                                        .size(px(12.0))
+                                                                        .text_color(muted_fg),
+                                                                ),
+                                                        ),
+                                                    cx,
+                                                ))
+                                                // Font dropdown menu (shown when open)
+                                                .when(cx.try_global::<FontDropdownOpen>().is_some(), |d| {
+                                                    d.child(
+                                                        div()
+                                                            .id("font-dropdown-menu")
+                                                            .absolute()
+                                                            .top(px(200.0))
+                                                            .right(px(24.0))
+                                                            .w(px(220.0))
+                                                            .max_h(px(280.0))
+                                                            .bg(bg)
+                                                            .border_1()
+                                                            .border_color(border)
+                                                            .rounded(px(6.0))
+                                                            .shadow_lg()
+                                                            .overflow_y_scroll()
+                                                            .py_1()
+                                                            .children(fonts.iter().map(|font_name| {
+                                                                let is_current = *font_name == current_font_display;
+                                                                let font_clone = font_name.to_string();
+
+                                                                div()
+                                                                    .id(ElementId::Name(format!("font-{}", font_name).into()))
+                                                                    .w_full()
+                                                                    .px_3()
+                                                                    .py_1p5()
+                                                                    .cursor(CursorStyle::PointingHand)
+                                                                    .font_family(font_name.to_string())
+                                                                    .when(is_current, |d| d.bg(list_active))
+                                                                    .when(!is_current, |d| d.hover(|s| s.bg(list_hover)))
+                                                                    .on_mouse_down(
+                                                                        MouseButton::Left,
+                                                                        cx.listener(move |this, _, _, cx| {
+                                                                            this.set_font(font_clone.clone(), cx);
+                                                                            this.close_font_dropdown(cx);
+                                                                        }),
+                                                                    )
+                                                                    .child(
+                                                                        h_flex()
+                                                                            .items_center()
+                                                                            .justify_between()
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_sm()
+                                                                                    .text_color(if is_current { fg } else { muted_fg })
+                                                                                    .child(font_name.to_string()),
+                                                                            )
+                                                                            .when(is_current, |d| {
+                                                                                d.child(
+                                                                                    Icon::new(IconName::Check)
+                                                                                        .size(px(14.0))
+                                                                                        .text_color(cx.theme().primary),
+                                                                                )
+                                                                            }),
+                                                                    )
+                                                            })),
+                                                    )
                                                 }),
                                         )
                                     })
@@ -1480,3 +1562,9 @@ pub fn render_settings_modal(
 pub struct ThemeDropdownOpen;
 
 impl gpui::Global for ThemeDropdownOpen {}
+
+/// Global marker for font dropdown state
+#[derive(Clone)]
+pub struct FontDropdownOpen;
+
+impl gpui::Global for FontDropdownOpen {}

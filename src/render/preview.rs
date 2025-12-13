@@ -76,7 +76,9 @@ pub fn render_tab_bar(
                             this.switch_tab(tab_index, cx);
                         }))
                         .child(if is_code {
-                            Icon::new(IconName::SquareTerminal).xsmall().text_color(hsla(40.0 / 360.0, 0.8, 0.6, 1.0)) // Orange for code
+                            Icon::new(IconName::SquareTerminal)
+                                .xsmall()
+                                .text_color(hsla(40.0 / 360.0, 0.8, 0.6, 1.0)) // Orange for code
                         } else if is_markdown {
                             Icon::new(IconName::File).xsmall().text_color(primary)
                         } else {
@@ -99,13 +101,7 @@ pub fn render_tab_bar(
                                 .rounded(px(2.0))
                                 .when(is_dirty, |d| {
                                     // Show dot indicator when dirty
-                                    d.child(
-                                        div()
-                                            .w(px(8.0))
-                                            .h(px(8.0))
-                                            .rounded_full()
-                                            .bg(primary)
-                                    )
+                                    d.child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(primary))
                                 })
                                 .when(!is_dirty, |d| {
                                     // Show close button when not dirty
@@ -140,6 +136,7 @@ pub fn render_tab_content(
     match tab {
         PreviewTab::Pdf { webview, path: _ } => div()
             .size_full()
+            .overflow_hidden()
             .when_some(webview.as_ref(), |d, wv| d.child(wv.webview())),
         PreviewTab::Markdown {
             content,
@@ -255,7 +252,8 @@ pub fn render_tab_content(
                         .key_context("CodeEditor")
                         .on_click(cx.listener(move |this, _event, window, cx| {
                             // Set focus context to CodeEditor and focus the editor
-                            this.focus.focus(crate::focus::FocusContext::CodeEditor, window);
+                            this.focus
+                                .focus(crate::focus::FocusContext::CodeEditor, window);
                             code_editor_focus.focus(window);
                             if let Some(ref ed) = editor_entity {
                                 ed.update(cx, |state, cx| {
@@ -308,12 +306,7 @@ pub fn render_tab_content(
                                 ),
                         )
                         .when(is_dirty, |d| {
-                            d.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(muted_fg)
-                                    .child("⌘S to save"),
-                            )
+                            d.child(div().text_xs().text_color(muted_fg).child("⌘S to save"))
                         }),
                 )
         }

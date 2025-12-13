@@ -86,7 +86,7 @@ impl Render for Humanboard {
         div()
             .size_full()
             .bg(bg)
-            .font_family(UI_FONT)
+            .font_family(self.settings.font.clone())
             .relative()
             .child(content)
             .when(self.show_shortcuts, |d| {
@@ -95,6 +95,7 @@ impl Render for Humanboard {
             .when(self.show_settings, |d| {
                 d.child(render_settings_modal(
                     &self.settings.theme,
+                    &self.settings.font,
                     self.settings_theme_index,
                     &self.settings_theme_scroll,
                     self.settings_tab,
@@ -437,56 +438,69 @@ impl Humanboard {
                             },
                             cx,
                         ))
+                        // Wrap canvas + splitter + preview in a flex_1 container
+                        // so Fraction calculations are based on remaining space after dock
                         .child(
                             div()
-                                .flex_shrink_0()
-                                .w(Fraction(canvas_size))
+                                .flex_1()
                                 .h_full()
-                                .child(render_canvas_area(
-                                    canvas_offset,
-                                    zoom,
-                                    &items,
-                                    &selected_items,
-                                    &self.youtube_webviews,
-                                    &self.audio_webviews,
-                                    &self.video_webviews,
-                                    &self.spotify_app_webviews,
-                                    self.editing_textbox_id,
-                                    self.textbox_input.as_ref(),
-                                    marquee,
-                                    drawing_preview,
-                                    cx,
-                                )),
-                        )
-                        .child(render_splitter(SplitDirection::Vertical, cx))
-                        .child({
-                            let bg = cx.theme().background;
-                            div()
-                                .flex_shrink_0()
-                                .w(Fraction(preview_size))
-                                .h_full()
-                                .bg(bg)
                                 .flex()
-                                .flex_col()
+                                .flex_row()
                                 .overflow_hidden()
-                                .child(render_tab_bar(
-                                    tabs,
-                                    active_tab,
-                                    &self.preview_tab_scroll,
-                                    cx,
-                                ))
                                 .child(
                                     div()
-                                        .id(ElementId::Name(
-                                            format!("tab-container-v-{}", active_tab).into(),
-                                        ))
-                                        .flex_1()
-                                        .overflow_hidden()
-                                        .when_some(tabs.get(active_tab), |d, tab| {
-                                            d.child(render_tab_content(tab, true, active_tab, cx))
-                                        }),
+                                        .flex_shrink_0()
+                                        .w(Fraction(canvas_size))
+                                        .h_full()
+                                        .child(render_canvas_area(
+                                            canvas_offset,
+                                            zoom,
+                                            &items,
+                                            &selected_items,
+                                            &self.youtube_webviews,
+                                            &self.audio_webviews,
+                                            &self.video_webviews,
+                                            &self.spotify_app_webviews,
+                                            self.editing_textbox_id,
+                                            self.textbox_input.as_ref(),
+                                            marquee,
+                                            drawing_preview,
+                                            cx,
+                                        )),
                                 )
-                        }),
+                                .child(render_splitter(SplitDirection::Vertical, cx))
+                                .child({
+                                    let bg = cx.theme().background;
+                                    div()
+                                        .flex_shrink_0()
+                                        .w(Fraction(preview_size))
+                                        .h_full()
+                                        .bg(bg)
+                                        .flex()
+                                        .flex_col()
+                                        .overflow_hidden()
+                                        .child(render_tab_bar(
+                                            tabs,
+                                            active_tab,
+                                            &self.preview_tab_scroll,
+                                            cx,
+                                        ))
+                                        .child(
+                                            div()
+                                                .id(ElementId::Name(
+                                                    format!("tab-container-v-{}", active_tab)
+                                                        .into(),
+                                                ))
+                                                .flex_1()
+                                                .overflow_hidden()
+                                                .when_some(tabs.get(active_tab), |d, tab| {
+                                                    d.child(render_tab_content(
+                                                        tab, true, active_tab, cx,
+                                                    ))
+                                                }),
+                                        )
+                                }),
+                        ),
                     SplitDirection::Horizontal => base
                         .flex()
                         .flex_row()

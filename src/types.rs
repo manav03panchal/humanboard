@@ -251,6 +251,14 @@ impl ItemContent {
         }
     }
 
+    /// Returns true if this item should appear in search results
+    pub fn is_searchable(&self) -> bool {
+        !matches!(
+            self,
+            ItemContent::TextBox { .. } | ItemContent::Arrow { .. } | ItemContent::Shape { .. }
+        )
+    }
+
     pub fn type_label(&self) -> &str {
         match self {
             ItemContent::Image(_) => "IMAGE",

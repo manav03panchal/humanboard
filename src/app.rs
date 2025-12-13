@@ -136,6 +136,7 @@ pub struct Humanboard {
     pub resizing_item: Option<u64>,
     pub resize_start_size: Option<(f32, f32)>,
     pub resize_start_pos: Option<Point<Pixels>>,
+    pub resize_start_font_size: Option<f32>,
     pub selected_items: HashSet<u64>,
 
     // Marquee selection state
@@ -180,6 +181,8 @@ pub struct Humanboard {
     pub settings_tab: SettingsTab,
     pub settings_theme_index: usize,
     pub settings_theme_scroll: ScrollHandle,
+    pub settings_font_index: usize,
+    pub settings_font_scroll: ScrollHandle,
 
     // Spotify auth flow (active during authorization)
     pub spotify_auth_flow: Option<SpotifyAuthFlow>,
@@ -231,6 +234,7 @@ impl Humanboard {
             resizing_item: None,
             resize_start_size: None,
             resize_start_pos: None,
+            resize_start_font_size: None,
             selected_items: HashSet::new(),
             marquee_start: None,
             marquee_current: None,
@@ -259,6 +263,8 @@ impl Humanboard {
             settings_tab: SettingsTab::default(),
             settings_theme_index: 0,
             settings_theme_scroll: ScrollHandle::new(),
+            settings_font_index: 0,
+            settings_font_scroll: ScrollHandle::new(),
             spotify_auth_flow: None,
             spotify_connecting: false,
             toast_manager: ToastManager::new(),
@@ -293,6 +299,13 @@ impl Humanboard {
             self.settings_theme_index = themes
                 .iter()
                 .position(|t| t == &self.settings.theme)
+                .unwrap_or(0);
+
+            // Initialize font index to current font
+            let fonts = crate::settings::Settings::available_fonts();
+            self.settings_font_index = fonts
+                .iter()
+                .position(|f| *f == self.settings.font)
                 .unwrap_or(0);
         } else {
             // Force focus back to canvas when closing settings
@@ -357,6 +370,36 @@ impl Humanboard {
         cx.notify();
     }
 
+    pub fn set_font(&mut self, font_name: String, cx: &mut Context<Self>) {
+        self.settings.font = font_name;
+        self.settings.save();
+        cx.notify();
+    }
+
+    pub fn select_next_font(&mut self, cx: &mut Context<Self>) {
+        let fonts = crate::settings::Settings::available_fonts();
+        if !fonts.is_empty() {
+            self.settings_font_index = (self.settings_font_index + 1) % fonts.len();
+            self.settings_font_scroll
+                .scroll_to_item(self.settings_font_index);
+            self.set_font(fonts[self.settings_font_index].to_string(), cx);
+        }
+    }
+
+    pub fn select_prev_font(&mut self, cx: &mut Context<Self>) {
+        let fonts = crate::settings::Settings::available_fonts();
+        if !fonts.is_empty() {
+            self.settings_font_index = if self.settings_font_index == 0 {
+                fonts.len() - 1
+            } else {
+                self.settings_font_index - 1
+            };
+            self.settings_font_scroll
+                .scroll_to_item(self.settings_font_index);
+            self.set_font(fonts[self.settings_font_index].to_string(), cx);
+        }
+    }
+
     pub fn toggle_shortcuts(&mut self, cx: &mut Context<Self>) {
         self.show_shortcuts = !self.show_shortcuts;
         cx.notify();
@@ -385,6 +428,28 @@ impl Humanboard {
             .is_some()
         {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
+        }
+        cx.notify();
+    }
+
+    pub fn toggle_font_dropdown(&mut self, cx: &mut Context<Self>) {
+        if cx
+            .try_global::<crate::render::overlays::FontDropdownOpen>()
+            .is_some()
+        {
+            cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
+        } else {
+            cx.set_global(crate::render::overlays::FontDropdownOpen);
+        }
+        cx.notify();
+    }
+
+    pub fn close_font_dropdown(&mut self, cx: &mut Context<Self>) {
+        if cx
+            .try_global::<crate::render::overlays::FontDropdownOpen>()
+            .is_some()
+        {
+            cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         }
         cx.notify();
     }
@@ -489,7 +554,7 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn add_spotify_webview(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub fn add_spotify_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Get board ID from current view
         let _board_id = match &self.view {
             AppView::Board(id) => id.clone(),
@@ -506,15 +571,18 @@ impl Humanboard {
 
         if let Some(ref mut board) = self.board {
             // Check if there's already a SpotifyApp item on the board
-            let has_spotify_app = board
+            let existing_spotify_id = board
                 .items
                 .iter()
-                .any(|item| matches!(item.content, crate::types::ItemContent::SpotifyApp));
+                .find(|item| matches!(item.content, crate::types::ItemContent::SpotifyApp))
+                .map(|item| item.id);
 
-            if has_spotify_app {
-                self.toast_manager.push(crate::notifications::Toast::info(
-                    "Spotify player already open".to_string(),
-                ));
+            if let Some(item_id) = existing_spotify_id {
+                // Jump to existing Spotify player instead of creating a new one
+                self.jump_to_item(item_id, window, cx);
+                self.selected_items.clear();
+                self.selected_items.insert(item_id);
+                cx.notify();
                 return;
             }
 
@@ -689,10 +757,11 @@ impl Humanboard {
         // Search canvas items (empty string shows all items)
         if let Some(ref board) = self.board {
             if text.is_empty() {
-                // Show all items when no search text
+                // Show all searchable items when no search text
                 self.search_results = board
                     .items
                     .iter()
+                    .filter(|item| item.content.is_searchable())
                     .map(|item| (item.id, item.content.display_name()))
                     .collect();
             } else {
@@ -1112,11 +1181,20 @@ impl Humanboard {
         let tab = if ext == "md" {
             // Load markdown content
             let content = std::fs::read_to_string(&path).unwrap_or_default();
+            // Create editor immediately for edit mode
+            let content_clone = content.clone();
+            let editor = Some(cx.new(|cx| {
+                InputState::new(_window, cx)
+                    .code_editor("markdown")
+                    .soft_wrap(true)
+                    .line_number(true)
+                    .default_value(content_clone)
+            }));
             PreviewTab::Markdown {
                 path: path.clone(),
                 content,
-                editing: false,
-                editor: None,
+                editing: true, // Open in edit mode
+                editor,
             }
         } else if ext == "pdf" {
             PreviewTab::Pdf {
@@ -1314,25 +1392,60 @@ impl Humanboard {
     pub fn save_code(&mut self, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
             if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
-                if let PreviewTab::Code {
-                    path,
-                    content,
-                    editor,
-                    dirty,
-                    ..
-                } = tab
-                {
-                    if let Some(ed) = editor {
-                        let new_content = ed.read(cx).text().to_string();
-                        *content = new_content.clone();
-                        // Save to file
-                        let path_clone = path.clone();
-                        if let Err(e) = std::fs::write(&path_clone, &new_content) {
-                            eprintln!("Failed to save code file: {}", e);
+                match tab {
+                    PreviewTab::Code {
+                        path,
+                        content,
+                        editor,
+                        dirty,
+                        ..
+                    } => {
+                        if let Some(ed) = editor {
+                            let new_content = ed.read(cx).text().to_string();
+                            *content = new_content.clone();
+                            // Save to file
+                            let path_clone = path.clone();
+                            if let Err(e) = std::fs::write(&path_clone, &new_content) {
+                                eprintln!("Failed to save code file: {}", e);
+                            }
+                            *dirty = false;
+                            // Keep editor for viewing
                         }
-                        *dirty = false;
-                        // Keep editor for viewing
                     }
+                    PreviewTab::Markdown {
+                        path,
+                        content,
+                        editor,
+                        editing,
+                    } => {
+                        // Also handle Cmd+S for markdown files
+                        if *editing {
+                            if let Some(ed) = editor {
+                                let new_content = ed.read(cx).text().to_string();
+                                *content = new_content.clone();
+                                // Save to file
+                                let path_clone = path.clone();
+                                let _ = std::fs::write(&path_clone, &new_content);
+                                // Also update board item if exists
+                                if let Some(ref mut board) = self.board {
+                                    for item in board.items.iter_mut() {
+                                        if let crate::types::ItemContent::Markdown {
+                                            path: item_path,
+                                            content: item_content,
+                                            ..
+                                        } = &mut item.content
+                                        {
+                                            if *item_path == path_clone {
+                                                *item_content = new_content.clone();
+                                            }
+                                        }
+                                    }
+                                }
+                                *editing = false; // Exit edit mode to show preview
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1510,8 +1623,8 @@ impl Humanboard {
     pub fn update_webview_visibility(&mut self, window: &mut Window, cx: &mut App) {
         let Some(ref board) = self.board else { return };
 
-        // Hide all webviews when settings modal is open
-        if self.show_settings {
+        // Hide all webviews when settings modal or shortcuts overlay is open
+        if self.show_settings || self.show_shortcuts {
             for (_, webview) in &self.youtube_webviews {
                 webview.webview().update(cx, |wv, _| wv.hide());
             }
@@ -1523,6 +1636,17 @@ impl Humanboard {
             }
             for (_, webview) in &self.spotify_app_webviews {
                 webview.webview().update(cx, |wv, _| wv.hide());
+            }
+            // Also hide PDF webviews in preview panel
+            if let Some(ref preview) = self.preview {
+                for tab in &preview.tabs {
+                    if let PreviewTab::Pdf {
+                        webview: Some(wv), ..
+                    } = tab
+                    {
+                        wv.webview().update(cx, |view, _| view.hide());
+                    }
+                }
             }
             return;
         }
@@ -1611,6 +1735,22 @@ impl Humanboard {
                         wv.hide();
                     }
                 });
+            }
+        }
+
+        // Show PDF webviews in preview panel (active tab only)
+        if let Some(ref preview) = self.preview {
+            for (idx, tab) in preview.tabs.iter().enumerate() {
+                if let PreviewTab::Pdf {
+                    webview: Some(wv), ..
+                } = tab
+                {
+                    if idx == preview.active_tab {
+                        wv.webview().update(cx, |view, _| view.show());
+                    } else {
+                        wv.webview().update(cx, |view, _| view.hide());
+                    }
+                }
             }
         }
     }
