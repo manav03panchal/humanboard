@@ -255,9 +255,12 @@ impl Humanboard {
                     };
 
                     if !in_preview_area {
-                        // Clicking on canvas always focuses it - user intent is clear
-                        this.focus.force_canvas_focus(window);
-                        this.handle_mouse_down(event, window, cx);
+                        // Only handle canvas clicks if no modal/palette is open
+                        // (they have their own click handlers for backdrops)
+                        if this.command_palette.is_none() && !this.show_settings {
+                            this.focus.force_canvas_focus(window);
+                            this.handle_mouse_down(event, window, cx);
+                        }
                     }
                 }),
             )
