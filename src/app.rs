@@ -151,6 +151,7 @@ pub struct Humanboard {
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
+    pub settings_backdrop_clicked: bool,
     pub settings_tab: SettingsTab,
     pub settings_theme_index: usize,
     pub settings_theme_scroll: ScrollHandle,
@@ -222,6 +223,7 @@ impl Humanboard {
             spotify_app_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
+            settings_backdrop_clicked: false,
             settings_tab: SettingsTab::default(),
             settings_theme_index: 0,
             settings_theme_scroll: ScrollHandle::new(),

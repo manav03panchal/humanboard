@@ -1096,12 +1096,13 @@ fn render_setting_row(
     h_flex()
         .w_full()
         .py_3()
-        .items_start()
+        .items_center()
         .justify_between()
         .gap_4()
         .child(
             v_flex()
                 .flex_1()
+                .min_w_0()
                 .gap(px(2.0))
                 .child(
                     div()
@@ -1116,7 +1117,11 @@ fn render_setting_row(
                         .child(description.to_string()),
                 ),
         )
-        .child(control)
+        .child(
+            div()
+                .flex_shrink_0()
+                .child(control),
+        )
 }
 
 /// Render a section header
@@ -1164,6 +1169,7 @@ pub fn render_settings_modal(
 
     deferred(
         div()
+            .id("settings-backdrop")
             .absolute()
             .top_0()
             .left_0()
@@ -1172,29 +1178,36 @@ pub fn render_settings_modal(
             .flex()
             .items_center()
             .justify_center()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
+                this.settings_backdrop_clicked = true;
+                cx.notify();
+            }))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| {
+                if this.settings_backdrop_clicked {
                     this.show_settings = false;
-                    cx.notify();
-                }),
-            )
+                    this.settings_backdrop_clicked = false;
+                }
+                cx.notify();
+            }))
             .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
             .child(
-                div()
-                    .p_4()
-                    .child(
-                        h_flex()
-                            .w(px(680.0))
-                            .h(px(480.0))
-                            .bg(bg)
-                            .border_1()
-                            .border_color(border)
-                            .rounded(px(10.0))
-                            .overflow_hidden()
-                            .shadow_lg()
-                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                            .on_scroll_wheel(|_, _, _| {})
+                h_flex()
+                    .id("settings-modal")
+                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| {
+                        this.settings_backdrop_clicked = false;
+                    }))
+                    .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| {
+                        this.settings_backdrop_clicked = false;
+                    }))
+                    .w(px(680.0))
+                    .h(px(480.0))
+                    .bg(bg)
+                    .border_1()
+                    .border_color(border)
+                    .rounded(px(10.0))
+                    .overflow_hidden()
+                    .shadow_lg()
+                    .on_scroll_wheel(|_, _, _| {})
                             .key_context("SettingsModal")
                             // Left sidebar
                             .child(
@@ -1326,12 +1339,13 @@ pub fn render_settings_modal(
                             )
                             // Right content area
                             .child(
-                                div()
+                                v_flex()
                                     .id("settings-content")
                                     .flex_1()
                                     .h_full()
-                                    .overflow_y_scroll()
-                                    .p_6()
+                                    .overflow_hidden()
+                                    .px_6()
+                                    .py_6()
                                     // Content - Appearance tab
                                     .when(active_tab == SettingsTab::Appearance, |d| {
                                         d.child(
@@ -1458,7 +1472,6 @@ pub fn render_settings_modal(
                                     }),
                             ),
                     ),
-            ),
     )
     .with_priority(1500)
 }
