@@ -565,10 +565,17 @@ impl Humanboard {
             return;
         }
 
-        // Handle theme mode (when entered via click)
+        // Handle theme mode (when entered via click or command selection)
         if self.cmd_palette_mode == CmdPaletteMode::Themes {
             let themes = Settings::available_themes(cx);
-            if text.is_empty() {
+            // If text is just "theme" (entered via command), treat as empty filter
+            let filter = if text.eq_ignore_ascii_case("theme") {
+                ""
+            } else {
+                text
+            };
+
+            if filter.is_empty() {
                 // Show all themes
                 self.search_results = themes
                     .into_iter()
@@ -580,7 +587,7 @@ impl Humanboard {
                 self.search_results = themes
                     .into_iter()
                     .enumerate()
-                    .filter(|(_, name)| name.to_lowercase().contains(&text.to_lowercase()))
+                    .filter(|(_, name)| name.to_lowercase().contains(&filter.to_lowercase()))
                     .map(|(idx, name)| (idx as u64, name))
                     .collect();
             }
