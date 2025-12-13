@@ -1,5 +1,4 @@
 use crate::pdf_thumbnail::generate_pdf_thumbnail;
-use crate::spotify_webview::SpotifyContentType;
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -24,10 +23,6 @@ pub enum ItemContent {
     },
     Link(String),
     YouTube(String), // Video ID
-    Spotify {
-        content_type: SpotifyContentType,
-        content_id: String,
-    },
     SpotifyApp, // Full Spotify web player
     Markdown {
         path: PathBuf,
@@ -102,14 +97,6 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (250.0, 350.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
-            ItemContent::Spotify { content_type, .. } => {
-                match content_type {
-                    SpotifyContentType::Track => (400.0, 100.0), // Single track - very compact
-                    SpotifyContentType::Album | SpotifyContentType::Playlist => (352.0, 380.0), // List view
-                    SpotifyContentType::Artist => (352.0, 380.0),
-                    SpotifyContentType::Episode | SpotifyContentType::Show => (352.0, 160.0),
-                }
-            }
             ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
         }
@@ -130,9 +117,6 @@ impl ItemContent {
             ItemContent::Text(text) => text.clone(),
             ItemContent::Link(url) => url.clone(),
             ItemContent::YouTube(id) => format!("YouTube: {}", id),
-            ItemContent::Spotify { content_type, content_id } => {
-                format!("Spotify {}: {}", content_type.as_str(), content_id)
-            }
             ItemContent::SpotifyApp => "Spotify".to_string(),
             ItemContent::Markdown { title, .. } => title.clone(),
         }
@@ -147,7 +131,6 @@ impl ItemContent {
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
             ItemContent::YouTube(_) => "YOUTUBE",
-            ItemContent::Spotify { .. } => "SPOTIFY",
             ItemContent::SpotifyApp => "SPOTIFY",
             ItemContent::Markdown { .. } => "MARKDOWN",
         }

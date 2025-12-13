@@ -184,18 +184,12 @@ impl Board {
         self.mark_dirty();
     }
 
-    /// Add URL (YouTube, Spotify, or generic link)
+    /// Add URL (YouTube or generic link)
     pub fn add_url(&mut self, url: &str, position: Point<Pixels>) {
-        use crate::spotify_webview::parse_spotify_url;
         use crate::types::extract_youtube_id;
 
         let content = if let Some(video_id) = extract_youtube_id(url) {
             ItemContent::YouTube(video_id)
-        } else if let Some((content_type, content_id)) = parse_spotify_url(url) {
-            ItemContent::Spotify {
-                content_type,
-                content_id,
-            }
         } else {
             ItemContent::Link(url.to_string())
         };

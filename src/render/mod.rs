@@ -168,9 +168,6 @@ impl Humanboard {
         // Ensure Video WebViews are created for any Video items
         self.ensure_video_webviews(window, cx);
 
-        // Ensure Spotify WebViews are created for any Spotify items
-        self.ensure_spotify_webviews(window, cx);
-
         // Ensure Spotify App WebViews are created for any SpotifyApp items
         self.ensure_spotify_app_webviews(window, cx);
 
@@ -367,7 +364,6 @@ impl Humanboard {
                                     &self.youtube_webviews,
                                     &self.audio_webviews,
                                     &self.video_webviews,
-                                    &self.spotify_webviews,
                                     &self.spotify_app_webviews,
                                     marquee,
                                     cx,
@@ -420,7 +416,6 @@ impl Humanboard {
                                     &self.youtube_webviews,
                                     &self.audio_webviews,
                                     &self.video_webviews,
-                                    &self.spotify_webviews,
                                     &self.spotify_app_webviews,
                                     marquee,
                                     cx,
@@ -465,7 +460,6 @@ impl Humanboard {
                 &self.youtube_webviews,
                 &self.audio_webviews,
                 &self.video_webviews,
-                &self.spotify_webviews,
                 &self.spotify_app_webviews,
                 marquee,
                 cx,

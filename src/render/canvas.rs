@@ -9,7 +9,6 @@
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
 use crate::markdown_card::render_collapsed_markdown;
-use crate::spotify_webview::SpotifyWebView;
 use crate::types::{CanvasItem, ItemContent};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -68,7 +67,7 @@ fn render_item_backgrounds(
             ItemContent::Pdf { .. } => hsla(15.0 / 360.0, 0.7, 0.5, 0.85), // Orange for documents
             ItemContent::Link(_) => hsla(180.0 / 360.0, 0.6, 0.4, 0.85),   // Cyan for links
             ItemContent::YouTube(_) => hsla(0.0 / 360.0, 0.75, 0.5, 0.85), // Red for YouTube
-            ItemContent::Spotify { .. } | ItemContent::SpotifyApp => hsla(141.0 / 360.0, 0.73, 0.42, 0.85), // Spotify green
+            ItemContent::SpotifyApp => hsla(141.0 / 360.0, 0.73, 0.42, 0.85), // Spotify green
             _ => hsla(0.0, 0.0, 0.4, 0.85),                                // Gray for unknown
         };
 
@@ -90,7 +89,6 @@ fn render_item_content(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_webviews: &HashMap<u64, SpotifyWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     fg: Hsla,
     muted_fg: Hsla,
@@ -368,65 +366,6 @@ fn render_item_content(
             }
         }
 
-        ItemContent::Spotify { content_type, .. } => {
-            // Render Spotify WebView if available
-            if let Some(webview) = spotify_webviews.get(&item.id) {
-                v_flex()
-                    .size_full()
-                    .rounded(corner_radius)
-                    .overflow_hidden()
-                    // Drag handle bar at top (needed because WebView captures mouse events)
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(20.0 * zoom))
-                            .bg(hsla(0.0, 0.0, 0.08, 1.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(10.0 * zoom))
-                                    .text_color(hsla(0.0, 0.0, 0.3, 1.0))
-                                    .child("≡"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .w_full()
-                            .overflow_hidden()
-                            .child(webview.webview().clone()),
-                    )
-            } else {
-                // Placeholder while loading
-                div()
-                    .size_full()
-                    .bg(hsla(141.0 / 360.0, 0.2, 0.12, 1.0)) // Dark Spotify green
-                    .rounded(corner_radius)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        v_flex()
-                            .items_center()
-                            .gap(px(8.0 * zoom))
-                            .child(
-                                div()
-                                    .text_size(px(32.0 * zoom))
-                                    .text_color(hsla(141.0 / 360.0, 0.73, 0.42, 1.0))
-                                    .child("♫"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child(format!("Spotify {}", content_type.as_str())),
-                            ),
-                    )
-            }
-        }
-
         ItemContent::SpotifyApp => {
             // Render Spotify App WebView if available
             if let Some(webview) = spotify_app_webviews.get(&item.id) {
@@ -523,7 +462,6 @@ pub fn render_items(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_webviews: &HashMap<u64, SpotifyWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
@@ -557,7 +495,6 @@ pub fn render_items(
                     youtube_webviews,
                     audio_webviews,
                     video_webviews,
-                    spotify_webviews,
                     spotify_app_webviews,
                     fg,
                     muted_fg,
@@ -596,7 +533,6 @@ pub fn render_canvas_area(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_webviews: &HashMap<u64, SpotifyWebView>,
     spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     cx: &Context<Humanboard>,
@@ -618,7 +554,6 @@ pub fn render_canvas_area(
             youtube_webviews,
             audio_webviews,
             video_webviews,
-            spotify_webviews,
             spotify_app_webviews,
             cx,
         ))

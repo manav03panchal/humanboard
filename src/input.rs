@@ -98,9 +98,8 @@ impl Humanboard {
                 .get_item(item_id)
                 .map(|item| (item.position, item.size, &item.content));
 
-            if let Some((position, size, content)) = item_info {
-                // Spotify items are not resizable (fixed embed size)
-                let is_resizable = !matches!(content, ItemContent::Spotify { .. });
+            if let Some((position, size, _content)) = item_info {
+                let is_resizable = true;
                 let scaled_x = position.0 * board.zoom + f32::from(board.canvas_offset.x);
                 let scaled_y =
                     position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
