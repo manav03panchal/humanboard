@@ -14,6 +14,7 @@ pub mod pdf_thumbnail;
 pub mod pdf_webview;
 pub mod render;
 pub mod settings;
+pub mod spotify_auth;
 pub mod spotify_webview;
 pub mod types;
 pub mod video_webview;

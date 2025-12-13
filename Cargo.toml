@@ -16,6 +16,11 @@ pdfium-render = { version = "0.8", features = ["image"] }
 tiny_http = "0.12"
 pulldown-cmark = "0.10"
 base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
+urlencoding = "2.1"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+open = "5.0"
 
 [profile.release]
 opt-level = 3

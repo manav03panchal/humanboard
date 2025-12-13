@@ -28,6 +28,7 @@ pub enum ItemContent {
         content_type: SpotifyContentType,
         content_id: String,
     },
+    SpotifyApp, // Full Spotify web player
     Markdown {
         path: PathBuf,
         title: String,
@@ -109,6 +110,7 @@ impl ItemContent {
                     SpotifyContentType::Episode | SpotifyContentType::Show => (352.0, 160.0),
                 }
             }
+            ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
         }
     }
@@ -131,6 +133,7 @@ impl ItemContent {
             ItemContent::Spotify { content_type, content_id } => {
                 format!("Spotify {}: {}", content_type.as_str(), content_id)
             }
+            ItemContent::SpotifyApp => "Spotify".to_string(),
             ItemContent::Markdown { title, .. } => title.clone(),
         }
     }
@@ -145,6 +148,7 @@ impl ItemContent {
             ItemContent::Link(_) => "LINK",
             ItemContent::YouTube(_) => "YOUTUBE",
             ItemContent::Spotify { .. } => "SPOTIFY",
+            ItemContent::SpotifyApp => "SPOTIFY",
             ItemContent::Markdown { .. } => "MARKDOWN",
         }
     }

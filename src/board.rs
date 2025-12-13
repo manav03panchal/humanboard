@@ -136,14 +136,15 @@ impl Board {
     }
 
     /// Add a single item (still triggers history + save for single operations)
-    pub fn add_item(&mut self, position: Point<Pixels>, content: ItemContent) {
-        self.add_item_internal(position, content);
+    pub fn add_item(&mut self, position: Point<Pixels>, content: ItemContent) -> u64 {
+        let id = self.add_item_internal(position, content);
         self.push_history();
         self.mark_dirty();
+        id
     }
 
     /// Internal add without history/save - used for batch operations
-    fn add_item_internal(&mut self, position: Point<Pixels>, content: ItemContent) {
+    fn add_item_internal(&mut self, position: Point<Pixels>, content: ItemContent) -> u64 {
         let size = content.default_size();
         let id = self.next_item_id;
 
@@ -155,6 +156,7 @@ impl Board {
         });
         self.items_index.insert(id, self.items.len() - 1);
         self.next_item_id += 1;
+        id
     }
 
     /// Handle file drop - batched operation (single history push + save)

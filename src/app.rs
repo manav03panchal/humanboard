@@ -4,7 +4,8 @@ use crate::board_index::BoardIndex;
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
-use crate::spotify_webview::SpotifyWebView;
+use crate::spotify_auth::SpotifyAuthFlow;
+use crate::spotify_webview::{SpotifyAppWebView, SpotifyWebView};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
@@ -31,6 +32,13 @@ pub enum CmdPaletteMode {
     #[default]
     Items, // Searching canvas items
     Themes, // Selecting theme
+}
+
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum SettingsTab {
+    #[default]
+    Appearance,
+    Integrations,
 }
 
 pub enum PreviewTab {
@@ -140,11 +148,19 @@ pub struct Humanboard {
     // Spotify WebViews (keyed by item ID)
     pub spotify_webviews: HashMap<u64, SpotifyWebView>,
 
+    // Spotify App WebViews - full Spotify web player (keyed by item ID)
+    pub spotify_app_webviews: HashMap<u64, SpotifyAppWebView>,
+
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
+    pub settings_tab: SettingsTab,
     pub settings_theme_index: usize,
     pub settings_theme_scroll: ScrollHandle,
+
+    // Spotify auth flow (active during authorization)
+    pub spotify_auth_flow: Option<SpotifyAuthFlow>,
+    pub spotify_connecting: bool,
 
     // Toast notifications
     pub toast_manager: ToastManager,
@@ -207,10 +223,14 @@ impl Humanboard {
             audio_webviews: HashMap::new(),
             video_webviews: HashMap::new(),
             spotify_webviews: HashMap::new(),
+            spotify_app_webviews: HashMap::new(),
             settings: Settings::load(),
             show_settings: false,
+            settings_tab: SettingsTab::default(),
             settings_theme_index: 0,
             settings_theme_scroll: ScrollHandle::new(),
+            spotify_auth_flow: None,
+            spotify_connecting: false,
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
@@ -290,6 +310,140 @@ impl Humanboard {
     pub fn toggle_shortcuts(&mut self, cx: &mut Context<Self>) {
         self.show_shortcuts = !self.show_shortcuts;
         cx.notify();
+    }
+
+    pub fn set_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+        self.settings_tab = tab;
+        cx.notify();
+    }
+
+    pub fn start_spotify_connect(&mut self, cx: &mut Context<Self>) {
+        // Start the OAuth flow
+        let auth_flow = SpotifyAuthFlow::new();
+        let auth_url = auth_flow.get_auth_url();
+
+        // Start the callback server
+        auth_flow.start_callback_server();
+
+        // Open the auth URL in the browser
+        if let Err(e) = open::that(&auth_url) {
+            self.toast_manager.push(crate::notifications::Toast::error(
+                format!("Failed to open browser: {}", e),
+            ));
+            return;
+        }
+
+        self.spotify_auth_flow = Some(auth_flow);
+        self.spotify_connecting = true;
+        cx.notify();
+    }
+
+    /// Called from render cycle to check if Spotify auth has completed
+    pub fn poll_spotify_auth(&mut self, cx: &mut Context<Self>) {
+        if !self.spotify_connecting {
+            return;
+        }
+
+        let auth_result = if let Some(ref flow) = self.spotify_auth_flow {
+            flow.check_result()
+        } else {
+            self.spotify_connecting = false;
+            return;
+        };
+
+        match auth_result {
+            Some(Ok(code)) => {
+                // Got the authorization code, exchange for tokens
+                if let Some(ref flow) = self.spotify_auth_flow {
+                    match flow.complete(&code) {
+                        Ok(tokens) => {
+                            if let Err(e) = tokens.save() {
+                                self.toast_manager.push(crate::notifications::Toast::error(
+                                    format!("Failed to save tokens: {}", e),
+                                ));
+                            } else {
+                                self.toast_manager.push(crate::notifications::Toast::success(
+                                    "Connected to Spotify!".to_string(),
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            self.toast_manager.push(crate::notifications::Toast::error(
+                                format!("Token exchange failed: {}", e),
+                            ));
+                        }
+                    }
+                }
+                self.spotify_auth_flow = None;
+                self.spotify_connecting = false;
+                cx.notify();
+            }
+            Some(Err(e)) => {
+                // Auth failed
+                self.toast_manager.push(crate::notifications::Toast::error(
+                    format!("Spotify auth failed: {}", e),
+                ));
+                self.spotify_auth_flow = None;
+                self.spotify_connecting = false;
+                cx.notify();
+            }
+            None => {
+                // Still waiting, schedule next poll
+                cx.notify();
+            }
+        }
+    }
+
+    pub fn disconnect_spotify(&mut self, cx: &mut Context<Self>) {
+        if let Err(e) = crate::spotify_auth::disconnect() {
+            self.toast_manager.push(crate::notifications::Toast::error(
+                format!("Failed to disconnect: {}", e),
+            ));
+        } else {
+            self.toast_manager.push(crate::notifications::Toast::success(
+                "Disconnected from Spotify".to_string(),
+            ));
+        }
+        cx.notify();
+    }
+
+    pub fn add_spotify_webview(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Get board ID from current view
+        let _board_id = match &self.view {
+            AppView::Board(id) => id.clone(),
+            _ => return,
+        };
+
+        // Check if authenticated
+        if !crate::spotify_auth::is_connected() {
+            self.toast_manager.push(crate::notifications::Toast::error(
+                "Connect to Spotify first in Settings → Integrations".to_string(),
+            ));
+            return;
+        }
+
+        if let Some(ref mut board) = self.board {
+            // Check if there's already a SpotifyApp item on the board
+            let has_spotify_app = board.items.iter().any(|item| {
+                matches!(item.content, crate::types::ItemContent::SpotifyApp)
+            });
+
+            if has_spotify_app {
+                self.toast_manager.push(crate::notifications::Toast::info(
+                    "Spotify player already open".to_string(),
+                ));
+                return;
+            }
+
+            // Add to board at center of visible canvas
+            let center_screen = point(px(600.0), px(400.0));
+            let canvas_pos = board.screen_to_canvas(center_screen);
+            let item_id = board.add_item(canvas_pos, crate::types::ItemContent::SpotifyApp);
+
+            // WebView will be created by ensure_spotify_app_webviews
+            cx.notify();
+            let _ = item_id; // Used by ensure function
+        }
     }
 
     pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -517,6 +671,9 @@ impl Humanboard {
                 self.create_markdown_note(name.to_string(), window, cx);
             } else if command == "md" {
                 self.create_markdown_note("Untitled".to_string(), window, cx);
+            } else if command == "spotify" {
+                // Open Spotify app/website
+                let _ = open::that("https://open.spotify.com");
             }
         }
     }
@@ -730,6 +887,7 @@ impl Humanboard {
         self.audio_webviews.clear(); // Clear Audio WebViews when leaving board
         self.video_webviews.clear(); // Clear Video WebViews when leaving board
         self.spotify_webviews.clear(); // Clear Spotify WebViews when leaving board
+        self.spotify_app_webviews.clear(); // Clear Spotify App WebViews when leaving board
         self.view = AppView::Landing;
         self.selected_items.clear();
         // Reload index to get any changes
@@ -1107,6 +1265,48 @@ impl Humanboard {
             spotify_items.iter().map(|(id, _, _)| *id).collect();
         self.spotify_webviews
             .retain(|id, _| spotify_ids.contains(id));
+    }
+
+    pub fn ensure_spotify_app_webviews(&mut self, window: &mut Window, cx: &mut App) {
+        use crate::types::ItemContent;
+
+        let Some(ref board) = self.board else {
+            self.spotify_app_webviews.clear();
+            return;
+        };
+
+        // Collect SpotifyApp item IDs
+        let spotify_app_items: Vec<u64> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if matches!(&item.content, ItemContent::SpotifyApp) {
+                    Some(item.id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create WebViews for new SpotifyApp items
+        for item_id in &spotify_app_items {
+            if !self.spotify_app_webviews.contains_key(item_id) {
+                match SpotifyAppWebView::new(window, cx) {
+                    Ok(webview) => {
+                        self.spotify_app_webviews.insert(*item_id, webview);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create Spotify App WebView: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Remove WebViews for deleted items
+        let spotify_app_ids: std::collections::HashSet<u64> =
+            spotify_app_items.iter().copied().collect();
+        self.spotify_app_webviews
+            .retain(|id, _| spotify_app_ids.contains(id));
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {

@@ -62,6 +62,9 @@ impl Render for Humanboard {
         // Remove expired toasts
         self.toast_manager.remove_expired();
 
+        // Poll for Spotify auth completion if connecting
+        self.poll_spotify_auth(cx);
+
         // Check for debounced save
         if let Some(ref mut board) = self.board {
             if board.should_save() {
@@ -87,6 +90,8 @@ impl Render for Humanboard {
                     &self.settings.theme,
                     self.settings_theme_index,
                     &self.settings_theme_scroll,
+                    self.settings_tab,
+                    self.spotify_connecting,
                     cx,
                 ))
             })
@@ -165,6 +170,9 @@ impl Humanboard {
 
         // Ensure Spotify WebViews are created for any Spotify items
         self.ensure_spotify_webviews(window, cx);
+
+        // Ensure Spotify App WebViews are created for any SpotifyApp items
+        self.ensure_spotify_app_webviews(window, cx);
 
         // Get board data (with fallback defaults if somehow no board)
         let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
@@ -360,6 +368,7 @@ impl Humanboard {
                                     &self.audio_webviews,
                                     &self.video_webviews,
                                     &self.spotify_webviews,
+                                    &self.spotify_app_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -412,6 +421,7 @@ impl Humanboard {
                                     &self.audio_webviews,
                                     &self.video_webviews,
                                     &self.spotify_webviews,
+                                    &self.spotify_app_webviews,
                                     marquee,
                                     cx,
                                 )),
@@ -456,6 +466,7 @@ impl Humanboard {
                 &self.audio_webviews,
                 &self.video_webviews,
                 &self.spotify_webviews,
+                &self.spotify_app_webviews,
                 marquee,
                 cx,
             )),
