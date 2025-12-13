@@ -7,7 +7,7 @@
 //! - Command palette popup
 //! - Settings modal
 
-use crate::actions::{CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp};
+use crate::actions::{CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::settings::Settings;
 use crate::spotify_auth;
@@ -375,7 +375,7 @@ pub fn render_header_bar(
                                                 MouseButton::Left,
                                                 cx.listener(|this, _, window, cx| {
                                                     this.add_spotify_webview(window, cx);
-                                                    this.hide_command_palette(cx);
+                                                    this.hide_command_palette(window, cx);
                                                 }),
                                             )
                                             .child(
@@ -496,8 +496,8 @@ pub fn render_header_bar(
                                 .size(px(14.0))
                                 .text_color(muted_fg),
                         )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.toggle_settings(cx);
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.toggle_settings(window, cx);
                         })),
                 )
                 // Help button
@@ -771,7 +771,7 @@ pub fn render_command_palette(
             .pt(px(120.0))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| this.hide_command_palette(cx)),
+                cx.listener(|this, _, window, cx| this.hide_command_palette(window, cx)),
             )
             .on_scroll_wheel(|_, _, _| {})
             .child(
@@ -1151,6 +1151,7 @@ pub fn render_settings_modal(
     _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
     spotify_connecting: bool,
+    modal_focus: &FocusHandle,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
@@ -1182,10 +1183,12 @@ pub fn render_settings_modal(
                 this.settings_backdrop_clicked = true;
                 cx.notify();
             }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| {
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 if this.settings_backdrop_clicked {
                     this.show_settings = false;
                     this.settings_backdrop_clicked = false;
+                    // Release focus back to canvas
+                    this.focus.release(crate::focus::FocusContext::Modal, window);
                 }
                 cx.notify();
             }))
@@ -1193,6 +1196,8 @@ pub fn render_settings_modal(
             .child(
                 h_flex()
                     .id("settings-modal")
+                    .track_focus(modal_focus)
+                    .key_context("Modal")
                     .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| {
                         this.settings_backdrop_clicked = false;
                     }))
@@ -1208,7 +1213,9 @@ pub fn render_settings_modal(
                     .overflow_hidden()
                     .shadow_lg()
                     .on_scroll_wheel(|_, _, _| {})
-                            .key_context("SettingsModal")
+                    .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
+                        this.toggle_settings(window, cx);
+                    }))
                             // Left sidebar
                             .child(
                                 v_flex()

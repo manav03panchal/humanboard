@@ -1,6 +1,7 @@
 use crate::audio_webview::AudioWebView;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
+use crate::focus::{FocusContext, FocusManager};
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
@@ -121,7 +122,8 @@ pub struct Humanboard {
     pub frame_times: Vec<Duration>,
     pub last_frame: Instant,
     pub frame_count: u64,
-    pub focus_handle: FocusHandle,
+    /// Focus manager for handling focus across different contexts
+    pub focus: FocusManager,
     pub preview: Option<PreviewPanel>,
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
@@ -205,7 +207,7 @@ impl Humanboard {
             frame_times: Vec::with_capacity(60),
             last_frame: Instant::now(),
             frame_count: 0,
-            focus_handle: cx.focus_handle(),
+            focus: FocusManager::new(cx),
             preview: None,
             dragging_splitter: false,
             splitter_drag_start: None,
@@ -236,15 +238,21 @@ impl Humanboard {
         }
     }
 
-    pub fn toggle_settings(&mut self, cx: &mut Context<Self>) {
+    pub fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_settings = !self.show_settings;
         if self.show_settings {
+            // Set focus context to Modal
+            self.focus.focus(FocusContext::Modal, window);
+
             // Initialize theme index to current theme
             let themes = crate::settings::Settings::available_themes(cx);
             self.settings_theme_index = themes
                 .iter()
                 .position(|t| t == &self.settings.theme)
                 .unwrap_or(0);
+        } else {
+            // Release focus back to canvas
+            self.focus.release(FocusContext::Modal, window);
         }
         cx.notify();
     }
@@ -461,6 +469,9 @@ impl Humanboard {
     }
 
     pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Set focus context to CommandPalette
+        self.focus.focus(FocusContext::CommandPalette, window);
+
         let input = cx
             .new(|cx| InputState::new(window, cx).placeholder("Type to search or use commands..."));
 
@@ -490,8 +501,9 @@ impl Humanboard {
                     gpui_component::input::InputEvent::Blur => {
                         // Close command palette when input loses focus (click outside)
                         // But not if we're in theme mode (user clicked theme command)
+                        // Note: Using clear_command_palette_state since window isn't available here
                         if this.cmd_palette_mode != CmdPaletteMode::Themes {
-                            this.hide_command_palette(cx);
+                            this.clear_command_palette_state(cx);
                         }
                     }
                     _ => {}
@@ -506,7 +518,16 @@ impl Humanboard {
         self.update_search_results("", cx);
     }
 
-    pub fn hide_command_palette(&mut self, cx: &mut Context<Self>) {
+    /// Hide command palette and release focus (when window is available)
+    pub fn hide_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear_command_palette_state(cx);
+        // Release focus back to canvas
+        self.focus.release(FocusContext::CommandPalette, window);
+    }
+
+    /// Clear command palette state without focus management
+    /// Used when window is not available (e.g., from Blur callback)
+    pub fn clear_command_palette_state(&mut self, cx: &mut Context<Self>) {
         self.command_palette = None;
         self.search_results.clear();
         self.selected_result = 0;
@@ -910,6 +931,9 @@ impl Humanboard {
 
     pub fn start_editing_board(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(meta) = self.board_index.get_board(&id) {
+            // Set focus context to Landing for input
+            self.focus.focus(FocusContext::Landing, window);
+
             let name = meta.name.clone();
             let input = cx.new(|cx| InputState::new(window, cx).default_value(name));
             // Focus the input so user can type immediately
@@ -1045,6 +1069,9 @@ impl Humanboard {
                 {
                     *editing = !*editing;
                     if *editing {
+                        // Set focus context to Preview for editor input
+                        self.focus.focus(FocusContext::Preview, window);
+
                         if editor.is_none() {
                             // Create editor with current content - use code_editor for multiline support
                             let content_clone = content.clone();
@@ -1062,6 +1089,9 @@ impl Humanboard {
                                 state.focus(window, cx);
                             });
                         }
+                    } else {
+                        // Release focus back to canvas when exiting edit mode
+                        self.focus.release(FocusContext::Preview, window);
                     }
                 }
             }
