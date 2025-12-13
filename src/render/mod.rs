@@ -178,6 +178,10 @@ impl Humanboard {
         // Ensure Spotify App WebViews are created for any SpotifyApp items
         self.ensure_spotify_app_webviews(window, cx);
 
+        // Update webview visibility based on canvas viewport
+        // This hides webviews that are scrolled out of view to prevent z-index issues
+        self.update_webview_visibility(window, cx);
+
         // Get board data (with fallback defaults if somehow no board)
         let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
             (

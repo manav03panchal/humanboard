@@ -1475,6 +1475,102 @@ impl Humanboard {
             .retain(|id, _| spotify_app_ids.contains(id));
     }
 
+    /// Update webview visibility based on canvas viewport
+    /// Hides webviews that are scrolled out of view to prevent z-index issues
+    pub fn update_webview_visibility(&mut self, window: &mut Window, cx: &mut App) {
+        let Some(ref board) = self.board else { return };
+
+        let bounds = window.bounds();
+        let window_width = f32::from(bounds.size.width);
+        let window_height = f32::from(bounds.size.height);
+
+        // Account for preview panel if open
+        let (canvas_width, canvas_height) = if let Some(ref preview) = self.preview {
+            match preview.split {
+                SplitDirection::Vertical => {
+                    ((1.0 - preview.size) * window_width, window_height)
+                }
+                SplitDirection::Horizontal => {
+                    (window_width, (1.0 - preview.size) * window_height)
+                }
+            }
+        } else {
+            (window_width, window_height)
+        };
+
+        // Header offset
+        let header_height = 40.0;
+        let canvas_top = header_height;
+
+        let zoom = board.zoom;
+        let offset_x = f32::from(board.canvas_offset.x);
+        let offset_y = f32::from(board.canvas_offset.y);
+
+        // Check each item with a webview
+        for item in &board.items {
+            let item_x = item.position.0 * zoom + offset_x;
+            let item_y = item.position.1 * zoom + offset_y + header_height;
+            let item_w = item.size.0 * zoom;
+            let item_h = item.size.1 * zoom;
+
+            // Check if item is visible and not overlapping UI chrome
+            // Webviews don't clip, so hide if any edge goes outside canvas bounds
+            let footer_height = 28.0;
+            let canvas_bottom = canvas_height - footer_height;
+
+            let overlaps_header = item_y < canvas_top;
+            let overlaps_footer = item_y + item_h > canvas_bottom;
+            let overlaps_left = item_x < 0.0;
+            let overlaps_right = item_x + item_w > canvas_width;
+
+            let is_visible = !overlaps_header && !overlaps_footer && !overlaps_left && !overlaps_right;
+
+            // Update YouTube webview visibility
+            if let Some(webview) = self.youtube_webviews.get(&item.id) {
+                webview.webview().update(cx, |wv, _| {
+                    if is_visible {
+                        wv.show();
+                    } else {
+                        wv.hide();
+                    }
+                });
+            }
+
+            // Update Audio webview visibility
+            if let Some(webview) = self.audio_webviews.get(&item.id) {
+                webview.webview_entity.update(cx, |wv, _| {
+                    if is_visible {
+                        wv.show();
+                    } else {
+                        wv.hide();
+                    }
+                });
+            }
+
+            // Update Video webview visibility
+            if let Some(webview) = self.video_webviews.get(&item.id) {
+                webview.webview_entity.update(cx, |wv, _| {
+                    if is_visible {
+                        wv.show();
+                    } else {
+                        wv.hide();
+                    }
+                });
+            }
+
+            // Update Spotify webview visibility
+            if let Some(webview) = self.spotify_app_webviews.get(&item.id) {
+                webview.webview().update(cx, |wv, _| {
+                    if is_visible {
+                        wv.show();
+                    } else {
+                        wv.hide();
+                    }
+                });
+            }
+        }
+    }
+
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {
         self.preview = None;
         cx.notify();
