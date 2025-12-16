@@ -5,8 +5,7 @@ use crate::focus::{FocusContext, FocusManager};
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
-use crate::spotify_auth::SpotifyAuthFlow;
-use crate::spotify_webview::SpotifyAppWebView;
+
 use crate::types::{ItemContent, ToolType};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -171,9 +170,6 @@ pub struct Humanboard {
     // Video WebViews (keyed by item ID)
     pub video_webviews: HashMap<u64, VideoWebView>,
 
-    // Spotify App WebViews - full Spotify web player (keyed by item ID)
-    pub spotify_app_webviews: HashMap<u64, SpotifyAppWebView>,
-
     // Settings
     pub settings: Settings,
     pub show_settings: bool,
@@ -183,10 +179,6 @@ pub struct Humanboard {
     pub settings_theme_scroll: ScrollHandle,
     pub settings_font_index: usize,
     pub settings_font_scroll: ScrollHandle,
-
-    // Spotify auth flow (active during authorization)
-    pub spotify_auth_flow: Option<SpotifyAuthFlow>,
-    pub spotify_connecting: bool,
 
     // Toast notifications
     pub toast_manager: ToastManager,
@@ -256,7 +248,7 @@ impl Humanboard {
             youtube_webviews: HashMap::new(),
             audio_webviews: HashMap::new(),
             video_webviews: HashMap::new(),
-            spotify_app_webviews: HashMap::new(),
+
             settings: Settings::load(),
             show_settings: false,
             settings_backdrop_clicked: false,
@@ -265,8 +257,7 @@ impl Humanboard {
             settings_theme_scroll: ScrollHandle::new(),
             settings_font_index: 0,
             settings_font_scroll: ScrollHandle::new(),
-            spotify_auth_flow: None,
-            spotify_connecting: false,
+
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
@@ -454,149 +445,6 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn start_spotify_connect(&mut self, cx: &mut Context<Self>) {
-        // Start the OAuth flow
-        let auth_flow = SpotifyAuthFlow::new();
-        let auth_url = auth_flow.get_auth_url();
-
-        // Start the callback server
-        auth_flow.start_callback_server();
-
-        // Open the auth URL in the browser
-        if let Err(e) = open::that(&auth_url) {
-            self.toast_manager
-                .push(crate::notifications::Toast::error(format!(
-                    "Failed to open browser: {}",
-                    e
-                )));
-            return;
-        }
-
-        self.spotify_auth_flow = Some(auth_flow);
-        self.spotify_connecting = true;
-        cx.notify();
-    }
-
-    /// Called from render cycle to check if Spotify auth has completed
-    pub fn poll_spotify_auth(&mut self, cx: &mut Context<Self>) {
-        if !self.spotify_connecting {
-            return;
-        }
-
-        let auth_result = if let Some(ref flow) = self.spotify_auth_flow {
-            flow.check_result()
-        } else {
-            self.spotify_connecting = false;
-            return;
-        };
-
-        match auth_result {
-            Some(Ok(code)) => {
-                // Got the authorization code, exchange for tokens
-                if let Some(ref flow) = self.spotify_auth_flow {
-                    match flow.complete(&code) {
-                        Ok(tokens) => {
-                            if let Err(e) = tokens.save() {
-                                self.toast_manager.push(crate::notifications::Toast::error(
-                                    format!("Failed to save tokens: {}", e),
-                                ));
-                            } else {
-                                self.toast_manager
-                                    .push(crate::notifications::Toast::success(
-                                        "Connected to Spotify!".to_string(),
-                                    ));
-                            }
-                        }
-                        Err(e) => {
-                            self.toast_manager
-                                .push(crate::notifications::Toast::error(format!(
-                                    "Token exchange failed: {}",
-                                    e
-                                )));
-                        }
-                    }
-                }
-                self.spotify_auth_flow = None;
-                self.spotify_connecting = false;
-                cx.notify();
-            }
-            Some(Err(e)) => {
-                // Auth failed
-                self.toast_manager
-                    .push(crate::notifications::Toast::error(format!(
-                        "Spotify auth failed: {}",
-                        e
-                    )));
-                self.spotify_auth_flow = None;
-                self.spotify_connecting = false;
-                cx.notify();
-            }
-            None => {
-                // Still waiting, schedule next poll
-                cx.notify();
-            }
-        }
-    }
-
-    pub fn disconnect_spotify(&mut self, cx: &mut Context<Self>) {
-        if let Err(e) = crate::spotify_auth::disconnect() {
-            self.toast_manager
-                .push(crate::notifications::Toast::error(format!(
-                    "Failed to disconnect: {}",
-                    e
-                )));
-        } else {
-            self.toast_manager
-                .push(crate::notifications::Toast::success(
-                    "Disconnected from Spotify".to_string(),
-                ));
-        }
-        cx.notify();
-    }
-
-    pub fn add_spotify_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Get board ID from current view
-        let _board_id = match &self.view {
-            AppView::Board(id) => id.clone(),
-            _ => return,
-        };
-
-        // Check if authenticated
-        if !crate::spotify_auth::is_connected() {
-            self.toast_manager.push(crate::notifications::Toast::error(
-                "Connect to Spotify first in Settings → Integrations".to_string(),
-            ));
-            return;
-        }
-
-        if let Some(ref mut board) = self.board {
-            // Check if there's already a SpotifyApp item on the board
-            let existing_spotify_id = board
-                .items
-                .iter()
-                .find(|item| matches!(item.content, crate::types::ItemContent::SpotifyApp))
-                .map(|item| item.id);
-
-            if let Some(item_id) = existing_spotify_id {
-                // Jump to existing Spotify player instead of creating a new one
-                self.jump_to_item(item_id, window, cx);
-                self.selected_items.clear();
-                self.selected_items.insert(item_id);
-                cx.notify();
-                return;
-            }
-
-            // Add to board at center of visible canvas
-            let center_screen = point(px(600.0), px(400.0));
-            let canvas_pos = board.screen_to_canvas(center_screen);
-            let item_id = board.add_item(canvas_pos, crate::types::ItemContent::SpotifyApp);
-
-            // WebView will be created by ensure_spotify_app_webviews
-            cx.notify();
-            let _ = item_id; // Used by ensure function
-        }
-    }
-
     pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Set focus context to CommandPalette
         self.focus.focus(FocusContext::CommandPalette, window);
@@ -729,7 +577,6 @@ impl Humanboard {
             let commands = [
                 (u64::MAX - 1, "theme", "Change theme"),
                 (u64::MAX - 2, "md", "Create markdown note"),
-                (u64::MAX - 3, "spotify", "Open Spotify player"),
             ];
 
             let matching_commands: Vec<(u64, String)> = commands
@@ -830,7 +677,6 @@ impl Humanboard {
             // Check for special command IDs (u64::MAX - N for commands)
             const CMD_THEME: u64 = u64::MAX - 1;
             const CMD_MD: u64 = u64::MAX - 2;
-            const CMD_SPOTIFY: u64 = u64::MAX - 3;
 
             match *item_id {
                 CMD_THEME => {
@@ -848,9 +694,6 @@ impl Humanboard {
                 }
                 CMD_MD => {
                     self.pending_command = Some("md".to_string());
-                }
-                CMD_SPOTIFY => {
-                    self.pending_command = Some("spotify".to_string());
                 }
                 _ => {
                     // Regular item - jump to it
@@ -896,9 +739,6 @@ impl Humanboard {
                 self.create_markdown_note(name.to_string(), window, cx);
             } else if command == "md" {
                 self.create_markdown_note("Untitled".to_string(), window, cx);
-            } else if command == "spotify" {
-                // Add Spotify player to canvas
-                self.add_spotify_webview(window, cx);
             }
         }
     }
@@ -1111,7 +951,6 @@ impl Humanboard {
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
         self.audio_webviews.clear(); // Clear Audio WebViews when leaving board
         self.video_webviews.clear(); // Clear Video WebViews when leaving board
-        self.spotify_app_webviews.clear(); // Clear Spotify App WebViews when leaving board
         self.view = AppView::Landing;
         self.selected_items.clear();
         // Reload index to get any changes
@@ -1576,48 +1415,6 @@ impl Humanboard {
         self.video_webviews.retain(|id, _| video_ids.contains(id));
     }
 
-    pub fn ensure_spotify_app_webviews(&mut self, window: &mut Window, cx: &mut App) {
-        use crate::types::ItemContent;
-
-        let Some(ref board) = self.board else {
-            self.spotify_app_webviews.clear();
-            return;
-        };
-
-        // Collect SpotifyApp item IDs
-        let spotify_app_items: Vec<u64> = board
-            .items
-            .iter()
-            .filter_map(|item| {
-                if matches!(&item.content, ItemContent::SpotifyApp) {
-                    Some(item.id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Create WebViews for new SpotifyApp items
-        for item_id in &spotify_app_items {
-            if !self.spotify_app_webviews.contains_key(item_id) {
-                match SpotifyAppWebView::new(window, cx) {
-                    Ok(webview) => {
-                        self.spotify_app_webviews.insert(*item_id, webview);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to create Spotify App WebView: {}", e);
-                    }
-                }
-            }
-        }
-
-        // Remove WebViews for deleted items
-        let spotify_app_ids: std::collections::HashSet<u64> =
-            spotify_app_items.iter().copied().collect();
-        self.spotify_app_webviews
-            .retain(|id, _| spotify_app_ids.contains(id));
-    }
-
     /// Update webview visibility based on canvas viewport
     /// Hides webviews that are scrolled out of view to prevent z-index issues
     pub fn update_webview_visibility(&mut self, window: &mut Window, cx: &mut App) {
@@ -1633,9 +1430,6 @@ impl Humanboard {
             }
             for (_, webview) in &self.video_webviews {
                 webview.webview_entity.update(cx, |wv, _| wv.hide());
-            }
-            for (_, webview) in &self.spotify_app_webviews {
-                webview.webview().update(cx, |wv, _| wv.hide());
             }
             // Also hide PDF webviews in preview panel
             if let Some(ref preview) = self.preview {
@@ -1718,17 +1512,6 @@ impl Humanboard {
             // Update Video webview visibility
             if let Some(webview) = self.video_webviews.get(&item.id) {
                 webview.webview_entity.update(cx, |wv, _| {
-                    if is_visible {
-                        wv.show();
-                    } else {
-                        wv.hide();
-                    }
-                });
-            }
-
-            // Update Spotify webview visibility
-            if let Some(webview) = self.spotify_app_webviews.get(&item.id) {
-                webview.webview().update(cx, |wv, _| {
                     if is_visible {
                         wv.show();
                     } else {

@@ -52,7 +52,6 @@ pub enum ItemContent {
     },
     Link(String),
     YouTube(String), // Video ID
-    SpotifyApp,      // Full Spotify web player
     Markdown {
         path: PathBuf,
         title: String,
@@ -205,7 +204,6 @@ impl ItemContent {
             ItemContent::Pdf { .. } => (180.0, 240.0),
             ItemContent::Link(_) => (300.0, 150.0),
             ItemContent::YouTube(_) => (560.0, 315.0), // 16:9 aspect ratio
-            ItemContent::SpotifyApp => (900.0, 600.0), // Full Spotify web player
             ItemContent::Markdown { .. } => (200.0, 36.0), // Simple filename button
             ItemContent::Code { .. } => (200.0, 36.0), // Simple filename button like markdown
             ItemContent::TextBox { .. } => (200.0, 100.0), // Default text box size
@@ -234,7 +232,6 @@ impl ItemContent {
             ItemContent::Text(text) => text.clone(),
             ItemContent::Link(url) => url.clone(),
             ItemContent::YouTube(id) => format!("YouTube: {}", id),
-            ItemContent::SpotifyApp => "Spotify".to_string(),
             ItemContent::Markdown { title, .. } => title.clone(),
             ItemContent::Code { path, .. } => path
                 .file_name()
@@ -268,7 +265,6 @@ impl ItemContent {
             ItemContent::Text(_) => "TEXT",
             ItemContent::Link(_) => "LINK",
             ItemContent::YouTube(_) => "YOUTUBE",
-            ItemContent::SpotifyApp => "SPOTIFY",
             ItemContent::Markdown { .. } => "MARKDOWN",
             ItemContent::Code { language, .. } => match language.as_str() {
                 "rust" => "RUST",

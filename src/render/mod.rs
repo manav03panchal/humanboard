@@ -69,9 +69,6 @@ impl Render for Humanboard {
         // Remove expired toasts
         self.toast_manager.remove_expired();
 
-        // Poll for Spotify auth completion if connecting
-        self.poll_spotify_auth(cx);
-
         // Check for debounced save
         if let Some(ref mut board) = self.board {
             if board.should_save() {
@@ -99,7 +96,6 @@ impl Render for Humanboard {
                     self.settings_theme_index,
                     &self.settings_theme_scroll,
                     self.settings_tab,
-                    self.spotify_connecting,
                     &self.focus.modal,
                     cx,
                 ))
@@ -198,9 +194,6 @@ impl Humanboard {
 
         // Ensure Video WebViews are created for any Video items
         self.ensure_video_webviews(window, cx);
-
-        // Ensure Spotify App WebViews are created for any SpotifyApp items
-        self.ensure_spotify_app_webviews(window, cx);
 
         // Update webview visibility based on canvas viewport
         // This hides webviews that are scrolled out of view to prevent z-index issues
@@ -460,7 +453,6 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
-                                            &self.spotify_app_webviews,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
                                             marquee,
@@ -533,7 +525,6 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
-                                            &self.spotify_app_webviews,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
                                             marquee,
@@ -597,7 +588,6 @@ impl Humanboard {
                     &self.youtube_webviews,
                     &self.audio_webviews,
                     &self.video_webviews,
-                    &self.spotify_app_webviews,
                     self.editing_textbox_id,
                     self.textbox_input.as_ref(),
                     marquee,

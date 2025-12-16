@@ -10,7 +10,7 @@
 use crate::actions::{CmdPaletteDown, CmdPaletteUp, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::settings::Settings;
-use crate::spotify_auth;
+
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputState, MoveDown, MoveUp};
@@ -356,42 +356,6 @@ pub fn render_header_bar(
                                                     .text_xs()
                                                     .text_color(muted_fg)
                                                     .child("Change theme"),
-                                            ),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .px_2()
-                                            .py_1()
-                                            .mx_1()
-                                            .mb_1()
-                                            .gap_2()
-                                            .rounded(px(4.0))
-                                            .hover(|s| s.bg(list_hover))
-                                            .cursor(CursorStyle::PointingHand)
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.add_spotify_webview(window, cx);
-                                                    this.hide_command_palette(window, cx);
-                                                }),
-                                            )
-                                            .child(
-                                                div()
-                                                    .px(px(6.0))
-                                                    .py(px(2.0))
-                                                    .bg(Hsla::from(gpui::rgb(0x1DB954)).opacity(0.15))
-                                                    .rounded(px(3.0))
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(Hsla::from(gpui::rgb(0x1DB954)))
-                                                    .child("spotify"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .ml_auto()
-                                                    .text_xs()
-                                                    .text_color(muted_fg)
-                                                    .child("Open Spotify"),
                                             ),
                                     ),
                             )
@@ -999,67 +963,6 @@ pub fn render_command_palette(
     .with_priority(2000)
 }
 
-/// Render the Spotify connect/disconnect button
-fn render_spotify_button(
-    connected: bool,
-    connecting: bool,
-    muted_fg: Hsla,
-    cx: &mut Context<Humanboard>,
-) -> Stateful<Div> {
-    let success = cx.theme().success;
-    let danger_color = Hsla::from(gpui::rgb(0xef4444));
-    let spotify_green = Hsla::from(gpui::rgb(0x1DB954));
-    let spotify_green_hover = Hsla::from(gpui::rgb(0x1ed760));
-
-    div()
-        .id("spotify-btn")
-        .px_3()
-        .py_1p5()
-        .rounded(px(6.0))
-        .when(connected, |d| {
-            d.bg(danger_color.opacity(0.1))
-                .border_1()
-                .border_color(danger_color.opacity(0.3))
-                .cursor(CursorStyle::PointingHand)
-                .hover(|s| s.bg(danger_color.opacity(0.2)))
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(success))
-                        .child(div().text_sm().text_color(danger_color).child("Disconnect")),
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        this.disconnect_spotify(cx);
-                    }),
-                )
-        })
-        .when(connecting && !connected, |d| {
-            d.bg(muted_fg.opacity(0.1))
-                .child(div().text_sm().text_color(muted_fg).child("Connecting..."))
-        })
-        .when(!connected && !connecting, |d| {
-            d.bg(spotify_green)
-                .cursor(CursorStyle::PointingHand)
-                .hover(|s| s.bg(spotify_green_hover))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(Hsla::from(gpui::rgb(0x000000)))
-                        .child("Connect"),
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        this.start_spotify_connect(cx);
-                    }),
-                )
-        })
-}
-
 /// Render a setting row with title, description, and control on the right
 fn render_setting_row(
     title: &str,
@@ -1119,7 +1022,6 @@ pub fn render_settings_modal(
     _theme_index: usize,
     _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
-    spotify_connecting: bool,
     modal_focus: &FocusHandle,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
@@ -1127,7 +1029,6 @@ pub fn render_settings_modal(
     let fonts = Settings::available_fonts();
     let current_theme_display = current_theme.to_string();
     let current_font_display = current_font.to_string();
-    let spotify_connected = spotify_auth::is_connected();
 
     let bg = cx.theme().background;
     let border = cx.theme().border;
@@ -1150,31 +1051,43 @@ pub fn render_settings_modal(
             .flex()
             .items_center()
             .justify_center()
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
-                this.settings_backdrop_clicked = true;
-                cx.notify();
-            }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, window, cx| {
-                if this.settings_backdrop_clicked {
-                    this.show_settings = false;
-                    this.settings_backdrop_clicked = false;
-                    // Force focus back to canvas
-                    this.focus.force_canvas_focus(window);
-                }
-                cx.notify();
-            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.settings_backdrop_clicked = true;
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    if this.settings_backdrop_clicked {
+                        this.show_settings = false;
+                        this.settings_backdrop_clicked = false;
+                        // Force focus back to canvas
+                        this.focus.force_canvas_focus(window);
+                    }
+                    cx.notify();
+                }),
+            )
             .on_scroll_wheel(cx.listener(|_, _, _, _| {}))
             .child(
                 h_flex()
                     .id("settings-modal")
                     .track_focus(modal_focus)
                     .key_context("Modal")
-                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| {
-                        this.settings_backdrop_clicked = false;
-                    }))
-                    .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| {
-                        this.settings_backdrop_clicked = false;
-                    }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, _| {
+                            this.settings_backdrop_clicked = false;
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, _| {
+                            this.settings_backdrop_clicked = false;
+                        }),
+                    )
                     .w(px(680.0))
                     .h(px(480.0))
                     .bg(bg)
@@ -1187,372 +1100,421 @@ pub fn render_settings_modal(
                     .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                         this.toggle_settings(window, cx);
                     }))
-                            // Left sidebar
+                    // Left sidebar
+                    .child(
+                        v_flex()
+                            .w(px(180.0))
+                            .h_full()
+                            .bg(title_bar)
+                            .border_r_1()
+                            .border_color(border)
+                            .p_2()
+                            .gap_1()
+                            // Search input placeholder
                             .child(
-                                v_flex()
-                                    .w(px(180.0))
-                                    .h_full()
-                                    .bg(title_bar)
-                                    .border_r_1()
+                                h_flex()
+                                    .w_full()
+                                    .h(px(28.0))
+                                    .mb_2()
+                                    .px_2()
+                                    .bg(input_bg)
+                                    .border_1()
                                     .border_color(border)
-                                    .p_2()
-                                    .gap_1()
-                                    // Search input placeholder
+                                    .rounded(px(6.0))
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        Icon::new(IconName::Search)
+                                            .size(px(12.0))
+                                            .text_color(muted_fg),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(muted_fg)
+                                            .child("Search settings..."),
+                                    ),
+                            )
+                            // Appearance tab
+                            .child(
+                                div()
+                                    .id("tab-appearance")
+                                    .w_full()
+                                    .px_2()
+                                    .py_1p5()
+                                    .rounded(px(4.0))
+                                    .cursor(CursorStyle::PointingHand)
+                                    .when(active_tab == SettingsTab::Appearance, |d| {
+                                        d.bg(list_active)
+                                    })
+                                    .when(active_tab != SettingsTab::Appearance, |d| {
+                                        d.hover(|s| s.bg(list_hover))
+                                    })
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_settings_tab(SettingsTab::Appearance, cx);
+                                        }),
+                                    )
                                     .child(
                                         h_flex()
-                                            .w_full()
-                                            .h(px(28.0))
-                                            .mb_2()
-                                            .px_2()
-                                            .bg(input_bg)
-                                            .border_1()
-                                            .border_color(border)
-                                            .rounded(px(6.0))
-                                            .items_center()
                                             .gap_2()
+                                            .items_center()
                                             .child(
-                                                Icon::new(IconName::Search)
-                                                    .size(px(12.0))
-                                                    .text_color(muted_fg),
+                                                Icon::new(IconName::Palette)
+                                                    .size(px(14.0))
+                                                    .text_color(
+                                                        if active_tab == SettingsTab::Appearance {
+                                                            fg
+                                                        } else {
+                                                            muted_fg
+                                                        },
+                                                    ),
                                             )
                                             .child(
                                                 div()
-                                                    .text_xs()
-                                                    .text_color(muted_fg)
-                                                    .child("Search settings..."),
-                                            ),
-                                    )
-                                    // Appearance tab
-                                    .child(
-                                        div()
-                                            .id("tab-appearance")
-                                            .w_full()
-                                            .px_2()
-                                            .py_1p5()
-                                            .rounded(px(4.0))
-                                            .cursor(CursorStyle::PointingHand)
-                                            .when(active_tab == SettingsTab::Appearance, |d| {
-                                                d.bg(list_active)
-                                            })
-                                            .when(active_tab != SettingsTab::Appearance, |d| {
-                                                d.hover(|s| s.bg(list_hover))
-                                            })
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.set_settings_tab(SettingsTab::Appearance, cx);
-                                                }),
-                                            )
-                                            .child(
-                                                h_flex()
-                                                    .gap_2()
-                                                    .items_center()
-                                                    .child(
-                                                        Icon::new(IconName::Palette)
-                                                            .size(px(14.0))
-                                                            .text_color(if active_tab == SettingsTab::Appearance {
-                                                                fg
-                                                            } else {
-                                                                muted_fg
-                                                            }),
+                                                    .text_sm()
+                                                    .text_color(
+                                                        if active_tab == SettingsTab::Appearance {
+                                                            fg
+                                                        } else {
+                                                            muted_fg
+                                                        },
                                                     )
-                                                    .child(
-                                                        div()
-                                                            .text_sm()
-                                                            .text_color(if active_tab == SettingsTab::Appearance {
-                                                                fg
-                                                            } else {
-                                                                muted_fg
-                                                            })
-                                                            .child("Appearance"),
-                                                    ),
-                                            ),
-                                    )
-                                    // Integrations tab
-                                    .child(
-                                        div()
-                                            .id("tab-integrations")
-                                            .w_full()
-                                            .px_2()
-                                            .py_1p5()
-                                            .rounded(px(4.0))
-                                            .cursor(CursorStyle::PointingHand)
-                                            .when(active_tab == SettingsTab::Integrations, |d| {
-                                                d.bg(list_active)
-                                            })
-                                            .when(active_tab != SettingsTab::Integrations, |d| {
-                                                d.hover(|s| s.bg(list_hover))
-                                            })
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.set_settings_tab(SettingsTab::Integrations, cx);
-                                                }),
-                                            )
-                                            .child(
-                                                h_flex()
-                                                    .gap_2()
-                                                    .items_center()
-                                                    .child(
-                                                        Icon::new(IconName::Settings)
-                                                            .size(px(14.0))
-                                                            .text_color(if active_tab == SettingsTab::Integrations {
-                                                                fg
-                                                            } else {
-                                                                muted_fg
-                                                            }),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_sm()
-                                                            .text_color(if active_tab == SettingsTab::Integrations {
-                                                                fg
-                                                            } else {
-                                                                muted_fg
-                                                            })
-                                                            .child("Integrations"),
-                                                    ),
+                                                    .child("Appearance"),
                                             ),
                                     ),
                             )
-                            // Right content area
+                            // Integrations tab
                             .child(
-                                v_flex()
-                                    .id("settings-content")
-                                    .flex_1()
-                                    .h_full()
-                                    .overflow_hidden()
-                                    .px_6()
-                                    .py_6()
-                                    // Content - Appearance tab
-                                    .when(active_tab == SettingsTab::Appearance, |d| {
-                                        d.child(
-                                            v_flex()
-                                                .gap_4()
-                                                // Section: Theme
-                                                .child(render_section_header("Theme", cx))
-                                                .child(render_setting_row(
-                                                    "Theme",
-                                                    "Choose a color theme for the interface",
-                                                    // Theme dropdown
-                                                    div()
-                                                        .id("theme-dropdown")
-                                                        .relative()
-                                                        .child(
-                                                            div()
-                                                                .id("theme-dropdown-trigger")
-                                                                .w(px(160.0))
-                                                                .h(px(28.0))
-                                                                .px_3()
-                                                                .bg(input_bg)
-                                                                .border_1()
-                                                                .border_color(border)
-                                                                .rounded(px(6.0))
-                                                                .cursor(CursorStyle::PointingHand)
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_between()
-                                                                .on_mouse_down(
-                                                                    MouseButton::Left,
-                                                                    cx.listener(|this, _, _, cx| {
-                                                                        this.toggle_theme_dropdown(cx);
-                                                                    }),
-                                                                )
-                                                                .child(
-                                                                    div()
-                                                                        .text_sm()
-                                                                        .text_color(fg)
-                                                                        .overflow_hidden()
-                                                                        .whitespace_nowrap()
-                                                                        .child(current_theme_display.clone()),
-                                                                )
-                                                                .child(
-                                                                    Icon::new(IconName::ChevronDown)
-                                                                        .size(px(12.0))
-                                                                        .text_color(muted_fg),
-                                                                ),
-                                                        ),
-                                                    cx,
-                                                ))
-                                                // Theme dropdown menu (shown when open)
-                                                .when(cx.try_global::<ThemeDropdownOpen>().is_some(), |d| {
-                                                    d.child(
-                                                        div()
-                                                            .id("theme-dropdown-menu")
-                                                            .absolute()
-                                                            .top(px(120.0))
-                                                            .right(px(24.0))
-                                                            .w(px(200.0))
-                                                            .max_h(px(280.0))
-                                                            .bg(bg)
-                                                            .border_1()
-                                                            .border_color(border)
-                                                            .rounded(px(6.0))
-                                                            .shadow_lg()
-                                                            .overflow_y_scroll()
-                                                            .py_1()
-                                                            .children(themes.iter().map(|theme_name| {
-                                                                let is_current = theme_name == &current_theme_display;
-                                                                let theme_clone = theme_name.clone();
-
-                                                                div()
-                                                                    .id(ElementId::Name(theme_name.clone().into()))
-                                                                    .w_full()
-                                                                    .px_3()
-                                                                    .py_1p5()
-                                                                    .cursor(CursorStyle::PointingHand)
-                                                                    .when(is_current, |d| d.bg(list_active))
-                                                                    .when(!is_current, |d| d.hover(|s| s.bg(list_hover)))
-                                                                    .on_mouse_down(
-                                                                        MouseButton::Left,
-                                                                        cx.listener(move |this, _, _, cx| {
-                                                                            this.set_theme(theme_clone.clone(), cx);
-                                                                            this.close_theme_dropdown(cx);
-                                                                        }),
-                                                                    )
-                                                                    .child(
-                                                                        h_flex()
-                                                                            .items_center()
-                                                                            .justify_between()
-                                                                            .child(
-                                                                                div()
-                                                                                    .text_sm()
-                                                                                    .text_color(if is_current { fg } else { muted_fg })
-                                                                                    .child(theme_name.clone()),
-                                                                            )
-                                                                            .when(is_current, |d| {
-                                                                                d.child(
-                                                                                    Icon::new(IconName::Check)
-                                                                                        .size(px(14.0))
-                                                                                        .text_color(cx.theme().primary),
-                                                                                )
-                                                                            }),
-                                                                    )
-                                                            })),
-                                                    )
-                                                })
-                                                // Section: Font
-                                                .child(render_section_header("Font", cx))
-                                                .child(render_setting_row(
-                                                    "Font Family",
-                                                    "Choose a font for the interface",
-                                                    // Font dropdown
-                                                    div()
-                                                        .id("font-dropdown")
-                                                        .relative()
-                                                        .child(
-                                                            div()
-                                                                .id("font-dropdown-trigger")
-                                                                .w(px(160.0))
-                                                                .h(px(28.0))
-                                                                .px_3()
-                                                                .bg(input_bg)
-                                                                .border_1()
-                                                                .border_color(border)
-                                                                .rounded(px(6.0))
-                                                                .cursor(CursorStyle::PointingHand)
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_between()
-                                                                .on_mouse_down(
-                                                                    MouseButton::Left,
-                                                                    cx.listener(|this, _, _, cx| {
-                                                                        this.toggle_font_dropdown(cx);
-                                                                    }),
-                                                                )
-                                                                .child(
-                                                                    div()
-                                                                        .text_sm()
-                                                                        .text_color(fg)
-                                                                        .overflow_hidden()
-                                                                        .whitespace_nowrap()
-                                                                        .child(current_font_display.clone()),
-                                                                )
-                                                                .child(
-                                                                    Icon::new(IconName::ChevronDown)
-                                                                        .size(px(12.0))
-                                                                        .text_color(muted_fg),
-                                                                ),
-                                                        ),
-                                                    cx,
-                                                ))
-                                                // Font dropdown menu (shown when open)
-                                                .when(cx.try_global::<FontDropdownOpen>().is_some(), |d| {
-                                                    d.child(
-                                                        div()
-                                                            .id("font-dropdown-menu")
-                                                            .absolute()
-                                                            .top(px(200.0))
-                                                            .right(px(24.0))
-                                                            .w(px(220.0))
-                                                            .max_h(px(280.0))
-                                                            .bg(bg)
-                                                            .border_1()
-                                                            .border_color(border)
-                                                            .rounded(px(6.0))
-                                                            .shadow_lg()
-                                                            .overflow_y_scroll()
-                                                            .py_1()
-                                                            .children(fonts.iter().map(|font_name| {
-                                                                let is_current = *font_name == current_font_display;
-                                                                let font_clone = font_name.to_string();
-
-                                                                div()
-                                                                    .id(ElementId::Name(format!("font-{}", font_name).into()))
-                                                                    .w_full()
-                                                                    .px_3()
-                                                                    .py_1p5()
-                                                                    .cursor(CursorStyle::PointingHand)
-                                                                    .font_family(font_name.to_string())
-                                                                    .when(is_current, |d| d.bg(list_active))
-                                                                    .when(!is_current, |d| d.hover(|s| s.bg(list_hover)))
-                                                                    .on_mouse_down(
-                                                                        MouseButton::Left,
-                                                                        cx.listener(move |this, _, _, cx| {
-                                                                            this.set_font(font_clone.clone(), cx);
-                                                                            this.close_font_dropdown(cx);
-                                                                        }),
-                                                                    )
-                                                                    .child(
-                                                                        h_flex()
-                                                                            .items_center()
-                                                                            .justify_between()
-                                                                            .child(
-                                                                                div()
-                                                                                    .text_sm()
-                                                                                    .text_color(if is_current { fg } else { muted_fg })
-                                                                                    .child(font_name.to_string()),
-                                                                            )
-                                                                            .when(is_current, |d| {
-                                                                                d.child(
-                                                                                    Icon::new(IconName::Check)
-                                                                                        .size(px(14.0))
-                                                                                        .text_color(cx.theme().primary),
-                                                                                )
-                                                                            }),
-                                                                    )
-                                                            })),
-                                                    )
-                                                }),
-                                        )
-                                    })
-                                    // Content - Integrations tab
+                                div()
+                                    .id("tab-integrations")
+                                    .w_full()
+                                    .px_2()
+                                    .py_1p5()
+                                    .rounded(px(4.0))
+                                    .cursor(CursorStyle::PointingHand)
                                     .when(active_tab == SettingsTab::Integrations, |d| {
-                                        d.child(
-                                            v_flex()
-                                                .gap_4()
-                                                // Section: Music
-                                                .child(render_section_header("Music", cx))
-                                                .child(render_setting_row(
-                                                    "Spotify",
-                                                    "Connect to play full tracks instead of 30-second previews. Requires Premium.",
-                                                    render_spotify_button(spotify_connected, spotify_connecting, muted_fg, cx),
-                                                    cx,
-                                                )),
-                                        )
-                                    }),
+                                        d.bg(list_active)
+                                    })
+                                    .when(active_tab != SettingsTab::Integrations, |d| {
+                                        d.hover(|s| s.bg(list_hover))
+                                    })
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_settings_tab(SettingsTab::Integrations, cx);
+                                        }),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .gap_2()
+                                            .items_center()
+                                            .child(
+                                                Icon::new(IconName::Settings)
+                                                    .size(px(14.0))
+                                                    .text_color(
+                                                        if active_tab == SettingsTab::Integrations {
+                                                            fg
+                                                        } else {
+                                                            muted_fg
+                                                        },
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(
+                                                        if active_tab == SettingsTab::Integrations {
+                                                            fg
+                                                        } else {
+                                                            muted_fg
+                                                        },
+                                                    )
+                                                    .child("Integrations"),
+                                            ),
+                                    ),
                             ),
+                    )
+                    // Right content area
+                    .child(
+                        v_flex()
+                            .id("settings-content")
+                            .flex_1()
+                            .h_full()
+                            .overflow_hidden()
+                            .px_6()
+                            .py_6()
+                            // Content - Appearance tab
+                            .when(active_tab == SettingsTab::Appearance, |d| {
+                                d.child(
+                                    v_flex()
+                                        .gap_4()
+                                        // Section: Theme
+                                        .child(render_section_header("Theme", cx))
+                                        .child(render_setting_row(
+                                            "Theme",
+                                            "Choose a color theme for the interface",
+                                            // Theme dropdown
+                                            div().id("theme-dropdown").relative().child(
+                                                div()
+                                                    .id("theme-dropdown-trigger")
+                                                    .w(px(160.0))
+                                                    .h(px(28.0))
+                                                    .px_3()
+                                                    .bg(input_bg)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(6.0))
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(|this, _, _, cx| {
+                                                            this.toggle_theme_dropdown(cx);
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .text_color(fg)
+                                                            .overflow_hidden()
+                                                            .whitespace_nowrap()
+                                                            .child(current_theme_display.clone()),
+                                                    )
+                                                    .child(
+                                                        Icon::new(IconName::ChevronDown)
+                                                            .size(px(12.0))
+                                                            .text_color(muted_fg),
+                                                    ),
+                                            ),
+                                            cx,
+                                        ))
+                                        // Theme dropdown menu (shown when open)
+                                        .when(cx.try_global::<ThemeDropdownOpen>().is_some(), |d| {
+                                            d.child(
+                                                div()
+                                                    .id("theme-dropdown-menu")
+                                                    .absolute()
+                                                    .top(px(120.0))
+                                                    .right(px(24.0))
+                                                    .w(px(200.0))
+                                                    .max_h(px(280.0))
+                                                    .bg(bg)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(6.0))
+                                                    .shadow_lg()
+                                                    .overflow_y_scroll()
+                                                    .py_1()
+                                                    .children(themes.iter().map(|theme_name| {
+                                                        let is_current =
+                                                            theme_name == &current_theme_display;
+                                                        let theme_clone = theme_name.clone();
+
+                                                        div()
+                                                            .id(ElementId::Name(
+                                                                theme_name.clone().into(),
+                                                            ))
+                                                            .w_full()
+                                                            .px_3()
+                                                            .py_1p5()
+                                                            .cursor(CursorStyle::PointingHand)
+                                                            .when(is_current, |d| d.bg(list_active))
+                                                            .when(!is_current, |d| {
+                                                                d.hover(|s| s.bg(list_hover))
+                                                            })
+                                                            .on_mouse_down(
+                                                                MouseButton::Left,
+                                                                cx.listener(
+                                                                    move |this, _, _, cx| {
+                                                                        this.set_theme(
+                                                                            theme_clone.clone(),
+                                                                            cx,
+                                                                        );
+                                                                        this.close_theme_dropdown(
+                                                                            cx,
+                                                                        );
+                                                                    },
+                                                                ),
+                                                            )
+                                                            .child(
+                                                                h_flex()
+                                                                    .items_center()
+                                                                    .justify_between()
+                                                                    .child(
+                                                                        div()
+                                                                            .text_sm()
+                                                                            .text_color(
+                                                                                if is_current {
+                                                                                    fg
+                                                                                } else {
+                                                                                    muted_fg
+                                                                                },
+                                                                            )
+                                                                            .child(
+                                                                                theme_name.clone(),
+                                                                            ),
+                                                                    )
+                                                                    .when(is_current, |d| {
+                                                                        d.child(
+                                                                            Icon::new(
+                                                                                IconName::Check,
+                                                                            )
+                                                                            .size(px(14.0))
+                                                                            .text_color(
+                                                                                cx.theme().primary,
+                                                                            ),
+                                                                        )
+                                                                    }),
+                                                            )
+                                                    })),
+                                            )
+                                        })
+                                        // Section: Font
+                                        .child(render_section_header("Font", cx))
+                                        .child(render_setting_row(
+                                            "Font Family",
+                                            "Choose a font for the interface",
+                                            // Font dropdown
+                                            div().id("font-dropdown").relative().child(
+                                                div()
+                                                    .id("font-dropdown-trigger")
+                                                    .w(px(160.0))
+                                                    .h(px(28.0))
+                                                    .px_3()
+                                                    .bg(input_bg)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(6.0))
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(|this, _, _, cx| {
+                                                            this.toggle_font_dropdown(cx);
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .text_color(fg)
+                                                            .overflow_hidden()
+                                                            .whitespace_nowrap()
+                                                            .child(current_font_display.clone()),
+                                                    )
+                                                    .child(
+                                                        Icon::new(IconName::ChevronDown)
+                                                            .size(px(12.0))
+                                                            .text_color(muted_fg),
+                                                    ),
+                                            ),
+                                            cx,
+                                        ))
+                                        // Font dropdown menu (shown when open)
+                                        .when(cx.try_global::<FontDropdownOpen>().is_some(), |d| {
+                                            d.child(
+                                                div()
+                                                    .id("font-dropdown-menu")
+                                                    .absolute()
+                                                    .top(px(200.0))
+                                                    .right(px(24.0))
+                                                    .w(px(220.0))
+                                                    .max_h(px(280.0))
+                                                    .bg(bg)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .rounded(px(6.0))
+                                                    .shadow_lg()
+                                                    .overflow_y_scroll()
+                                                    .py_1()
+                                                    .children(fonts.iter().map(|font_name| {
+                                                        let is_current =
+                                                            *font_name == current_font_display;
+                                                        let font_clone = font_name.to_string();
+
+                                                        div()
+                                                            .id(ElementId::Name(
+                                                                format!("font-{}", font_name)
+                                                                    .into(),
+                                                            ))
+                                                            .w_full()
+                                                            .px_3()
+                                                            .py_1p5()
+                                                            .cursor(CursorStyle::PointingHand)
+                                                            .font_family(font_name.to_string())
+                                                            .when(is_current, |d| d.bg(list_active))
+                                                            .when(!is_current, |d| {
+                                                                d.hover(|s| s.bg(list_hover))
+                                                            })
+                                                            .on_mouse_down(
+                                                                MouseButton::Left,
+                                                                cx.listener(
+                                                                    move |this, _, _, cx| {
+                                                                        this.set_font(
+                                                                            font_clone.clone(),
+                                                                            cx,
+                                                                        );
+                                                                        this.close_font_dropdown(
+                                                                            cx,
+                                                                        );
+                                                                    },
+                                                                ),
+                                                            )
+                                                            .child(
+                                                                h_flex()
+                                                                    .items_center()
+                                                                    .justify_between()
+                                                                    .child(
+                                                                        div()
+                                                                            .text_sm()
+                                                                            .text_color(
+                                                                                if is_current {
+                                                                                    fg
+                                                                                } else {
+                                                                                    muted_fg
+                                                                                },
+                                                                            )
+                                                                            .child(
+                                                                                font_name
+                                                                                    .to_string(),
+                                                                            ),
+                                                                    )
+                                                                    .when(is_current, |d| {
+                                                                        d.child(
+                                                                            Icon::new(
+                                                                                IconName::Check,
+                                                                            )
+                                                                            .size(px(14.0))
+                                                                            .text_color(
+                                                                                cx.theme().primary,
+                                                                            ),
+                                                                        )
+                                                                    }),
+                                                            )
+                                                    })),
+                                            )
+                                        }),
+                                )
+                            })
+                            // Content - Integrations tab
+                            .when(active_tab == SettingsTab::Integrations, |d| {
+                                d.child(
+                                    v_flex().gap_4().child(
+                                        div()
+                                            .py_8()
+                                            .text_color(muted_fg)
+                                            .text_sm()
+                                            .child("No integrations available yet."),
+                                    ),
+                                )
+                            }),
                     ),
+            ),
     )
     .with_priority(1500)
 }

@@ -2,10 +2,10 @@
 
 pub mod actions;
 pub mod app;
-pub mod focus;
 pub mod audio_webview;
 pub mod board;
 pub mod board_index;
+pub mod focus;
 pub mod input;
 pub mod landing;
 pub mod loading;
@@ -15,8 +15,7 @@ pub mod pdf_thumbnail;
 pub mod pdf_webview;
 pub mod render;
 pub mod settings;
-pub mod spotify_auth;
-pub mod spotify_webview;
+
 pub mod types;
 pub mod video_webview;
 pub mod youtube_webview;

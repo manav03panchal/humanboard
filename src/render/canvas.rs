@@ -73,7 +73,6 @@ fn render_item_backgrounds(
             ItemContent::Pdf { .. } => hsla(15.0 / 360.0, 0.7, 0.5, 0.85), // Orange for documents
             ItemContent::Link(_) => hsla(180.0 / 360.0, 0.6, 0.4, 0.85),   // Cyan for links
             ItemContent::YouTube(_) => hsla(0.0 / 360.0, 0.75, 0.5, 0.85), // Red for YouTube
-            ItemContent::SpotifyApp => hsla(141.0 / 360.0, 0.73, 0.42, 0.85), // Spotify green
             _ => hsla(0.0, 0.0, 0.4, 0.85),                                // Gray for unknown
         };
 
@@ -95,7 +94,6 @@ fn render_item_content(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     fg: Hsla,
@@ -354,69 +352,6 @@ fn render_item_content(
                                     .text_size(px(12.0 * zoom))
                                     .text_color(muted_fg)
                                     .child(format!("YouTube: {}", video_id)),
-                            ),
-                    )
-            }
-        }
-
-        ItemContent::SpotifyApp => {
-            // Render Spotify App WebView if available
-            if let Some(webview) = spotify_app_webviews.get(&item.id) {
-                // Use same structure as YouTube/Spotify embeds
-                v_flex()
-                    .size_full()
-                    // Drag handle bar at top - OUTSIDE the webview
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(24.0 * zoom))
-                            .bg(hsla(0.0, 0.0, 0.15, 1.0))
-                            .border_b_1()
-                            .border_color(hsla(0.0, 0.0, 0.3, 1.0))
-                            .rounded_t(corner_radius)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(14.0 * zoom))
-                                    .text_color(hsla(0.0, 0.0, 0.5, 1.0))
-                                    .child("≡"),
-                            ),
-                    )
-                    // WebView takes remaining space
-                    .child(
-                        div()
-                            .flex_1()
-                            .w_full()
-                            .overflow_hidden()
-                            .rounded_b(corner_radius)
-                            .child(webview.webview().clone()),
-                    )
-            } else {
-                // Placeholder while loading
-                div()
-                    .size_full()
-                    .bg(hsla(141.0 / 360.0, 0.2, 0.12, 1.0)) // Dark Spotify green
-                    .rounded(corner_radius)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        v_flex()
-                            .items_center()
-                            .gap(px(8.0 * zoom))
-                            .child(
-                                div()
-                                    .text_size(px(48.0 * zoom))
-                                    .text_color(hsla(141.0 / 360.0, 0.73, 0.42, 1.0))
-                                    .child("♫"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(14.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child("Loading Spotify..."),
                             ),
                     )
             }
@@ -692,7 +627,6 @@ pub fn render_items(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     cx: &Context<Humanboard>,
@@ -727,7 +661,6 @@ pub fn render_items(
                     youtube_webviews,
                     audio_webviews,
                     video_webviews,
-                    spotify_app_webviews,
                     editing_textbox_id,
                     textbox_input,
                     fg,
@@ -767,7 +700,6 @@ pub fn render_canvas_area(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
-    spotify_app_webviews: &HashMap<u64, crate::spotify_webview::SpotifyAppWebView>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
@@ -792,7 +724,6 @@ pub fn render_canvas_area(
             youtube_webviews,
             audio_webviews,
             video_webviews,
-            spotify_app_webviews,
             editing_textbox_id,
             textbox_input,
             cx,
