@@ -1,1 +1,5 @@
 /target
+.DS_Store
+Humanboard.app/
+Humanboard.dmg
+*.png
