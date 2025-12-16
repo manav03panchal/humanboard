@@ -408,6 +408,13 @@ impl Humanboard {
         {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         } else {
+            // Close font dropdown if open
+            if cx
+                .try_global::<crate::render::overlays::FontDropdownOpen>()
+                .is_some()
+            {
+                cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
+            }
             cx.set_global(crate::render::overlays::ThemeDropdownOpen);
         }
         cx.notify();
@@ -430,6 +437,13 @@ impl Humanboard {
         {
             cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         } else {
+            // Close theme dropdown if open
+            if cx
+                .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+                .is_some()
+            {
+                cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
+            }
             cx.set_global(crate::render::overlays::FontDropdownOpen);
         }
         cx.notify();
