@@ -91,6 +91,24 @@ impl Humanboard {
             HitTestResult::Item(item_hit) => {
                 let item_id = item_hit.item_id;
 
+                // Check if clicking on resize corner FIRST - this takes priority
+                // so users can resize textboxes even while editing
+                if item_hit.area == ItemHitArea::ResizeCorner {
+                    debug!("Click on resize corner of item {}", item_id);
+                    // If editing a textbox, finish editing first before resizing
+                    if self.editing_textbox_id.is_some() {
+                        self.finish_textbox_editing_with_window(window, cx);
+                    }
+                    // Select the item if not selected
+                    if !self.selected_items.contains(&item_id) {
+                        self.selected_items.clear();
+                        self.selected_items.insert(item_id);
+                    }
+                    self.handle_item_interaction(item_id, item_hit.area, mouse_pos);
+                    cx.notify();
+                    return;
+                }
+
                 // If we're already editing this textbox, don't process further clicks
                 // (prevents clicks from stealing focus from input)
                 if self.editing_textbox_id == Some(item_id) {
@@ -112,15 +130,6 @@ impl Humanboard {
                 } else if !self.selected_items.contains(&item_id) {
                     self.selected_items.clear();
                     self.selected_items.insert(item_id);
-                }
-
-                // Check if clicking on resize corner FIRST - this takes priority
-                // so users can resize textboxes without triggering edit mode
-                if item_hit.area == ItemHitArea::ResizeCorner {
-                    debug!("Click on resize corner of item {}", item_id);
-                    self.handle_item_interaction(item_id, item_hit.area, mouse_pos);
-                    cx.notify();
-                    return;
                 }
 
                 // Single click on textbox body starts editing

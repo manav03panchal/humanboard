@@ -308,6 +308,28 @@ impl FocusManager {
         event
     }
 
+    /// Set the active context without actually focusing the FocusHandle.
+    ///
+    /// This is useful when another component (like an Input) should have the actual
+    /// focus, but we want to track that we're in a specific context for keybinding
+    /// and state purposes.
+    pub fn set_context_without_focus(&mut self, context: FocusContext) {
+        let previous = if self.active_context != context {
+            Some(self.active_context)
+        } else {
+            None
+        };
+
+        self.previous_context = previous;
+        self.active_context = context;
+
+        trace!(
+            "Context set (no focus change): {:?} -> {:?}",
+            previous,
+            context
+        );
+    }
+
     /// Try to focus a context, but only if no higher-priority context is active.
     ///
     /// Returns `Some(FocusChangeEvent)` if focus was granted, `None` if blocked.

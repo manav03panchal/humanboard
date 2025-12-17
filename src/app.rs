@@ -1773,8 +1773,8 @@ impl Humanboard {
             )
             .detach();
 
-            // Update focus context to TextboxEditing
-            self.focus.focus(FocusContext::TextboxEditing, window);
+            // Update focus context to TextboxEditing (without stealing focus from Input)
+            self.focus.set_context_without_focus(FocusContext::TextboxEditing);
 
             self.editing_textbox_id = Some(item_id);
             self.textbox_input = Some(input);
