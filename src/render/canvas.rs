@@ -14,7 +14,7 @@ use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
 use gpui::{PathBuilder, *};
-use gpui_component::input::{Input, InputState};
+use gpui_component::input::InputState;
 use gpui_component::{ActiveTheme as _, h_flex, v_flex};
 use std::collections::HashMap;
 
@@ -95,7 +95,7 @@ fn render_item_content(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     editing_textbox_id: Option<u64>,
-    textbox_input: Option<&Entity<InputState>>,
+    _textbox_input: Option<&Entity<InputState>>, // Input rendered as overlay in mod.rs
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -423,36 +423,12 @@ fn render_item_content(
             let is_editing = editing_textbox_id == Some(item.id);
 
             if is_editing {
-                if let Some(input) = textbox_input {
-                    // Render the input field for inline editing (multiline)
-                    // No background - transparent textbox with just a border
-                    div()
-                        .size_full()
-                        .rounded(px(4.0 * zoom))
-                        .border_1()
-                        .border_color(fg.opacity(0.3))
-                        .overflow_hidden()
-                        .child(Input::new(input).appearance(false).size_full())
-                } else {
-                    // Fallback to static text if input not available
-                    div()
-                        .size_full()
-                        .rounded(px(4.0 * zoom))
-                        .p(px(8.0 * zoom))
-                        .overflow_hidden()
-                        .flex()
-                        .flex_col()
-                        .children(text.lines().map(|line| {
-                            div()
-                                .text_size(px(scaled_font))
-                                .text_color(text_color)
-                                .child(if line.is_empty() {
-                                    " ".to_string() // Preserve empty lines
-                                } else {
-                                    line.to_string()
-                                })
-                        }))
-                }
+                // When editing, just show a transparent placeholder
+                // The actual Input is rendered as a floating overlay at screen coordinates
+                // in render/mod.rs (Input components don't work inside scaled containers)
+                div()
+                    .size_full()
+                    .rounded(px(4.0 * zoom))
             } else {
                 // Normal display mode - just text, no background
                 div()

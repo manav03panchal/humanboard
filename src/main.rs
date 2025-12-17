@@ -6,10 +6,11 @@
 use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
-    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown,
-    CmdPaletteSelect, CmdPaletteUp, DeleteSelected, DuplicateSelected, GoHome, NewBoard, NextTab,
-    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevTab, Quit, Redo,
-    SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
+    DeleteSelected, DeselectAll, DuplicateSelected, GoHome, NewBoard, NextTab,
+    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PrevTab,
+    Quit, Redo, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo,
+    ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use once_cell::sync::Lazy;
@@ -213,14 +214,16 @@ fn register_keybindings(cx: &mut App) {
 
     // Canvas-only shortcuts (not active when text input is focused)
     cx.bind_keys([
+        // Selection actions
         KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
         KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
         KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
         KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
-        KeyBinding::new("escape", ClosePreview, Some("Canvas")),
-        KeyBinding::new("escape", CloseCommandPalette, Some("Canvas")),
+        KeyBinding::new("escape", DeselectAll, Some("Canvas")),
+
+        // Command palette (cmd-k toggles open/close)
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
-        KeyBinding::new("cmd-v", Paste, Some("Canvas")),
+
         // Arrow keys to nudge selected items
         KeyBinding::new("up", NudgeUp, Some("Canvas")),
         KeyBinding::new("down", NudgeDown, Some("Canvas")),
@@ -230,9 +233,8 @@ fn register_keybindings(cx: &mut App) {
 
     // Shortcuts that work even when input is active
     cx.bind_keys([
-        KeyBinding::new("escape", CloseCommandPalette, Some("CanvasInputActive")),
-        KeyBinding::new("escape", CancelTextboxEdit, Some("CanvasInputActive")),
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("CanvasInputActive")),
+        KeyBinding::new("escape", CancelTextboxEdit, Some("CanvasInputActive")),
     ]);
 
     // Landing page shortcuts

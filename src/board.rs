@@ -1,11 +1,18 @@
+//! Board Module - Canvas state and item management
+//!
+//! This module provides the core data structures for managing the infinite canvas,
+//! including items, undo/redo history, and debounced saving.
+
 use crate::board_index::BoardIndex;
+use crate::error::BoardError;
 use crate::types::{CanvasItem, ItemContent};
-use gpui::{Pixels, Point, Size, point, px};
+use gpui::{point, px, Pixels, Point, Size};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use tracing::{debug, error, info, trace, warn};
 
 /// Save debounce delay - saves are batched within this window
 const SAVE_DEBOUNCE_MS: u64 = 500;
@@ -22,20 +29,53 @@ pub struct BoardState {
 }
 
 impl BoardState {
-    pub fn save_to_path(&self, path: &PathBuf) {
-        if let Ok(json) = serde_json::to_string_pretty(&self) {
-            if let Some(parent) = path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let _ = fs::write(path, json);
+    /// Save board state to a file path.
+    ///
+    /// Returns Ok(()) on success, or a BoardError on failure.
+    pub fn save_to_path(&self, path: &PathBuf) -> Result<(), BoardError> {
+        let json = serde_json::to_string_pretty(&self).map_err(BoardError::ParseError)?;
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| BoardError::SaveFailed {
+                path: path.clone(),
+                source: e,
+            })?;
         }
+
+        fs::write(path, json).map_err(|e| BoardError::SaveFailed {
+            path: path.clone(),
+            source: e,
+        })?;
+
+        trace!("Board state saved to {:?}", path);
+        Ok(())
     }
 
-    pub fn load_from_path(path: &PathBuf) -> Option<Self> {
-        if let Ok(json) = fs::read_to_string(path) {
-            serde_json::from_str(&json).ok()
-        } else {
-            None
+    /// Load board state from a file path.
+    ///
+    /// Returns the loaded state, or a BoardError if loading fails.
+    pub fn load_from_path(path: &PathBuf) -> Result<Self, BoardError> {
+        let json = fs::read_to_string(path).map_err(|e| BoardError::LoadFailed {
+            path: path.clone(),
+            source: e,
+        })?;
+
+        let state = serde_json::from_str(&json).map_err(BoardError::ParseError)?;
+        trace!("Board state loaded from {:?}", path);
+        Ok(state)
+    }
+
+    /// Try to load board state, returning None if the file doesn't exist
+    /// or an error occurs.
+    pub fn try_load(path: &PathBuf) -> Option<Self> {
+        match Self::load_from_path(path) {
+            Ok(state) => Some(state),
+            Err(e) => {
+                if !matches!(e, BoardError::LoadFailed { .. }) {
+                    warn!("Failed to load board state: {}", e);
+                }
+                None
+            }
         }
     }
 }
@@ -61,11 +101,15 @@ pub struct Board {
 }
 
 impl Board {
-    /// Load a board by ID, or create a new empty one
+    /// Load a board by ID, or create a new empty one.
+    ///
+    /// If the board file doesn't exist or can't be loaded, a new empty
+    /// board is created.
     pub fn load(id: String) -> Self {
         let board_path = BoardIndex::board_path(&id);
 
-        if let Some(state) = BoardState::load_from_path(&board_path) {
+        if let Some(state) = BoardState::try_load(&board_path) {
+            info!("Loaded board '{}' with {} items", id, state.items.len());
             let items_index = Self::build_items_index(&state.items);
             let initial_state = state.clone();
             Self {
@@ -81,6 +125,7 @@ impl Board {
                 last_change: Instant::now(),
             }
         } else {
+            debug!("Creating new empty board '{}'", id);
             Self::new_empty(id)
         }
     }
@@ -337,7 +382,10 @@ impl Board {
         }
     }
 
-    /// Force immediate save (used when leaving board)
+    /// Force immediate save (used when leaving board).
+    ///
+    /// Logs any errors but doesn't propagate them since this is
+    /// typically called during cleanup.
     pub fn save_immediate(&self) {
         let state = BoardState {
             canvas_offset: (
@@ -349,7 +397,12 @@ impl Board {
             next_item_id: self.next_item_id,
         };
         let board_path = BoardIndex::board_path(&self.id);
-        state.save_to_path(&board_path);
+
+        if let Err(e) = state.save_to_path(&board_path) {
+            error!("Failed to save board '{}': {}", self.id, e);
+        } else {
+            debug!("Board '{}' saved with {} items", self.id, self.items.len());
+        }
     }
 
     /// Legacy save method - now marks dirty for debounced save

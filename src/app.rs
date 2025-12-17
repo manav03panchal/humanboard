@@ -2,6 +2,7 @@ use crate::audio_webview::AudioWebView;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
 use crate::focus::{FocusContext, FocusManager};
+use crate::hit_testing::HitTester;
 use crate::notifications::ToastManager;
 use crate::pdf_webview::PdfWebView;
 use crate::settings::Settings;
@@ -198,6 +199,9 @@ pub struct Humanboard {
     pub drawing_current: Option<Point<Pixels>>, // Current position while drawing (for preview)
     pub editing_textbox_id: Option<u64>,      // ID of textbox being edited
     pub textbox_input: Option<Entity<gpui_component::input::InputState>>, // Input for editing textbox
+
+    // Hit testing
+    pub hit_tester: HitTester,
 }
 
 /// Animation state for smooth panning to a target position
@@ -267,6 +271,7 @@ impl Humanboard {
             drawing_current: None,
             editing_textbox_id: None,
             textbox_input: None,
+            hit_tester: HitTester::new(),
         }
     }
 
@@ -1768,6 +1773,9 @@ impl Humanboard {
             )
             .detach();
 
+            // Update focus context to TextboxEditing
+            self.focus.focus(FocusContext::TextboxEditing, window);
+
             self.editing_textbox_id = Some(item_id);
             self.textbox_input = Some(input);
             cx.notify();
@@ -1791,6 +1799,32 @@ impl Humanboard {
                 }
             }
         }
+
+        // Release focus back to canvas (mark for restore since we don't have window)
+        self.focus.mark_needs_canvas_focus();
+        cx.notify();
+    }
+
+    /// Finish editing with explicit window access (preferred when window available)
+    pub fn finish_textbox_editing_with_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(item_id) = self.editing_textbox_id.take() {
+            if let Some(input) = self.textbox_input.take() {
+                let new_text = input.read(cx).text().to_string();
+
+                if let Some(ref mut board) = self.board {
+                    if let Some(item) = board.get_item_mut(item_id) {
+                        if let ItemContent::TextBox { text, .. } = &mut item.content {
+                            *text = new_text;
+                        }
+                    }
+                    board.push_history();
+                    board.flush_save();
+                }
+            }
+        }
+
+        // Release focus back to canvas
+        self.focus.release(FocusContext::TextboxEditing, window);
         cx.notify();
     }
 
@@ -1798,6 +1832,19 @@ impl Humanboard {
     pub fn cancel_textbox_editing(&mut self, cx: &mut Context<Self>) {
         self.editing_textbox_id = None;
         self.textbox_input = None;
+
+        // Release focus back to canvas (mark for restore since we don't have window)
+        self.focus.mark_needs_canvas_focus();
+        cx.notify();
+    }
+
+    /// Cancel textbox editing with explicit window access (preferred when window available)
+    pub fn cancel_textbox_editing_with_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editing_textbox_id = None;
+        self.textbox_input = None;
+
+        // Release focus back to canvas
+        self.focus.release(FocusContext::TextboxEditing, window);
         cx.notify();
     }
 }

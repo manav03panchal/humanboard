@@ -53,6 +53,8 @@ pub enum FocusContext {
     Modal,
     /// Command palette - captures keyboard input
     CommandPalette,
+    /// Textbox editing on canvas - captures text input
+    TextboxEditing,
     /// Code editor in edit mode - captures undo/redo/save
     CodeEditor,
     /// Preview panel (markdown editor)
@@ -70,6 +72,7 @@ impl FocusContext {
         match self {
             FocusContext::Modal => "Modal",
             FocusContext::CommandPalette => "CommandPalette",
+            FocusContext::TextboxEditing => "TextboxEditing",
             FocusContext::CodeEditor => "CodeEditor",
             FocusContext::Preview => "Preview",
             FocusContext::Landing => "Landing",
@@ -81,8 +84,9 @@ impl FocusContext {
     /// Used to prevent lower-priority contexts from stealing focus.
     pub fn priority(&self) -> u8 {
         match self {
-            FocusContext::Modal => 6,
-            FocusContext::CommandPalette => 5,
+            FocusContext::Modal => 7,
+            FocusContext::CommandPalette => 6,
+            FocusContext::TextboxEditing => 5,
             FocusContext::CodeEditor => 4,
             FocusContext::Preview => 3,
             FocusContext::Landing => 2,
@@ -95,11 +99,25 @@ impl FocusContext {
         &[
             FocusContext::Modal,
             FocusContext::CommandPalette,
+            FocusContext::TextboxEditing,
             FocusContext::CodeEditor,
             FocusContext::Preview,
             FocusContext::Landing,
             FocusContext::Canvas,
         ]
+    }
+
+    /// Check if this context captures text input.
+    /// When true, single-key shortcuts should be disabled.
+    pub fn captures_text_input(&self) -> bool {
+        matches!(
+            self,
+            FocusContext::CommandPalette
+                | FocusContext::TextboxEditing
+                | FocusContext::CodeEditor
+                | FocusContext::Preview
+                | FocusContext::Landing
+        )
     }
 }
 
@@ -157,6 +175,8 @@ pub struct FocusManager {
     pub canvas: FocusHandle,
     /// Focus handle for the command palette
     pub command_palette: FocusHandle,
+    /// Focus handle for textbox editing on canvas
+    pub textbox_editing: FocusHandle,
     /// Focus handle for the code editor
     pub code_editor: FocusHandle,
     /// Focus handle for the preview panel
@@ -190,12 +210,14 @@ impl FocusManager {
         tab_order.insert(FocusContext::Landing, 1);
         tab_order.insert(FocusContext::Preview, 2);
         tab_order.insert(FocusContext::CodeEditor, 3);
-        tab_order.insert(FocusContext::CommandPalette, 4);
-        tab_order.insert(FocusContext::Modal, 5);
+        tab_order.insert(FocusContext::TextboxEditing, 4);
+        tab_order.insert(FocusContext::CommandPalette, 5);
+        tab_order.insert(FocusContext::Modal, 6);
 
         Self {
             canvas: cx.focus_handle(),
             command_palette: cx.focus_handle(),
+            textbox_editing: cx.focus_handle(),
             code_editor: cx.focus_handle(),
             preview: cx.focus_handle(),
             landing: cx.focus_handle(),
@@ -222,6 +244,7 @@ impl FocusManager {
         match context {
             FocusContext::Canvas => &self.canvas,
             FocusContext::CommandPalette => &self.command_palette,
+            FocusContext::TextboxEditing => &self.textbox_editing,
             FocusContext::CodeEditor => &self.code_editor,
             FocusContext::Preview => &self.preview,
             FocusContext::Landing => &self.landing,
@@ -522,7 +545,8 @@ mod tests {
     #[test]
     fn test_focus_context_priority() {
         assert!(FocusContext::Modal.priority() > FocusContext::CommandPalette.priority());
-        assert!(FocusContext::CommandPalette.priority() > FocusContext::CodeEditor.priority());
+        assert!(FocusContext::CommandPalette.priority() > FocusContext::TextboxEditing.priority());
+        assert!(FocusContext::TextboxEditing.priority() > FocusContext::CodeEditor.priority());
         assert!(FocusContext::CodeEditor.priority() > FocusContext::Preview.priority());
         assert!(FocusContext::Preview.priority() > FocusContext::Landing.priority());
         assert!(FocusContext::Landing.priority() > FocusContext::Canvas.priority());
@@ -532,8 +556,18 @@ mod tests {
     fn test_key_context_strings() {
         assert_eq!(FocusContext::Canvas.key_context(), "Canvas");
         assert_eq!(FocusContext::CommandPalette.key_context(), "CommandPalette");
+        assert_eq!(FocusContext::TextboxEditing.key_context(), "TextboxEditing");
         assert_eq!(FocusContext::CodeEditor.key_context(), "CodeEditor");
         assert_eq!(FocusContext::Modal.key_context(), "Modal");
+    }
+
+    #[test]
+    fn test_captures_text_input() {
+        assert!(FocusContext::CommandPalette.captures_text_input());
+        assert!(FocusContext::TextboxEditing.captures_text_input());
+        assert!(FocusContext::CodeEditor.captures_text_input());
+        assert!(!FocusContext::Canvas.captures_text_input());
+        assert!(!FocusContext::Modal.captures_text_input());
     }
 
     #[test]
@@ -552,7 +586,7 @@ mod tests {
     #[test]
     fn test_focus_context_all() {
         let all = FocusContext::all();
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 7);
         // Should be in priority order (highest first)
         assert_eq!(all[0], FocusContext::Modal);
         assert_eq!(all[5], FocusContext::Canvas);

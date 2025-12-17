@@ -24,11 +24,12 @@ pub use preview::{
 };
 
 use crate::actions::{
-    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
-    DuplicateSelected, GoHome, NewBoard, NextPage, NextTab, NudgeDown, NudgeLeft, NudgeRight,
-    NudgeUp, OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevTab,
-    Redo, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, ToggleSplit, ToolArrow,
-    ToolSelect, ToolShape, ToolText, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette,
+    DeleteSelected, DeselectAll, DuplicateSelected, GoHome, NewBoard, NextPage, NextTab,
+    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn,
+    PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SaveCode, SelectAll, ShowShortcuts,
+    ToggleCommandPalette, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo,
+    ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -80,12 +81,38 @@ impl Render for Humanboard {
         let bg = cx.theme().background;
         let toasts = self.toast_manager.toasts().to_vec();
 
+        // Get textbox editing overlay info if active
+        let textbox_overlay = self.get_textbox_editing_overlay_info(cx);
+
         div()
             .size_full()
             .bg(bg)
             .font_family(self.settings.font.clone())
             .relative()
             .child(content)
+            // Textbox editing overlay - rendered OUTSIDE the canvas transform
+            .when_some(textbox_overlay, |d, (screen_bounds, input, font_size, text_color)| {
+                d.child(
+                    div()
+                        .absolute()
+                        .left(screen_bounds.origin.x)
+                        .top(screen_bounds.origin.y)
+                        .w(screen_bounds.size.width)
+                        .h(screen_bounds.size.height)
+                        .bg(cx.theme().background)
+                        .border_2()
+                        .border_color(cx.theme().primary)
+                        .rounded(px(4.0))
+                        .overflow_hidden()
+                        .text_size(font_size)
+                        .text_color(text_color)
+                        .child(
+                            gpui_component::input::Input::new(&input)
+                                .appearance(false)
+                                .size_full()
+                        )
+                )
+            })
             .when(self.show_shortcuts, |d| {
                 d.child(render_shortcuts_overlay(cx))
             })
@@ -105,6 +132,93 @@ impl Render for Humanboard {
                 d.child(render_toast_container(&toasts))
             })
     }
+}
+
+impl Humanboard {
+    /// Get textbox editing overlay info: screen bounds, input entity, font size, text color
+    fn get_textbox_editing_overlay_info(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<(Bounds<Pixels>, Entity<gpui_component::input::InputState>, Pixels, Hsla)> {
+        let editing_id = self.editing_textbox_id?;
+        tracing::debug!("Textbox editing active for id {}", editing_id);
+
+        let input = self.textbox_input.clone()?;
+        tracing::debug!("Input entity present");
+
+        let board = self.board.as_ref()?;
+        let item = board.get_item(editing_id)?;
+        tracing::debug!("Found item for editing: {:?}", item.id);
+
+        // Get textbox properties
+        let (font_size, color) = if let crate::types::ItemContent::TextBox { font_size, color, .. } = &item.content {
+            (*font_size, color.clone())
+        } else {
+            return None;
+        };
+
+        // Parse text color
+        let text_color = parse_hex_color(&color).unwrap_or(cx.theme().foreground);
+
+        // Calculate screen position
+        // Account for: dock width (44px), header height (40px), canvas offset, zoom
+        let dock_width = crate::render::dock::DOCK_WIDTH;
+        let header_height = 40.0;
+
+        let screen_x = item.position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_width;
+        let screen_y = item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_height;
+        let screen_w = item.size.0 * board.zoom;
+        let screen_h = item.size.1 * board.zoom;
+
+        let scaled_font = px(font_size * board.zoom);
+
+        let bounds = Bounds {
+            origin: point(px(screen_x), px(screen_y)),
+            size: size(px(screen_w), px(screen_h)),
+        };
+
+        tracing::debug!("Textbox overlay bounds: x={}, y={}, w={}, h={}", screen_x, screen_y, screen_w, screen_h);
+
+        Some((bounds, input, scaled_font, text_color))
+    }
+}
+
+/// Parse a hex color string like "#ffffff" into an Hsla color
+fn parse_hex_color(hex: &str) -> Option<Hsla> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+
+    // Convert RGB to HSL
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+
+    if max == min {
+        return Some(hsla(0.0, 0.0, l, 1.0));
+    }
+
+    let d = max - min;
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
+
+    let h = if max == r {
+        ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
+    } else if max == g {
+        ((b - r) / d + 2.0) / 6.0
+    } else {
+        ((r - g) / d + 4.0) / 6.0
+    };
+
+    Some(hsla(h, s, l, 1.0))
 }
 
 // ============================================================================
@@ -309,6 +423,7 @@ impl Humanboard {
                 cx.listener(|this, _: &DuplicateSelected, _, cx| this.duplicate_selected(cx)),
             )
             .on_action(cx.listener(|this, _: &SelectAll, _, cx| this.select_all(cx)))
+            .on_action(cx.listener(|this, _: &DeselectAll, _, cx| this.deselect_all(cx)))
             .on_action(cx.listener(|this, _: &NudgeUp, _, cx| this.nudge_up(cx)))
             .on_action(cx.listener(|this, _: &NudgeDown, _, cx| this.nudge_down(cx)))
             .on_action(cx.listener(|this, _: &NudgeLeft, _, cx| this.nudge_left(cx)))
@@ -327,7 +442,6 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.prev_tab(cx)))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.close_current_tab(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
-            .on_action(cx.listener(|this, _: &Paste, window, cx| this.paste(window, cx)))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
             }))
@@ -356,9 +470,9 @@ impl Humanboard {
                 this.selected_tool = crate::types::ToolType::Shape;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &CancelTextboxEdit, _, cx| {
+            .on_action(cx.listener(|this, _: &CancelTextboxEdit, window, cx| {
                 if this.editing_textbox_id.is_some() {
-                    this.cancel_textbox_editing(cx);
+                    this.cancel_textbox_editing_with_window(window, cx);
                 }
             }))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {

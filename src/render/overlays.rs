@@ -1110,31 +1110,7 @@ pub fn render_settings_modal(
                             .border_color(border)
                             .p_2()
                             .gap_1()
-                            // Search input placeholder
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .h(px(28.0))
-                                    .mb_2()
-                                    .px_2()
-                                    .bg(input_bg)
-                                    .border_1()
-                                    .border_color(border)
-                                    .rounded(px(6.0))
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        Icon::new(IconName::Search)
-                                            .size(px(12.0))
-                                            .text_color(muted_fg),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(muted_fg)
-                                            .child("Search settings..."),
-                                    ),
-                            )
+
                             // Appearance tab
                             .child(
                                 div()
