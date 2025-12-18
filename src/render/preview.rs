@@ -242,21 +242,19 @@ pub fn render_drag_ghost(
         )
 }
 
-/// Render a single drop zone indicator
+/// Render a single drop zone indicator (visual only - parent handles events)
 fn render_drop_zone_indicator(
-    id: &'static str,
+    _id: &'static str,
     zone: crate::app::SplitDropZone,
     active_zone: Option<crate::app::SplitDropZone>,
     label: &'static str,
-    cx: &mut Context<Humanboard>,
-) -> Stateful<Div> {
+    cx: &Context<Humanboard>,
+) -> Div {
     let primary = cx.theme().primary;
     let bg = cx.theme().background;
     let is_active = active_zone == Some(zone);
 
     div()
-        .id(id)
-        .absolute()
         .rounded(px(8.0))
         .border_2()
         .border_color(if is_active {
@@ -273,18 +271,6 @@ fn render_drop_zone_indicator(
         .items_center()
         .justify_center()
         .shadow_lg()
-        .on_mouse_move(
-            cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
-                this.update_tab_drag_position(event.position, cx);
-                this.set_tab_drag_split_zone(Some(zone), cx);
-            }),
-        )
-        .on_mouse_up(
-            MouseButton::Left,
-            cx.listener(|this, _event, _window, cx| {
-                this.finish_tab_drag(cx);
-            }),
-        )
         .child(
             div()
                 .text_sm()
@@ -305,32 +291,63 @@ pub fn render_split_drop_zones(
 ) -> Div {
     use crate::app::SplitDropZone;
 
+    // Zone strip dimensions
+    let side_width = px(120.0);
+    let top_bottom_height = px(100.0);
+
     div()
         .absolute()
         .inset_0()
         .bg(gpui::black().opacity(0.3))
-        // Handle mouse move in empty space to update position and clear zone
-        .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
-            this.update_tab_drag_position(event.position, cx);
-            this.set_tab_drag_split_zone(None, cx);
-        }))
+        // Only handle mouse up on the background (no mouse move here - children handle zones)
         .on_mouse_up(
             MouseButton::Left,
             cx.listener(|this, _event, _window, cx| {
                 this.finish_tab_drag(cx);
             }),
         )
-        // Left zone - positioned in left column, centered vertically
+        // Center area - this clears the zone when hovering in the middle
         .child(
             div()
+                .id("zone-center")
+                .absolute()
+                .top(top_bottom_height)
+                .bottom(top_bottom_height)
+                .left(side_width)
+                .right(side_width)
+                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                    this.update_tab_drag_position(event.position, cx);
+                    this.set_tab_drag_split_zone(None, cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                ),
+        )
+        // Left zone
+        .child(
+            div()
+                .id("zone-left-strip")
                 .absolute()
                 .left_0()
                 .top_0()
                 .bottom_0()
-                .w(px(120.0))
+                .w(side_width)
                 .flex()
                 .items_center()
                 .justify_center()
+                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                    this.update_tab_drag_position(event.position, cx);
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Left), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
                 .child(
                     render_drop_zone_indicator(
                         "zone-left",
@@ -343,17 +360,28 @@ pub fn render_split_drop_zones(
                     .h(px(90.0)),
                 ),
         )
-        // Right zone - positioned in right column, centered vertically
+        // Right zone
         .child(
             div()
+                .id("zone-right-strip")
                 .absolute()
                 .right_0()
                 .top_0()
                 .bottom_0()
-                .w(px(120.0))
+                .w(side_width)
                 .flex()
                 .items_center()
                 .justify_center()
+                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                    this.update_tab_drag_position(event.position, cx);
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Right), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
                 .child(
                     render_drop_zone_indicator(
                         "zone-right",
@@ -366,17 +394,28 @@ pub fn render_split_drop_zones(
                     .h(px(90.0)),
                 ),
         )
-        // Top zone - positioned in top row, centered horizontally
+        // Top zone (between left and right strips)
         .child(
             div()
+                .id("zone-top-strip")
                 .absolute()
                 .top_0()
-                .left_0()
-                .right_0()
-                .h(px(100.0))
+                .left(side_width)
+                .right(side_width)
+                .h(top_bottom_height)
                 .flex()
                 .items_center()
                 .justify_center()
+                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                    this.update_tab_drag_position(event.position, cx);
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Top), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
                 .child(
                     render_drop_zone_indicator(
                         "zone-top",
@@ -389,17 +428,28 @@ pub fn render_split_drop_zones(
                     .h(px(70.0)),
                 ),
         )
-        // Bottom zone - positioned in bottom row, centered horizontally
+        // Bottom zone (between left and right strips)
         .child(
             div()
+                .id("zone-bottom-strip")
                 .absolute()
                 .bottom_0()
-                .left_0()
-                .right_0()
-                .h(px(100.0))
+                .left(side_width)
+                .right(side_width)
+                .h(top_bottom_height)
                 .flex()
                 .items_center()
                 .justify_center()
+                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                    this.update_tab_drag_position(event.position, cx);
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Bottom), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
                 .child(
                     render_drop_zone_indicator(
                         "zone-bottom",
