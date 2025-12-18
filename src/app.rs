@@ -241,6 +241,8 @@ pub enum FocusedPane {
 pub enum SplitDropZone {
     Left,
     Right,
+    Top,
+    Bottom,
 }
 
 pub struct PreviewPanel {
@@ -332,6 +334,7 @@ pub struct Humanboard {
     pub dragging_tab: Option<usize>,    // Index of tab being dragged
     pub tab_drag_target: Option<usize>, // Target position for tab drop
     pub tab_drag_split_zone: Option<SplitDropZone>, // Drop zone for creating split
+    pub tab_drag_position: Option<Point<Pixels>>, // Current drag position for ghost
     pub preview_search: Option<Entity<InputState>>, // Search input for preview panel
     pub preview_search_query: String,   // Current search query
     pub preview_search_matches: Vec<(usize, usize)>, // (line, column) positions of matches
@@ -445,6 +448,7 @@ impl Humanboard {
             dragging_tab: None,
             tab_drag_target: None,
             tab_drag_split_zone: None,
+            tab_drag_position: None,
             preview_search: None,
             preview_search_query: String::new(),
             preview_search_matches: Vec::new(),
@@ -2087,11 +2091,26 @@ impl Humanboard {
     }
 
     /// Start dragging a tab for reordering
-    pub fn start_tab_drag(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+    pub fn start_tab_drag(
+        &mut self,
+        tab_index: usize,
+        position: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::debug!("start_tab_drag: index={}", tab_index);
         self.dragging_tab = Some(tab_index);
         self.tab_drag_target = Some(tab_index);
         self.tab_drag_split_zone = None;
+        self.tab_drag_position = Some(position);
         cx.notify();
+    }
+
+    /// Update drag position as mouse moves
+    pub fn update_tab_drag_position(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        if self.dragging_tab.is_some() {
+            self.tab_drag_position = Some(position);
+            cx.notify();
+        }
     }
 
     /// Update the drag target position as mouse moves over tabs
@@ -2111,6 +2130,7 @@ impl Humanboard {
     /// Set the split drop zone when dragging to edges
     pub fn set_tab_drag_split_zone(&mut self, zone: Option<SplitDropZone>, cx: &mut Context<Self>) {
         if self.dragging_tab.is_some() && self.tab_drag_split_zone != zone {
+            tracing::debug!("set_tab_drag_split_zone: {:?}", zone);
             self.tab_drag_split_zone = zone;
             // Clear tab target when in split zone
             if zone.is_some() {
@@ -2122,6 +2142,12 @@ impl Humanboard {
 
     /// Finish tab drag - either reorder or create split
     pub fn finish_tab_drag(&mut self, cx: &mut Context<Self>) {
+        tracing::debug!(
+            "finish_tab_drag: dragging={:?}, split_zone={:?}, target={:?}",
+            self.dragging_tab,
+            self.tab_drag_split_zone,
+            self.tab_drag_target
+        );
         // Check if dropping on a split zone
         if let (Some(from), Some(zone)) = (self.dragging_tab, self.tab_drag_split_zone) {
             if let Some(ref mut preview) = self.preview {
@@ -2142,13 +2168,14 @@ impl Humanboard {
                     }
 
                     match zone {
-                        SplitDropZone::Right => {
+                        SplitDropZone::Right | SplitDropZone::Bottom => {
+                            // Tab goes to right/bottom pane
                             preview.right_tabs.push(tab);
                             preview.right_active_tab = preview.right_tabs.len() - 1;
                             preview.focused_pane = FocusedPane::Right;
                         }
-                        SplitDropZone::Left => {
-                            // Move current left tabs to right, put new tab in left
+                        SplitDropZone::Left | SplitDropZone::Top => {
+                            // Move current left tabs to right, put new tab in left/top
                             let left_tabs: Vec<PreviewTab> = preview.tabs.drain(..).collect();
                             preview.tabs.push(tab);
                             preview.active_tab = 0;
@@ -2164,6 +2191,7 @@ impl Humanboard {
             self.dragging_tab = None;
             self.tab_drag_target = None;
             self.tab_drag_split_zone = None;
+            self.tab_drag_position = None;
             cx.notify();
             return;
         }
@@ -2210,6 +2238,7 @@ impl Humanboard {
         self.dragging_tab = None;
         self.tab_drag_target = None;
         self.tab_drag_split_zone = None;
+        self.tab_drag_position = None;
         cx.notify();
     }
 
@@ -2218,6 +2247,7 @@ impl Humanboard {
         self.dragging_tab = None;
         self.tab_drag_target = None;
         self.tab_drag_split_zone = None;
+        self.tab_drag_position = None;
         cx.notify();
     }
 

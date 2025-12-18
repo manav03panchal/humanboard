@@ -19,8 +19,9 @@ pub use overlays::{
     render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
-    render_preview_panel, render_search_bar, render_selected_item_label, render_split_drop_zones,
-    render_split_panes, render_splitter, render_tab_bar, render_tab_content,
+    render_drag_ghost, render_preview_panel, render_search_bar, render_selected_item_label,
+    render_split_drop_zones, render_split_panes, render_splitter, render_tab_bar,
+    render_tab_content,
 };
 
 use crate::actions::{
@@ -746,6 +747,22 @@ impl Humanboard {
             &self.focus.command_palette,
             cx,
         ));
+
+        // Add drag ghost overlay when dragging a tab
+        let content =
+            if let (Some(drag_idx), Some(drag_pos)) = (self.dragging_tab, self.tab_drag_position) {
+                if let Some(ref preview) = self.preview {
+                    if let Some(tab) = preview.tabs.get(drag_idx) {
+                        content.child(render_drag_ghost(tab, drag_pos, cx))
+                    } else {
+                        content
+                    }
+                } else {
+                    content
+                }
+            } else {
+                content
+            };
 
         content
     }
