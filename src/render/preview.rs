@@ -10,6 +10,7 @@ use crate::app::{Humanboard, PreviewTab, SplitDirection};
 use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::Disableable as _;
 use gpui_component::InteractiveElementExt as _;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::Input;
@@ -21,6 +22,8 @@ pub fn render_tab_bar(
     tabs: &Vec<PreviewTab>,
     active_tab: usize,
     scroll_handle: &ScrollHandle,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
     cx: &mut Context<Humanboard>,
 ) -> Stateful<Div> {
     let bg = cx.theme().title_bar;
@@ -43,6 +46,15 @@ pub fn render_tab_bar(
         .items_center()
         .overflow_x_scroll()
         .track_scroll(scroll_handle)
+        // Cancel drag if mouse leaves tab bar
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|this, _event, _window, cx| {
+                if this.dragging_tab.is_some() {
+                    this.finish_tab_drag(cx);
+                }
+            }),
+        )
         .child(
             h_flex()
                 .flex_shrink_0()
@@ -54,6 +66,10 @@ pub fn render_tab_bar(
                     let is_dirty = tab.is_dirty();
                     let is_preview = tab.is_preview();
                     let is_pinned = tab.is_pinned();
+                    let is_being_dragged = dragging_tab == Some(index);
+                    let is_drag_target = drag_target == Some(index)
+                        && dragging_tab.is_some()
+                        && dragging_tab != Some(index);
 
                     let display_name = if filename.len() > 20 {
                         format!("{}...", &filename[..17])
@@ -64,6 +80,7 @@ pub fn render_tab_bar(
                     let tab_index = index;
                     let tab_index_close = index;
                     let tab_index_pin = index;
+                    let tab_index_drag = index;
 
                     h_flex()
                         .id(ElementId::Name(format!("tab-{}", index).into()))
@@ -74,15 +91,47 @@ pub fn render_tab_bar(
                         .bg(if is_active { list_active } else { bg })
                         .border_r_1()
                         .border_color(border)
+                        // Show drop indicator
+                        .when(is_drag_target, |d| d.border_l_2().border_color(primary))
+                        // Dim the tab being dragged
+                        .when(is_being_dragged, |d| d.opacity(0.5))
                         .hover(|style| style.bg(list_hover))
-                        .cursor(CursorStyle::PointingHand)
+                        .cursor(if dragging_tab.is_some() {
+                            CursorStyle::ClosedHand
+                        } else {
+                            CursorStyle::PointingHand
+                        })
                         .on_click(cx.listener(move |this, _event, _window, cx| {
-                            this.switch_tab(tab_index, cx);
+                            if this.dragging_tab.is_none() {
+                                this.switch_tab(tab_index, cx);
+                            }
                         }))
                         // Double-click converts preview to permanent
                         .on_double_click(cx.listener(move |this, _event, _window, cx| {
                             this.make_tab_permanent(tab_index, cx);
                         }))
+                        // Start drag on mouse down
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _event, _window, cx| {
+                                this.start_tab_drag(tab_index_drag, cx);
+                            }),
+                        )
+                        // Update drag target on mouse enter
+                        .on_mouse_move(cx.listener(move |this, _event, _window, cx| {
+                            if this.dragging_tab.is_some() {
+                                this.update_tab_drag_target(tab_index_drag, cx);
+                            }
+                        }))
+                        // Finish drag on mouse up
+                        .on_mouse_up(
+                            MouseButton::Left,
+                            cx.listener(move |this, _event, _window, cx| {
+                                if this.dragging_tab.is_some() {
+                                    this.finish_tab_drag(cx);
+                                }
+                            }),
+                        )
                         // Pin icon for pinned tabs
                         .when(is_pinned, |d| {
                             d.child(div().text_xs().text_color(muted_fg).mr_1().child("📌"))
@@ -341,6 +390,73 @@ pub fn render_tab_content(
 }
 
 /// Render the legacy preview panel (for PDF pages)
+/// Render the search bar for the preview panel
+pub fn render_search_bar(
+    search_input: &Entity<gpui_component::input::InputState>,
+    match_count: usize,
+    current_match: usize,
+    cx: &mut Context<Humanboard>,
+) -> Div {
+    let bg = cx.theme().title_bar;
+    let border = cx.theme().border;
+    let muted_fg = cx.theme().muted_foreground;
+
+    h_flex()
+        .w_full()
+        .h(px(32.0))
+        .px_2()
+        .py_1()
+        .bg(bg)
+        .border_b_1()
+        .border_color(border)
+        .gap_2()
+        .items_center()
+        .child(div().flex_1().child(Input::new(search_input).xsmall()))
+        .child(
+            div()
+                .text_xs()
+                .text_color(muted_fg)
+                .child(if match_count > 0 {
+                    format!("{}/{}", current_match + 1, match_count)
+                } else {
+                    "No matches".to_string()
+                }),
+        )
+        .child(
+            h_flex()
+                .gap_1()
+                .child(
+                    Button::new("search-prev")
+                        .icon(IconName::ChevronUp)
+                        .xsmall()
+                        .ghost()
+                        .disabled(match_count == 0)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.prev_search_match(cx);
+                        })),
+                )
+                .child(
+                    Button::new("search-next")
+                        .icon(IconName::ChevronDown)
+                        .xsmall()
+                        .ghost()
+                        .disabled(match_count == 0)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.next_search_match(cx);
+                        })),
+                )
+                .child(
+                    Button::new("search-close")
+                        .icon(IconName::Close)
+                        .xsmall()
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.close_preview_search(cx);
+                        })),
+                ),
+        )
+}
+
 pub fn render_preview_panel(
     file_name: String,
     page_image_path: Option<PathBuf>,

@@ -42,14 +42,17 @@ actions!(
         Redo,     // Redo last undone action (Cmd+Shift+Z)
         SaveCode, // Save current code file (Cmd+S)
         // === Preview Panel ===
-        ClosePreview,    // Close preview panel (Escape)
-        ToggleSplit,     // Toggle split direction (Cmd+\)
-        NextTab,         // Switch to next tab (Cmd+Shift+])
-        PrevTab,         // Switch to previous tab (Cmd+Shift+[)
-        CloseTab,        // Close current tab (Cmd+W)
-        ReopenClosedTab, // Reopen last closed tab (Cmd+Shift+T)
-        GoBack,          // Navigate back in tab history (Cmd+[)
-        GoForward,       // Navigate forward in tab history (Cmd+])
+        ClosePreview,        // Close preview panel (Escape)
+        ToggleSplit,         // Toggle split direction (Cmd+\)
+        NextTab,             // Switch to next tab (Cmd+Shift+])
+        PrevTab,             // Switch to previous tab (Cmd+Shift+[)
+        CloseTab,            // Close current tab (Cmd+W)
+        ReopenClosedTab,     // Reopen last closed tab (Cmd+Shift+T)
+        GoBack,              // Navigate back in tab history (Cmd+[)
+        GoForward,           // Navigate forward in tab history (Cmd+])
+        TogglePreviewSearch, // Toggle search in preview panel (Cmd+F)
+        NextSearchMatch,     // Go to next search match (Cmd+G)
+        PrevSearchMatch,     // Go to previous search match (Cmd+Shift+G)
         // === PDF Viewer ===
         NextPage,     // Go to next PDF page
         PrevPage,     // Go to previous PDF page

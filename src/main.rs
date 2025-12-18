@@ -7,9 +7,10 @@ use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
     CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextTab, NudgeDown,
-    NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PrevTab, Quit, Redo, ReopenClosedTab,
-    SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextSearchMatch, NextTab,
+    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PrevSearchMatch, PrevTab,
+    Quit, Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette,
+    TogglePreviewSearch, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use once_cell::sync::Lazy;
@@ -203,6 +204,9 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-shift-t", ReopenClosedTab, None),
         KeyBinding::new("cmd-[", GoBack, None),
         KeyBinding::new("cmd-]", GoForward, None),
+        KeyBinding::new("cmd-f", TogglePreviewSearch, None),
+        KeyBinding::new("cmd-g", NextSearchMatch, None),
+        KeyBinding::new("cmd-shift-g", PrevSearchMatch, None),
         KeyBinding::new("cmd-n", NewBoard, None),
         KeyBinding::new("cmd-h", GoHome, None),
         KeyBinding::new("cmd-/", ShowShortcuts, None),

@@ -19,17 +19,17 @@ pub use overlays::{
     render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
-    render_preview_panel, render_selected_item_label, render_splitter, render_tab_bar,
-    render_tab_content,
+    render_preview_panel, render_search_bar, render_selected_item_label, render_splitter,
+    render_tab_bar, render_tab_content,
 };
 
 use crate::actions::{
     CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextPage, NextTab,
-    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn, PdfZoomOut,
-    PdfZoomReset, PrevPage, PrevTab, Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts,
-    ToggleCommandPalette, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo, ZoomIn,
-    ZoomOut, ZoomReset,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextPage, NextSearchMatch,
+    NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn,
+    PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab, Redo, ReopenClosedTab, SaveCode,
+    SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePreviewSearch, ToggleSplit, ToolArrow,
+    ToolSelect, ToolShape, ToolText, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -364,6 +364,11 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &ReopenClosedTab, _, cx| this.reopen_closed_tab(cx)))
             .on_action(cx.listener(|this, _: &GoBack, _, cx| this.go_back(cx)))
             .on_action(cx.listener(|this, _: &GoForward, _, cx| this.go_forward(cx)))
+            .on_action(cx.listener(|this, _: &TogglePreviewSearch, window, cx| {
+                this.toggle_preview_search(window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &NextSearchMatch, _, cx| this.next_search_match(cx)))
+            .on_action(cx.listener(|this, _: &PrevSearchMatch, _, cx| this.prev_search_match(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
@@ -512,8 +517,22 @@ impl Humanboard {
                                             tabs,
                                             active_tab,
                                             &self.preview_tab_scroll,
+                                            self.dragging_tab,
+                                            self.tab_drag_target,
                                             cx,
                                         ))
+                                        // Search bar (when active)
+                                        .when_some(
+                                            self.preview_search.as_ref(),
+                                            |d, search_input| {
+                                                d.child(render_search_bar(
+                                                    search_input,
+                                                    self.preview_search_matches.len(),
+                                                    self.preview_search_current,
+                                                    cx,
+                                                ))
+                                            },
+                                        )
                                         .child(
                                             div()
                                                 .id(ElementId::Name(
@@ -584,8 +603,22 @@ impl Humanboard {
                                             tabs,
                                             active_tab,
                                             &self.preview_tab_scroll,
+                                            self.dragging_tab,
+                                            self.tab_drag_target,
                                             cx,
                                         ))
+                                        // Search bar (when active)
+                                        .when_some(
+                                            self.preview_search.as_ref(),
+                                            |d, search_input| {
+                                                d.child(render_search_bar(
+                                                    search_input,
+                                                    self.preview_search_matches.len(),
+                                                    self.preview_search_current,
+                                                    cx,
+                                                ))
+                                            },
+                                        )
                                         .child(
                                             div()
                                                 .id(ElementId::Name(

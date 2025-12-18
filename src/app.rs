@@ -295,6 +295,12 @@ pub struct Humanboard {
     /// Focus manager for handling focus across different contexts
     pub focus: FocusManager,
     pub preview: Option<PreviewPanel>,
+    pub dragging_tab: Option<usize>,    // Index of tab being dragged
+    pub tab_drag_target: Option<usize>, // Target position for tab drop
+    pub preview_search: Option<Entity<InputState>>, // Search input for preview panel
+    pub preview_search_query: String,   // Current search query
+    pub preview_search_matches: Vec<(usize, usize)>, // (line, column) positions of matches
+    pub preview_search_current: usize,  // Current match index
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
     pub last_drop_pos: Option<Point<Pixels>>,
@@ -400,6 +406,12 @@ impl Humanboard {
             frame_count: 0,
             focus: FocusManager::new(cx),
             preview: None,
+            dragging_tab: None,
+            tab_drag_target: None,
+            preview_search: None,
+            preview_search_query: String::new(),
+            preview_search_matches: Vec::new(),
+            preview_search_current: 0,
             dragging_splitter: false,
             splitter_drag_start: None,
             last_drop_pos: None,
@@ -2039,6 +2051,195 @@ impl Humanboard {
                     cx.notify();
                 }
             }
+        }
+    }
+
+    /// Start dragging a tab for reordering
+    pub fn start_tab_drag(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+        self.dragging_tab = Some(tab_index);
+        self.tab_drag_target = Some(tab_index);
+        cx.notify();
+    }
+
+    /// Update the drag target position as mouse moves over tabs
+    pub fn update_tab_drag_target(&mut self, target_index: usize, cx: &mut Context<Self>) {
+        if self.dragging_tab.is_some() && self.tab_drag_target != Some(target_index) {
+            self.tab_drag_target = Some(target_index);
+            cx.notify();
+        }
+    }
+
+    /// Finish tab drag and reorder if needed
+    pub fn finish_tab_drag(&mut self, cx: &mut Context<Self>) {
+        if let (Some(from), Some(to)) = (self.dragging_tab, self.tab_drag_target) {
+            if from != to {
+                if let Some(ref mut preview) = self.preview {
+                    // Don't allow moving tabs before pinned tabs (unless the dragged tab is pinned)
+                    let pinned_count = preview.tabs.iter().filter(|t| t.is_pinned()).count();
+                    let is_dragged_pinned = preview
+                        .tabs
+                        .get(from)
+                        .map(|t| t.is_pinned())
+                        .unwrap_or(false);
+
+                    let effective_to = if !is_dragged_pinned && to < pinned_count {
+                        pinned_count // Can't move before pinned tabs
+                    } else {
+                        to
+                    };
+
+                    if from != effective_to && from < preview.tabs.len() {
+                        let tab = preview.tabs.remove(from);
+                        let insert_pos = if effective_to > from {
+                            effective_to.min(preview.tabs.len())
+                        } else {
+                            effective_to
+                        };
+                        preview.tabs.insert(insert_pos, tab);
+
+                        // Update active tab index
+                        if preview.active_tab == from {
+                            preview.active_tab = insert_pos;
+                        } else if from < preview.active_tab && insert_pos >= preview.active_tab {
+                            preview.active_tab -= 1;
+                        } else if from > preview.active_tab && insert_pos <= preview.active_tab {
+                            preview.active_tab += 1;
+                        }
+                    }
+                }
+            }
+        }
+        self.dragging_tab = None;
+        self.tab_drag_target = None;
+        cx.notify();
+    }
+
+    /// Cancel tab drag without reordering
+    pub fn cancel_tab_drag(&mut self, cx: &mut Context<Self>) {
+        self.dragging_tab = None;
+        self.tab_drag_target = None;
+        cx.notify();
+    }
+
+    /// Toggle the preview search bar
+    pub fn toggle_preview_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview_search.is_some() {
+            self.close_preview_search(cx);
+        } else {
+            self.open_preview_search(window, cx);
+        }
+    }
+
+    /// Open the preview search bar
+    pub fn open_preview_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview.is_none() {
+            return;
+        }
+
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in file..."));
+
+        // Focus the input
+        input.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+
+        // Subscribe to input changes
+        cx.subscribe(
+            &input,
+            |this, input, event: &gpui_component::input::InputEvent, cx| {
+                match event {
+                    gpui_component::input::InputEvent::Change { .. } => {
+                        let query = input.read(cx).text().to_string();
+                        this.update_preview_search(&query, cx);
+                    }
+                    gpui_component::input::InputEvent::PressEnter { .. } => {
+                        // Go to next match
+                        this.next_search_match(cx);
+                    }
+                    gpui_component::input::InputEvent::Blur => {
+                        // Don't close on blur - let user click away
+                    }
+                    _ => {}
+                }
+            },
+        )
+        .detach();
+
+        self.preview_search = Some(input);
+        self.preview_search_query.clear();
+        self.preview_search_matches.clear();
+        self.preview_search_current = 0;
+        cx.notify();
+    }
+
+    /// Close the preview search bar
+    pub fn close_preview_search(&mut self, cx: &mut Context<Self>) {
+        self.preview_search = None;
+        self.preview_search_query.clear();
+        self.preview_search_matches.clear();
+        self.preview_search_current = 0;
+        cx.notify();
+    }
+
+    /// Update search matches based on query
+    fn update_preview_search(&mut self, query: &str, cx: &mut Context<Self>) {
+        self.preview_search_query = query.to_string();
+        self.preview_search_matches.clear();
+        self.preview_search_current = 0;
+
+        if query.is_empty() {
+            cx.notify();
+            return;
+        }
+
+        // Get content from active tab
+        let content = if let Some(ref preview) = self.preview {
+            if let Some(tab) = preview.tabs.get(preview.active_tab) {
+                match tab {
+                    PreviewTab::Markdown { content, .. } => Some(content.clone()),
+                    PreviewTab::Code { content, .. } => Some(content.clone()),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(content) = content {
+            let query_lower = query.to_lowercase();
+            for (line_idx, line) in content.lines().enumerate() {
+                let line_lower = line.to_lowercase();
+                let mut start = 0;
+                while let Some(col) = line_lower[start..].find(&query_lower) {
+                    self.preview_search_matches.push((line_idx, start + col));
+                    start += col + 1;
+                }
+            }
+        }
+
+        cx.notify();
+    }
+
+    /// Go to next search match
+    pub fn next_search_match(&mut self, cx: &mut Context<Self>) {
+        if !self.preview_search_matches.is_empty() {
+            self.preview_search_current =
+                (self.preview_search_current + 1) % self.preview_search_matches.len();
+            cx.notify();
+        }
+    }
+
+    /// Go to previous search match
+    pub fn prev_search_match(&mut self, cx: &mut Context<Self>) {
+        if !self.preview_search_matches.is_empty() {
+            self.preview_search_current = if self.preview_search_current == 0 {
+                self.preview_search_matches.len() - 1
+            } else {
+                self.preview_search_current - 1
+            };
+            cx.notify();
         }
     }
 
