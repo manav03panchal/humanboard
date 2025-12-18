@@ -197,6 +197,124 @@ pub fn render_tab_bar(
         )
 }
 
+/// Render the split pane container when panel is split
+pub fn render_split_panes(
+    preview: &crate::app::PreviewPanel,
+    left_scroll: &ScrollHandle,
+    right_scroll: &ScrollHandle,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
+    search_input: Option<&Entity<gpui_component::input::InputState>>,
+    search_match_count: usize,
+    search_current: usize,
+    cx: &mut Context<Humanboard>,
+) -> Div {
+    use crate::app::FocusedPane;
+
+    let bg = cx.theme().background;
+    let border = cx.theme().border;
+    let primary = cx.theme().primary;
+    let left_focused = preview.focused_pane == FocusedPane::Left;
+    let right_focused = preview.focused_pane == FocusedPane::Right;
+
+    h_flex()
+        .size_full()
+        .gap_1()
+        // Left pane
+        .child(
+            v_flex()
+                .id("left-pane")
+                .flex_1()
+                .h_full()
+                .bg(bg)
+                .overflow_hidden()
+                .border_1()
+                .border_color(if left_focused { primary } else { border })
+                .rounded(px(4.0))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.focus_left_pane(cx);
+                    }),
+                )
+                .child(render_tab_bar(
+                    &preview.tabs,
+                    preview.active_tab,
+                    left_scroll,
+                    if left_focused { dragging_tab } else { None },
+                    if left_focused { drag_target } else { None },
+                    cx,
+                ))
+                .when(left_focused, |d| {
+                    d.when_some(search_input, |d, input| {
+                        d.child(render_search_bar(
+                            input,
+                            search_match_count,
+                            search_current,
+                            cx,
+                        ))
+                    })
+                })
+                .child(
+                    div()
+                        .id("left-pane-content")
+                        .flex_1()
+                        .overflow_hidden()
+                        .when_some(preview.tabs.get(preview.active_tab), |d, tab| {
+                            d.child(render_tab_content(tab, true, preview.active_tab, cx))
+                        }),
+                ),
+        )
+        // Right pane
+        .child(
+            v_flex()
+                .id("right-pane")
+                .flex_1()
+                .h_full()
+                .bg(bg)
+                .overflow_hidden()
+                .border_1()
+                .border_color(if right_focused { primary } else { border })
+                .rounded(px(4.0))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.focus_right_pane(cx);
+                    }),
+                )
+                .child(render_tab_bar(
+                    &preview.right_tabs,
+                    preview.right_active_tab,
+                    right_scroll,
+                    if right_focused { dragging_tab } else { None },
+                    if right_focused { drag_target } else { None },
+                    cx,
+                ))
+                .when(right_focused, |d| {
+                    d.when_some(search_input, |d, input| {
+                        d.child(render_search_bar(
+                            input,
+                            search_match_count,
+                            search_current,
+                            cx,
+                        ))
+                    })
+                })
+                .child(
+                    div()
+                        .id("right-pane-content")
+                        .flex_1()
+                        .overflow_hidden()
+                        .when_some(
+                            preview.right_tabs.get(preview.right_active_tab),
+                            |d, tab| {
+                                d.child(render_tab_content(tab, true, preview.right_active_tab, cx))
+                            },
+                        ),
+                ),
+        )
+}
+
 /// Render the content area for a preview tab
 pub fn render_tab_content(
     tab: &PreviewTab,

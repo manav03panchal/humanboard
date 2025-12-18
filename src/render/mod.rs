@@ -19,17 +19,18 @@ pub use overlays::{
     render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
-    render_preview_panel, render_search_bar, render_selected_item_label, render_splitter,
-    render_tab_bar, render_tab_content,
+    render_preview_panel, render_search_bar, render_selected_item_label, render_split_panes,
+    render_splitter, render_tab_bar, render_tab_content,
 };
 
 use crate::actions::{
     CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextPage, NextSearchMatch,
-    NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn,
-    PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab, Redo, ReopenClosedTab, SaveCode,
-    SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePreviewSearch, ToggleSplit, ToolArrow,
-    ToolSelect, ToolShape, ToolText, Undo, ZoomIn, ZoomOut, ZoomReset,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, MoveTabToOtherPane, NewBoard,
+    NextPage, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
+    OpenSettings, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab, Redo,
+    ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePaneSplit,
+    TogglePreviewSearch, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo, ZoomIn,
+    ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -280,10 +281,9 @@ impl Humanboard {
         };
 
         // Extract preview info
-        let preview_info = self
-            .preview
-            .as_ref()
-            .map(|p| (p.split, p.size, &p.tabs, p.active_tab));
+        let preview_ref = self.preview.as_ref();
+        let preview_info =
+            preview_ref.map(|p| (p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
 
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
@@ -369,6 +369,10 @@ impl Humanboard {
             }))
             .on_action(cx.listener(|this, _: &NextSearchMatch, _, cx| this.next_search_match(cx)))
             .on_action(cx.listener(|this, _: &PrevSearchMatch, _, cx| this.prev_search_match(cx)))
+            .on_action(cx.listener(|this, _: &TogglePaneSplit, _, cx| this.toggle_pane_split(cx)))
+            .on_action(
+                cx.listener(|this, _: &MoveTabToOtherPane, _, cx| this.move_tab_to_other_pane(cx)),
+            )
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
@@ -455,7 +459,7 @@ impl Humanboard {
 
         let selected_tool = self.selected_tool;
         let content = match preview_info {
-            Some((split, size, tabs, active_tab)) => {
+            Some((split, size, tabs, active_tab, is_pane_split)) => {
                 let canvas_size = 1.0 - size;
                 let preview_size = size;
 
@@ -505,48 +509,66 @@ impl Humanboard {
                                 .child(render_splitter(SplitDirection::Vertical, cx))
                                 .child({
                                     let bg = cx.theme().background;
-                                    div()
+                                    let container = div()
                                         .flex_shrink_0()
                                         .w(Fraction(preview_size))
                                         .h_full()
                                         .bg(bg)
                                         .flex()
                                         .flex_col()
-                                        .overflow_hidden()
-                                        .child(render_tab_bar(
-                                            tabs,
-                                            active_tab,
+                                        .overflow_hidden();
+
+                                    if is_pane_split {
+                                        // Render split panes
+                                        container.child(render_split_panes(
+                                            preview_ref.unwrap(),
                                             &self.preview_tab_scroll,
+                                            &self.preview_right_tab_scroll,
                                             self.dragging_tab,
                                             self.tab_drag_target,
+                                            self.preview_search.as_ref(),
+                                            self.preview_search_matches.len(),
+                                            self.preview_search_current,
                                             cx,
                                         ))
-                                        // Search bar (when active)
-                                        .when_some(
-                                            self.preview_search.as_ref(),
-                                            |d, search_input| {
-                                                d.child(render_search_bar(
-                                                    search_input,
-                                                    self.preview_search_matches.len(),
-                                                    self.preview_search_current,
-                                                    cx,
-                                                ))
-                                            },
-                                        )
-                                        .child(
-                                            div()
-                                                .id(ElementId::Name(
-                                                    format!("tab-container-v-{}", active_tab)
-                                                        .into(),
-                                                ))
-                                                .flex_1()
-                                                .overflow_hidden()
-                                                .when_some(tabs.get(active_tab), |d, tab| {
-                                                    d.child(render_tab_content(
-                                                        tab, true, active_tab, cx,
+                                    } else {
+                                        // Render single pane
+                                        container
+                                            .child(render_tab_bar(
+                                                tabs,
+                                                active_tab,
+                                                &self.preview_tab_scroll,
+                                                self.dragging_tab,
+                                                self.tab_drag_target,
+                                                cx,
+                                            ))
+                                            // Search bar (when active)
+                                            .when_some(
+                                                self.preview_search.as_ref(),
+                                                |d, search_input| {
+                                                    d.child(render_search_bar(
+                                                        search_input,
+                                                        self.preview_search_matches.len(),
+                                                        self.preview_search_current,
+                                                        cx,
                                                     ))
-                                                }),
-                                        )
+                                                },
+                                            )
+                                            .child(
+                                                div()
+                                                    .id(ElementId::Name(
+                                                        format!("tab-container-v-{}", active_tab)
+                                                            .into(),
+                                                    ))
+                                                    .flex_1()
+                                                    .overflow_hidden()
+                                                    .when_some(tabs.get(active_tab), |d, tab| {
+                                                        d.child(render_tab_content(
+                                                            tab, true, active_tab, cx,
+                                                        ))
+                                                    }),
+                                            )
+                                    }
                                 }),
                         ),
                     SplitDirection::Horizontal => base
@@ -591,48 +613,66 @@ impl Humanboard {
                                 .child(render_splitter(SplitDirection::Horizontal, cx))
                                 .child({
                                     let bg = cx.theme().background;
-                                    div()
+                                    let container = div()
                                         .flex_shrink_0()
                                         .h(Fraction(preview_size))
                                         .w_full()
                                         .bg(bg)
                                         .flex()
                                         .flex_col()
-                                        .overflow_hidden()
-                                        .child(render_tab_bar(
-                                            tabs,
-                                            active_tab,
+                                        .overflow_hidden();
+
+                                    if is_pane_split {
+                                        // Render split panes
+                                        container.child(render_split_panes(
+                                            preview_ref.unwrap(),
                                             &self.preview_tab_scroll,
+                                            &self.preview_right_tab_scroll,
                                             self.dragging_tab,
                                             self.tab_drag_target,
+                                            self.preview_search.as_ref(),
+                                            self.preview_search_matches.len(),
+                                            self.preview_search_current,
                                             cx,
                                         ))
-                                        // Search bar (when active)
-                                        .when_some(
-                                            self.preview_search.as_ref(),
-                                            |d, search_input| {
-                                                d.child(render_search_bar(
-                                                    search_input,
-                                                    self.preview_search_matches.len(),
-                                                    self.preview_search_current,
-                                                    cx,
-                                                ))
-                                            },
-                                        )
-                                        .child(
-                                            div()
-                                                .id(ElementId::Name(
-                                                    format!("tab-container-h-{}", active_tab)
-                                                        .into(),
-                                                ))
-                                                .flex_1()
-                                                .overflow_hidden()
-                                                .when_some(tabs.get(active_tab), |d, tab| {
-                                                    d.child(render_tab_content(
-                                                        tab, true, active_tab, cx,
+                                    } else {
+                                        // Render single pane
+                                        container
+                                            .child(render_tab_bar(
+                                                tabs,
+                                                active_tab,
+                                                &self.preview_tab_scroll,
+                                                self.dragging_tab,
+                                                self.tab_drag_target,
+                                                cx,
+                                            ))
+                                            // Search bar (when active)
+                                            .when_some(
+                                                self.preview_search.as_ref(),
+                                                |d, search_input| {
+                                                    d.child(render_search_bar(
+                                                        search_input,
+                                                        self.preview_search_matches.len(),
+                                                        self.preview_search_current,
+                                                        cx,
                                                     ))
-                                                }),
-                                        )
+                                                },
+                                            )
+                                            .child(
+                                                div()
+                                                    .id(ElementId::Name(
+                                                        format!("tab-container-h-{}", active_tab)
+                                                            .into(),
+                                                    ))
+                                                    .flex_1()
+                                                    .overflow_hidden()
+                                                    .when_some(tabs.get(active_tab), |d, tab| {
+                                                        d.child(render_tab_content(
+                                                            tab, true, active_tab, cx,
+                                                        ))
+                                                    }),
+                                            )
+                                    }
                                 }),
                         ),
                 }

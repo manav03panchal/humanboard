@@ -228,16 +228,34 @@ impl PreviewTab {
     }
 }
 
+/// Which pane is focused in split view
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
+pub enum FocusedPane {
+    #[default]
+    Left,
+    Right,
+}
+
 pub struct PreviewPanel {
+    // Left/primary pane
     pub tabs: Vec<PreviewTab>,
     pub active_tab: usize,
-    pub split: SplitDirection,
-    pub size: f32, // 0.0 to 1.0, percentage of window
-    /// Navigation history - indices of previously active tabs
     pub back_stack: Vec<usize>,
     pub forward_stack: Vec<usize>,
-    /// Recently closed tabs for recovery (max 20)
     pub closed_tabs: Vec<PreviewTab>,
+
+    // Right/secondary pane (only used when is_pane_split is true)
+    pub right_tabs: Vec<PreviewTab>,
+    pub right_active_tab: usize,
+    pub right_back_stack: Vec<usize>,
+    pub right_forward_stack: Vec<usize>,
+
+    // Split state
+    pub split: SplitDirection, // Split with canvas (vertical/horizontal)
+    pub size: f32,             // Panel size (0.0 to 1.0)
+    pub is_pane_split: bool,   // Whether panel itself is split into two panes
+    pub focused_pane: FocusedPane, // Which pane has focus
+    pub pane_ratio: f32,       // Ratio between left/right panes (0.5 = equal)
 }
 
 impl PreviewPanel {
@@ -245,11 +263,20 @@ impl PreviewPanel {
         Self {
             tabs: Vec::new(),
             active_tab: 0,
-            split,
-            size,
             back_stack: Vec::new(),
             forward_stack: Vec::new(),
             closed_tabs: Vec::new(),
+
+            right_tabs: Vec::new(),
+            right_active_tab: 0,
+            right_back_stack: Vec::new(),
+            right_forward_stack: Vec::new(),
+
+            split,
+            size,
+            is_pane_split: false,
+            focused_pane: FocusedPane::Left,
+            pane_ratio: 0.5,
         }
     }
 }
@@ -336,8 +363,9 @@ pub struct Humanboard {
     // Toast notifications
     pub toast_manager: ToastManager,
 
-    // Preview tab scroll handle
+    // Preview tab scroll handles (left/right for split pane)
     pub preview_tab_scroll: ScrollHandle,
+    pub preview_right_tab_scroll: ScrollHandle,
 
     // Command palette scroll handle
     pub cmd_palette_scroll: ScrollHandle,
@@ -437,6 +465,7 @@ impl Humanboard {
 
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),
+            preview_right_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
             pan_animation: None,
             selected_tool: ToolType::default(),
@@ -1465,15 +1494,9 @@ impl Humanboard {
             }
         } else {
             // Create new preview panel with first tab
-            self.preview = Some(PreviewPanel {
-                tabs: vec![tab],
-                active_tab: 0,
-                split: SplitDirection::Vertical,
-                size: 0.4,
-                back_stack: Vec::new(),
-                forward_stack: Vec::new(),
-                closed_tabs: Vec::new(),
-            });
+            let mut panel = PreviewPanel::new(SplitDirection::Vertical, 0.4);
+            panel.tabs.push(tab);
+            self.preview = Some(panel);
         }
         cx.notify();
     }
@@ -2306,6 +2329,116 @@ impl Humanboard {
                 SplitDirection::Vertical => SplitDirection::Horizontal,
                 SplitDirection::Horizontal => SplitDirection::Vertical,
             };
+            cx.notify();
+        }
+    }
+
+    /// Split the preview panel into two panes
+    pub fn split_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if !preview.is_pane_split {
+                preview.is_pane_split = true;
+                preview.pane_ratio = 0.5;
+                // Focus stays on left pane
+                cx.notify();
+            }
+        }
+    }
+
+    /// Close the split and merge into single pane
+    pub fn close_split_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if preview.is_pane_split {
+                // Move right pane tabs to left pane
+                let right_tabs: Vec<PreviewTab> = preview.right_tabs.drain(..).collect();
+                for tab in right_tabs {
+                    preview.tabs.push(tab);
+                }
+                preview.right_active_tab = 0;
+                preview.right_back_stack.clear();
+                preview.right_forward_stack.clear();
+                preview.is_pane_split = false;
+                preview.focused_pane = FocusedPane::Left;
+                cx.notify();
+            }
+        }
+    }
+
+    /// Toggle split pane on/off
+    pub fn toggle_pane_split(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref preview) = self.preview {
+            if preview.is_pane_split {
+                self.close_split_pane(cx);
+            } else {
+                self.split_pane(cx);
+            }
+        }
+    }
+
+    /// Focus the left pane
+    pub fn focus_left_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            preview.focused_pane = FocusedPane::Left;
+            cx.notify();
+        }
+    }
+
+    /// Focus the right pane
+    pub fn focus_right_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if preview.is_pane_split {
+                preview.focused_pane = FocusedPane::Right;
+                cx.notify();
+            }
+        }
+    }
+
+    /// Move current tab to the other pane
+    pub fn move_tab_to_other_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if !preview.is_pane_split {
+                // Auto-split when moving tab
+                preview.is_pane_split = true;
+                preview.pane_ratio = 0.5;
+            }
+
+            match preview.focused_pane {
+                FocusedPane::Left => {
+                    if !preview.tabs.is_empty() {
+                        let tab = preview.tabs.remove(preview.active_tab);
+                        preview.right_tabs.push(tab);
+                        preview.right_active_tab = preview.right_tabs.len() - 1;
+                        // Adjust left active tab
+                        if preview.active_tab >= preview.tabs.len() && !preview.tabs.is_empty() {
+                            preview.active_tab = preview.tabs.len() - 1;
+                        }
+                        // Focus the right pane where we moved the tab
+                        preview.focused_pane = FocusedPane::Right;
+                    }
+                }
+                FocusedPane::Right => {
+                    if !preview.right_tabs.is_empty() {
+                        let tab = preview.right_tabs.remove(preview.right_active_tab);
+                        preview.tabs.push(tab);
+                        preview.active_tab = preview.tabs.len() - 1;
+                        // Adjust right active tab
+                        if preview.right_active_tab >= preview.right_tabs.len()
+                            && !preview.right_tabs.is_empty()
+                        {
+                            preview.right_active_tab = preview.right_tabs.len() - 1;
+                        }
+                        // Focus the left pane where we moved the tab
+                        preview.focused_pane = FocusedPane::Left;
+                    }
+                }
+            }
+
+            // If right pane is empty after move, close split
+            if preview.right_tabs.is_empty() {
+                preview.is_pane_split = false;
+                preview.focused_pane = FocusedPane::Left;
+            }
+
             cx.notify();
         }
     }

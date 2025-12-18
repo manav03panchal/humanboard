@@ -53,6 +53,10 @@ actions!(
         TogglePreviewSearch, // Toggle search in preview panel (Cmd+F)
         NextSearchMatch,     // Go to next search match (Cmd+G)
         PrevSearchMatch,     // Go to previous search match (Cmd+Shift+G)
+        TogglePaneSplit,     // Toggle split preview into two panes (Cmd+Shift+\)
+        MoveTabToOtherPane,  // Move current tab to other pane (Cmd+Alt+Shift+Arrow)
+        FocusLeftPane,       // Focus left pane
+        FocusRightPane,      // Focus right pane
         // === PDF Viewer ===
         NextPage,     // Go to next PDF page
         PrevPage,     // Go to previous PDF page
