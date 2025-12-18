@@ -191,42 +191,84 @@ fn register_keybindings(cx: &mut App) {
     });
 
     // Global shortcuts (always active, no context)
+    // Register both cmd- (macOS) and ctrl- (Linux/Windows) variants
     cx.bind_keys([
+        // Quit - cmd-q on macOS, ctrl-q on Linux/Windows
         KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("ctrl-q", Quit, None),
+        // Open file
         KeyBinding::new("cmd-o", OpenFile, None),
+        KeyBinding::new("ctrl-o", OpenFile, None),
+        // Zoom
         KeyBinding::new("cmd-=", ZoomIn, None),
+        KeyBinding::new("ctrl-=", ZoomIn, None),
         KeyBinding::new("cmd-+", ZoomIn, None),
+        KeyBinding::new("ctrl-+", ZoomIn, None),
         KeyBinding::new("cmd--", ZoomOut, None),
+        KeyBinding::new("ctrl--", ZoomOut, None),
         KeyBinding::new("cmd-0", ZoomReset, None),
+        KeyBinding::new("ctrl-0", ZoomReset, None),
+        // Tab navigation
         KeyBinding::new("cmd-shift-]", NextTab, None),
+        KeyBinding::new("ctrl-shift-]", NextTab, None),
+        KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("cmd-shift-[", PrevTab, None),
+        KeyBinding::new("ctrl-shift-[", PrevTab, None),
+        KeyBinding::new("ctrl-shift-tab", PrevTab, None),
         KeyBinding::new("cmd-w", CloseTab, None),
+        KeyBinding::new("ctrl-w", CloseTab, None),
         KeyBinding::new("cmd-shift-t", ReopenClosedTab, None),
+        KeyBinding::new("ctrl-shift-t", ReopenClosedTab, None),
+        // History navigation
         KeyBinding::new("cmd-[", GoBack, None),
+        KeyBinding::new("ctrl-[", GoBack, None),
+        KeyBinding::new("alt-left", GoBack, None),
         KeyBinding::new("cmd-]", GoForward, None),
+        KeyBinding::new("ctrl-]", GoForward, None),
+        KeyBinding::new("alt-right", GoForward, None),
+        // Search
         KeyBinding::new("cmd-f", TogglePreviewSearch, None),
+        KeyBinding::new("ctrl-f", TogglePreviewSearch, None),
         KeyBinding::new("cmd-g", NextSearchMatch, None),
+        KeyBinding::new("ctrl-g", NextSearchMatch, None),
         KeyBinding::new("cmd-shift-g", PrevSearchMatch, None),
+        KeyBinding::new("ctrl-shift-g", PrevSearchMatch, None),
+        // Pane split
         KeyBinding::new("cmd-shift-d", TogglePaneSplit, None),
+        KeyBinding::new("ctrl-shift-d", TogglePaneSplit, None),
         KeyBinding::new("cmd-alt-shift-right", MoveTabToOtherPane, None),
+        KeyBinding::new("ctrl-alt-shift-right", MoveTabToOtherPane, None),
         KeyBinding::new("cmd-alt-shift-left", MoveTabToOtherPane, None),
+        KeyBinding::new("ctrl-alt-shift-left", MoveTabToOtherPane, None),
+        // Board management
         KeyBinding::new("cmd-n", NewBoard, None),
+        KeyBinding::new("ctrl-n", NewBoard, None),
         KeyBinding::new("cmd-h", GoHome, None),
+        KeyBinding::new("ctrl-h", GoHome, None),
+        // Help & settings
         KeyBinding::new("cmd-/", ShowShortcuts, None),
+        KeyBinding::new("ctrl-/", ShowShortcuts, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
+        KeyBinding::new("ctrl-,", OpenSettings, None),
     ]);
 
     // Canvas-specific shortcuts (undo/redo - code editor handles its own)
     cx.bind_keys([
         KeyBinding::new("cmd-z", Undo, Some("Canvas")),
+        KeyBinding::new("ctrl-z", Undo, Some("Canvas")),
         KeyBinding::new("cmd-shift-z", Redo, Some("Canvas")),
+        KeyBinding::new("ctrl-shift-z", Redo, Some("Canvas")),
+        KeyBinding::new("ctrl-y", Redo, Some("Canvas")), // Windows-style redo
     ]);
 
     // Save shortcuts for different contexts
     cx.bind_keys([
         KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor")),
+        KeyBinding::new("ctrl-s", SaveCode, Some("CodeEditor")),
         KeyBinding::new("cmd-s", SaveCode, Some("Canvas")),
+        KeyBinding::new("ctrl-s", SaveCode, Some("Canvas")),
         KeyBinding::new("cmd-s", SaveCode, Some("CanvasInputActive")),
+        KeyBinding::new("ctrl-s", SaveCode, Some("CanvasInputActive")),
     ]);
 
     // Canvas-only shortcuts (not active when text input is focused)
@@ -235,10 +277,13 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
         KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
         KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
+        KeyBinding::new("ctrl-d", DuplicateSelected, Some("Canvas")),
         KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
+        KeyBinding::new("ctrl-a", SelectAll, Some("Canvas")),
         KeyBinding::new("escape", DeselectAll, Some("Canvas")),
-        // Command palette (cmd-k toggles open/close)
+        // Command palette (cmd-k / ctrl-k toggles open/close)
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("Canvas")),
         // Arrow keys to nudge selected items
         KeyBinding::new("up", NudgeUp, Some("Canvas")),
         KeyBinding::new("down", NudgeDown, Some("Canvas")),
@@ -249,15 +294,15 @@ fn register_keybindings(cx: &mut App) {
     // Shortcuts that work even when input is active
     cx.bind_keys([
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("CanvasInputActive")),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("CanvasInputActive")),
         KeyBinding::new("escape", CancelTextboxEdit, Some("CanvasInputActive")),
     ]);
 
     // Landing page shortcuts
-    cx.bind_keys([KeyBinding::new(
-        "cmd-k",
-        ToggleCommandPalette,
-        Some("Landing"),
-    )]);
+    cx.bind_keys([
+        KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Landing")),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("Landing")),
+    ]);
 
     // Command palette navigation (higher priority than Input context)
     cx.bind_keys([
