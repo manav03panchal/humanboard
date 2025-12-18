@@ -6,11 +6,10 @@
 use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
-    CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp,
-    DeleteSelected, DeselectAll, DuplicateSelected, GoHome, NewBoard, NextTab,
-    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PrevTab,
-    Quit, Redo, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo,
-    ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, DeleteSelected,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextTab, NudgeDown,
+    NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PrevTab, Quit, Redo, ReopenClosedTab,
+    SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use once_cell::sync::Lazy;
@@ -114,22 +113,30 @@ impl AssetSource for Assets {
 /// Following Zed's pattern of early directory setup.
 fn init_paths() -> Result<()> {
     let home = std::env::var("HOME").context("HOME environment variable not set")?;
-    let config_dir = std::path::PathBuf::from(&home).join(".config").join("humanboard");
-    let data_dir = std::path::PathBuf::from(&home).join(".local").join("share").join("humanboard");
+    let config_dir = std::path::PathBuf::from(&home)
+        .join(".config")
+        .join("humanboard");
+    let data_dir = std::path::PathBuf::from(&home)
+        .join(".local")
+        .join("share")
+        .join("humanboard");
 
     std::fs::create_dir_all(&config_dir)
         .with_context(|| format!("Failed to create config directory: {:?}", config_dir))?;
     std::fs::create_dir_all(&data_dir)
         .with_context(|| format!("Failed to create data directory: {:?}", data_dir))?;
 
-    debug!("Initialized paths - config: {:?}, data: {:?}", config_dir, data_dir);
+    debug!(
+        "Initialized paths - config: {:?}, data: {:?}",
+        config_dir, data_dir
+    );
     Ok(())
 }
 
 /// Initialize the logging system.
 /// Following Zed's tracing initialization pattern.
 fn init_logging() {
-    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("humanboard=info,warn"));
@@ -193,6 +200,9 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-shift-]", NextTab, None),
         KeyBinding::new("cmd-shift-[", PrevTab, None),
         KeyBinding::new("cmd-w", CloseTab, None),
+        KeyBinding::new("cmd-shift-t", ReopenClosedTab, None),
+        KeyBinding::new("cmd-[", GoBack, None),
+        KeyBinding::new("cmd-]", GoForward, None),
         KeyBinding::new("cmd-n", NewBoard, None),
         KeyBinding::new("cmd-h", GoHome, None),
         KeyBinding::new("cmd-/", ShowShortcuts, None),
@@ -220,10 +230,8 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
         KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
         KeyBinding::new("escape", DeselectAll, Some("Canvas")),
-
         // Command palette (cmd-k toggles open/close)
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
-
         // Arrow keys to nudge selected items
         KeyBinding::new("up", NudgeUp, Some("Canvas")),
         KeyBinding::new("down", NudgeDown, Some("Canvas")),
@@ -238,9 +246,11 @@ fn register_keybindings(cx: &mut App) {
     ]);
 
     // Landing page shortcuts
-    cx.bind_keys([
-        KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Landing")),
-    ]);
+    cx.bind_keys([KeyBinding::new(
+        "cmd-k",
+        ToggleCommandPalette,
+        Some("Landing"),
+    )]);
 
     // Command palette navigation (higher priority than Input context)
     cx.bind_keys([
@@ -250,9 +260,7 @@ fn register_keybindings(cx: &mut App) {
     ]);
 
     // Modal context shortcuts (settings, dialogs)
-    cx.bind_keys([
-        KeyBinding::new("escape", OpenSettings, Some("Modal")),
-    ]);
+    cx.bind_keys([KeyBinding::new("escape", OpenSettings, Some("Modal"))]);
 
     debug!("Keybindings registered");
 }
@@ -311,6 +319,9 @@ fn main() {
             cx.quit();
         }
 
-        info!("Application fully initialized in {:?}", STARTUP_TIME.elapsed());
+        info!(
+            "Application fully initialized in {:?}",
+            STARTUP_TIME.elapsed()
+        );
     });
 }

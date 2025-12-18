@@ -10,6 +10,7 @@ use crate::app::{Humanboard, PreviewTab, SplitDirection};
 use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::InteractiveElementExt as _;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::Input;
 use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable, h_flex, v_flex};
@@ -51,6 +52,8 @@ pub fn render_tab_bar(
                     let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
                     let is_code = matches!(tab, PreviewTab::Code { .. });
                     let is_dirty = tab.is_dirty();
+                    let is_preview = tab.is_preview();
+                    let is_pinned = tab.is_pinned();
 
                     let display_name = if filename.len() > 20 {
                         format!("{}...", &filename[..17])
@@ -60,6 +63,7 @@ pub fn render_tab_bar(
 
                     let tab_index = index;
                     let tab_index_close = index;
+                    let tab_index_pin = index;
 
                     h_flex()
                         .id(ElementId::Name(format!("tab-{}", index).into()))
@@ -75,6 +79,14 @@ pub fn render_tab_bar(
                         .on_click(cx.listener(move |this, _event, _window, cx| {
                             this.switch_tab(tab_index, cx);
                         }))
+                        // Double-click converts preview to permanent
+                        .on_double_click(cx.listener(move |this, _event, _window, cx| {
+                            this.make_tab_permanent(tab_index, cx);
+                        }))
+                        // Pin icon for pinned tabs
+                        .when(is_pinned, |d| {
+                            d.child(div().text_xs().text_color(muted_fg).mr_1().child("📌"))
+                        })
                         .child(if is_code {
                             Icon::new(IconName::SquareTerminal)
                                 .xsmall()
@@ -89,6 +101,8 @@ pub fn render_tab_bar(
                                 .text_xs()
                                 .whitespace_nowrap()
                                 .text_color(if is_active { fg } else { muted_fg })
+                                // Italicize preview tabs
+                                .when(is_preview, |d| d.italic())
                                 .child(display_name),
                         )
                         .child(
@@ -103,8 +117,8 @@ pub fn render_tab_bar(
                                     // Show dot indicator when dirty
                                     d.child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(primary))
                                 })
-                                .when(!is_dirty, |d| {
-                                    // Show close button when not dirty
+                                .when(!is_dirty && !is_pinned, |d| {
+                                    // Show close button when not dirty and not pinned
                                     d.text_xs()
                                         .text_color(muted_fg)
                                         .hover(|style| style.bg(list_hover).text_color(fg))
@@ -112,6 +126,19 @@ pub fn render_tab_bar(
                                             MouseButton::Left,
                                             cx.listener(move |this, _event, _window, cx| {
                                                 this.close_tab(tab_index_close, cx);
+                                            }),
+                                        )
+                                        .child("×")
+                                })
+                                .when(is_pinned && !is_dirty, |d| {
+                                    // Show unpin option on hover for pinned tabs
+                                    d.text_xs()
+                                        .text_color(muted_fg)
+                                        .hover(|style| style.text_color(fg))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(move |this, _event, _window, cx| {
+                                                this.toggle_tab_pinned(tab_index_pin, cx);
                                             }),
                                         )
                                         .child("×")
@@ -134,15 +161,15 @@ pub fn render_tab_content(
     let muted_fg = cx.theme().muted_foreground;
 
     match tab {
-        PreviewTab::Pdf { webview, path: _ } => div()
+        PreviewTab::Pdf { webview, .. } => div()
             .size_full()
             .overflow_hidden()
             .when_some(webview.as_ref(), |d, wv| d.child(wv.webview())),
         PreviewTab::Markdown {
             content,
-            path: _,
             editing,
             editor,
+            ..
         } => {
             let is_editing = *editing;
 

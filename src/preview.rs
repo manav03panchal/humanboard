@@ -167,11 +167,13 @@ pub fn tab_from_path(path: PathBuf) -> Option<PreviewTab> {
                 content,
                 editing: false,
                 editor: None,
+                meta: crate::app::TabMeta::default(),
             })
         }
         "pdf" => Some(PreviewTab::Pdf {
             path,
             webview: None,
+            meta: crate::app::TabMeta::default(),
         }),
         _ => {
             // Try to detect code files
@@ -184,6 +186,7 @@ pub fn tab_from_path(path: PathBuf) -> Option<PreviewTab> {
                     editing: true,
                     dirty: false,
                     editor: None,
+                    meta: crate::app::TabMeta::default(),
                 })
             } else {
                 None

@@ -99,21 +99,34 @@ impl StorageLocation {
                     false
                 }
             }
-            StorageLocation::Custom(path) => path.exists() || path.parent().map(|p| p.exists()).unwrap_or(false),
+            StorageLocation::Custom(path) => {
+                path.exists() || path.parent().map(|p| p.exists()).unwrap_or(false)
+            }
         }
     }
+}
+
+/// Tab metadata shared across all tab types
+#[derive(Clone, Copy, Default)]
+pub struct TabMeta {
+    /// Preview tabs are temporary and get replaced by the next preview open
+    pub is_preview: bool,
+    /// Pinned tabs resist close operations and stay at the left
+    pub is_pinned: bool,
 }
 
 pub enum PreviewTab {
     Pdf {
         path: PathBuf,
         webview: Option<PdfWebView>,
+        meta: TabMeta,
     },
     Markdown {
         path: PathBuf,
         content: String,
         editing: bool,
         editor: Option<Entity<InputState>>,
+        meta: TabMeta,
     },
     Code {
         path: PathBuf,
@@ -122,6 +135,7 @@ pub enum PreviewTab {
         editing: bool,
         dirty: bool,
         editor: Option<Entity<InputState>>,
+        meta: TabMeta,
     },
 }
 
@@ -169,6 +183,49 @@ impl PreviewTab {
     pub fn is_dirty(&self) -> bool {
         matches!(self, PreviewTab::Code { dirty: true, .. })
     }
+
+    /// Get tab metadata
+    pub fn meta(&self) -> &TabMeta {
+        match self {
+            PreviewTab::Pdf { meta, .. } => meta,
+            PreviewTab::Markdown { meta, .. } => meta,
+            PreviewTab::Code { meta, .. } => meta,
+        }
+    }
+
+    /// Get mutable tab metadata
+    pub fn meta_mut(&mut self) -> &mut TabMeta {
+        match self {
+            PreviewTab::Pdf { meta, .. } => meta,
+            PreviewTab::Markdown { meta, .. } => meta,
+            PreviewTab::Code { meta, .. } => meta,
+        }
+    }
+
+    /// Check if this is a preview (temporary) tab
+    pub fn is_preview(&self) -> bool {
+        self.meta().is_preview
+    }
+
+    /// Check if this tab is pinned
+    pub fn is_pinned(&self) -> bool {
+        self.meta().is_pinned
+    }
+
+    /// Convert preview tab to permanent
+    pub fn make_permanent(&mut self) {
+        self.meta_mut().is_preview = false;
+    }
+
+    /// Toggle pinned state
+    pub fn toggle_pinned(&mut self) {
+        let meta = self.meta_mut();
+        meta.is_pinned = !meta.is_pinned;
+        // Pinned tabs are never previews
+        if meta.is_pinned {
+            meta.is_preview = false;
+        }
+    }
 }
 
 pub struct PreviewPanel {
@@ -176,6 +233,25 @@ pub struct PreviewPanel {
     pub active_tab: usize,
     pub split: SplitDirection,
     pub size: f32, // 0.0 to 1.0, percentage of window
+    /// Navigation history - indices of previously active tabs
+    pub back_stack: Vec<usize>,
+    pub forward_stack: Vec<usize>,
+    /// Recently closed tabs for recovery (max 20)
+    pub closed_tabs: Vec<PreviewTab>,
+}
+
+impl PreviewPanel {
+    pub fn new(split: SplitDirection, size: f32) -> Self {
+        Self {
+            tabs: Vec::new(),
+            active_tab: 0,
+            split,
+            size,
+            back_stack: Vec::new(),
+            forward_stack: Vec::new(),
+            closed_tabs: Vec::new(),
+        }
+    }
 }
 
 pub struct Humanboard {
@@ -379,7 +455,8 @@ impl Humanboard {
                     }
                     SettingsEvent::Deleted => {
                         tracing::warn!("Settings file deleted");
-                        self.toast_manager.push(Toast::warning("Settings file deleted"));
+                        self.toast_manager
+                            .push(Toast::warning("Settings file deleted"));
                     }
                     SettingsEvent::Error(e) => {
                         tracing::error!("Settings watch error: {}", e);
@@ -522,16 +599,24 @@ impl Humanboard {
 
     /// Close all settings dropdowns
     fn close_all_dropdowns(&mut self, cx: &mut Context<Self>) {
-        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         }
-        if cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::FontDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         }
     }
 
     pub fn toggle_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        let was_open = cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some();
+        let was_open = cx
+            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+            .is_some();
         // Always close all dropdowns first
         self.close_all_dropdowns(cx);
         // Only open theme dropdown if it wasn't already open
@@ -542,14 +627,19 @@ impl Humanboard {
     }
 
     pub fn close_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         }
         cx.notify();
     }
 
     pub fn toggle_font_dropdown(&mut self, cx: &mut Context<Self>) {
-        let was_open = cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some();
+        let was_open = cx
+            .try_global::<crate::render::overlays::FontDropdownOpen>()
+            .is_some();
         // Always close all dropdowns first
         self.close_all_dropdowns(cx);
         // Only open font dropdown if it wasn't already open
@@ -560,7 +650,10 @@ impl Humanboard {
     }
 
     pub fn close_font_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some() {
+        if cx
+            .try_global::<crate::render::overlays::FontDropdownOpen>()
+            .is_some()
+        {
             cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         }
         cx.notify();
@@ -1052,10 +1145,7 @@ impl Humanboard {
     pub fn show_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus.focus(FocusContext::Modal, window);
 
-        let input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Enter board name...")
-        });
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Enter board name..."));
 
         // Focus the input
         input.update(cx, |state, cx| {
@@ -1085,7 +1175,8 @@ impl Humanboard {
 
     /// Create a new board with custom name and storage location
     pub fn confirm_create_board(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let name = self.create_board_input
+        let name = self
+            .create_board_input
             .as_ref()
             .map(|input| input.read(cx).text().to_string())
             .unwrap_or_default();
@@ -1109,9 +1200,11 @@ impl Humanboard {
 
         // Show success toast with location info
         let location_name = location.display_name();
-        self.toast_manager.push(
-            crate::notifications::Toast::success(format!("Board created in {}", location_name))
-        );
+        self.toast_manager
+            .push(crate::notifications::Toast::success(format!(
+                "Board created in {}",
+                location_name
+            )));
 
         // Open the new board
         self.open_board(metadata.id, cx);
@@ -1135,9 +1228,11 @@ impl Humanboard {
         // Force save current board before leaving
         if let Some(ref mut board) = self.board {
             if let Err(e) = board.flush_save() {
-                self.toast_manager.push(
-                    crate::notifications::Toast::error(format!("Save failed: {}", e))
-                );
+                self.toast_manager
+                    .push(crate::notifications::Toast::error(format!(
+                        "Save failed: {}",
+                        e
+                    )));
             }
         }
         self.board = None;
@@ -1198,9 +1293,8 @@ impl Humanboard {
     pub fn delete_board(&mut self, id: String, cx: &mut Context<Self>) {
         self.board_index.delete_board(&id);
         self.deleting_board_id = None;
-        self.toast_manager.push(
-            crate::notifications::Toast::info("Board moved to trash")
-        );
+        self.toast_manager
+            .push(crate::notifications::Toast::info("Board moved to trash"));
         cx.notify();
     }
 
@@ -1212,9 +1306,8 @@ impl Humanboard {
     /// Restore a board from trash
     pub fn restore_board(&mut self, id: String, cx: &mut Context<Self>) {
         if self.board_index.restore_board(&id) {
-            self.toast_manager.push(
-                crate::notifications::Toast::success("Board restored")
-            );
+            self.toast_manager
+                .push(crate::notifications::Toast::success("Board restored"));
         }
         cx.notify();
     }
@@ -1222,9 +1315,9 @@ impl Humanboard {
     /// Permanently delete a board (no recovery)
     pub fn permanently_delete_board(&mut self, id: String, cx: &mut Context<Self>) {
         if self.board_index.permanently_delete_board(&id) {
-            self.toast_manager.push(
-                crate::notifications::Toast::info("Board permanently deleted")
-            );
+            self.toast_manager.push(crate::notifications::Toast::info(
+                "Board permanently deleted",
+            ));
         }
         cx.notify();
     }
@@ -1233,9 +1326,11 @@ impl Humanboard {
     pub fn empty_trash(&mut self, cx: &mut Context<Self>) {
         let count = self.board_index.empty_trash();
         if count > 0 {
-            self.toast_manager.push(
-                crate::notifications::Toast::info(format!("Permanently deleted {} board(s)", count))
-            );
+            self.toast_manager
+                .push(crate::notifications::Toast::info(format!(
+                    "Permanently deleted {} board(s)",
+                    count
+                )));
         }
         // Hide trash section if empty
         if self.board_index.trashed_boards().is_empty() {
@@ -1256,9 +1351,36 @@ impl Humanboard {
 
     // ==================== Board Methods (existing) ====================
 
-    pub fn open_preview(&mut self, path: PathBuf, _window: &mut Window, cx: &mut Context<Self>) {
+    /// Open a file in the preview panel as a permanent tab
+    pub fn open_preview(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_preview_internal(path, false, window, cx);
+    }
+
+    /// Open a file as a preview (temporary) tab - will replace existing preview tab
+    pub fn open_as_preview_tab(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_preview_internal(path, true, window, cx);
+    }
+
+    /// Internal method to open preview with preview/permanent mode option
+    fn open_preview_internal(
+        &mut self,
+        path: PathBuf,
+        as_preview: bool,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Determine tab type based on extension
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+        let meta = TabMeta {
+            is_preview: as_preview,
+            is_pinned: false,
+        };
 
         let tab = if ext == "md" {
             // Load markdown content
@@ -1277,11 +1399,13 @@ impl Humanboard {
                 content,
                 editing: true, // Open in edit mode
                 editor,
+                meta,
             }
         } else if ext == "pdf" {
             PreviewTab::Pdf {
                 path: path.clone(),
                 webview: None,
+                meta,
             }
         } else if let Some(language) = crate::types::language_from_extension(ext) {
             // Code file - load content
@@ -1293,21 +1417,37 @@ impl Humanboard {
                 editing: true, // Always editable
                 dirty: false,
                 editor: None,
+                meta,
             }
         } else {
             // Default to PDF for unknown types (or could be Text)
             PreviewTab::Pdf {
                 path: path.clone(),
                 webview: None,
+                meta,
             }
         };
 
         if let Some(ref mut preview) = self.preview {
             // Check if file is already open in a tab
             if let Some(index) = preview.tabs.iter().position(|t| t.path() == &path) {
+                // File already open - just switch to it and make permanent if not preview mode
+                if !as_preview {
+                    preview.tabs[index].make_permanent();
+                }
                 preview.active_tab = index;
+            } else if as_preview {
+                // Preview mode: replace existing preview tab if one exists
+                if let Some(preview_idx) = preview.tabs.iter().position(|t| t.is_preview()) {
+                    preview.tabs[preview_idx] = tab;
+                    preview.active_tab = preview_idx;
+                } else {
+                    // No existing preview tab, add new one
+                    preview.tabs.push(tab);
+                    preview.active_tab = preview.tabs.len() - 1;
+                }
             } else {
-                // Add new tab
+                // Permanent mode: add new tab
                 preview.tabs.push(tab);
                 preview.active_tab = preview.tabs.len() - 1;
             }
@@ -1318,6 +1458,9 @@ impl Humanboard {
                 active_tab: 0,
                 split: SplitDirection::Vertical,
                 size: 0.4,
+                back_stack: Vec::new(),
+                forward_stack: Vec::new(),
+                closed_tabs: Vec::new(),
             });
         }
         cx.notify();
@@ -1329,7 +1472,7 @@ impl Humanboard {
 
             // Ensure all PDF tabs have their WebViews created, and hide/show based on active
             for (idx, tab) in preview.tabs.iter_mut().enumerate() {
-                if let PreviewTab::Pdf { path, webview } = tab {
+                if let PreviewTab::Pdf { path, webview, .. } = tab {
                     if webview.is_none() {
                         match PdfWebView::new(path.clone(), window, cx) {
                             Ok(wv) => {
@@ -1499,6 +1642,7 @@ impl Humanboard {
                         content,
                         editor,
                         editing,
+                        ..
                     } => {
                         // Also handle Cmd+S for markdown files
                         if *editing {
@@ -1563,7 +1707,10 @@ impl Humanboard {
                         self.youtube_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
-                        error!("Failed to create YouTube WebView for video {}: {}", video_id, e);
+                        error!(
+                            "Failed to create YouTube WebView for video {}: {}",
+                            video_id, e
+                        );
                     }
                 }
             }
@@ -1789,7 +1936,17 @@ impl Humanboard {
     pub fn close_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
             if tab_index < preview.tabs.len() {
-                preview.tabs.remove(tab_index);
+                // Don't close pinned tabs
+                if preview.tabs[tab_index].is_pinned() {
+                    return;
+                }
+
+                // Save to closed_tabs for recovery (max 20)
+                let closed_tab = preview.tabs.remove(tab_index);
+                preview.closed_tabs.push(closed_tab);
+                if preview.closed_tabs.len() > 20 {
+                    preview.closed_tabs.remove(0);
+                }
 
                 if preview.tabs.is_empty() {
                     // No more tabs, close preview panel
@@ -1807,9 +1964,92 @@ impl Humanboard {
         }
     }
 
+    /// Convert a preview tab to a permanent tab
+    pub fn make_tab_permanent(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(tab_index) {
+                tab.make_permanent();
+                cx.notify();
+            }
+        }
+    }
+
+    /// Toggle the pinned state of a tab
+    pub fn toggle_tab_pinned(&mut self, tab_index: usize, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.tabs.get_mut(tab_index) {
+                let was_pinned = tab.is_pinned();
+                tab.toggle_pinned();
+
+                // Reorder tabs: pinned tabs stay at the left
+                if !was_pinned && tab.is_pinned() {
+                    // Tab was just pinned - move it to after the last pinned tab
+                    let pinned_count = preview.tabs.iter().filter(|t| t.is_pinned()).count();
+                    if tab_index >= pinned_count {
+                        let tab = preview.tabs.remove(tab_index);
+                        preview.tabs.insert(pinned_count - 1, tab);
+                        // Adjust active tab index
+                        if preview.active_tab == tab_index {
+                            preview.active_tab = pinned_count - 1;
+                        } else if preview.active_tab < tab_index
+                            && preview.active_tab >= pinned_count - 1
+                        {
+                            preview.active_tab += 1;
+                        }
+                    }
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    /// Reopen the most recently closed tab
+    pub fn reopen_closed_tab(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(tab) = preview.closed_tabs.pop() {
+                preview.tabs.push(tab);
+                preview.active_tab = preview.tabs.len() - 1;
+                cx.notify();
+            }
+        }
+    }
+
+    /// Navigate back in tab history
+    pub fn go_back(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(prev_index) = preview.back_stack.pop() {
+                if prev_index < preview.tabs.len() {
+                    // Push current to forward stack
+                    preview.forward_stack.push(preview.active_tab);
+                    preview.active_tab = prev_index;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    /// Navigate forward in tab history
+    pub fn go_forward(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut preview) = self.preview {
+            if let Some(next_index) = preview.forward_stack.pop() {
+                if next_index < preview.tabs.len() {
+                    // Push current to back stack
+                    preview.back_stack.push(preview.active_tab);
+                    preview.active_tab = next_index;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
     pub fn switch_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
-            if tab_index < preview.tabs.len() {
+            if tab_index < preview.tabs.len() && tab_index != preview.active_tab {
+                // Record in back stack for navigation history
+                preview.back_stack.push(preview.active_tab);
+                // Clear forward stack when user manually switches tabs
+                preview.forward_stack.clear();
+
                 // Hide/show PDF webviews based on active tab
                 for (idx, tab) in preview.tabs.iter().enumerate() {
                     if let PreviewTab::Pdf {
@@ -2006,7 +2246,8 @@ impl Humanboard {
             .detach();
 
             // Set focus context to TextboxEditing so keyboard shortcuts don't intercept input
-            self.focus.set_context_without_focus(FocusContext::TextboxEditing);
+            self.focus
+                .set_context_without_focus(FocusContext::TextboxEditing);
 
             self.editing_textbox_id = Some(item_id);
             self.textbox_input = Some(input);
@@ -2028,9 +2269,11 @@ impl Humanboard {
                     }
                     board.push_history();
                     if let Err(e) = board.flush_save() {
-                        self.toast_manager.push(
-                            crate::notifications::Toast::error(format!("Save failed: {}", e))
-                        );
+                        self.toast_manager
+                            .push(crate::notifications::Toast::error(format!(
+                                "Save failed: {}",
+                                e
+                            )));
                     }
                 }
             }
@@ -2042,7 +2285,11 @@ impl Humanboard {
     }
 
     /// Finish editing with explicit window access (preferred when window available)
-    pub fn finish_textbox_editing_with_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn finish_textbox_editing_with_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(item_id) = self.editing_textbox_id.take() {
             if let Some(input) = self.textbox_input.take() {
                 let new_text = input.read(cx).text().to_string();
@@ -2055,9 +2302,11 @@ impl Humanboard {
                     }
                     board.push_history();
                     if let Err(e) = board.flush_save() {
-                        self.toast_manager.push(
-                            crate::notifications::Toast::error(format!("Save failed: {}", e))
-                        );
+                        self.toast_manager
+                            .push(crate::notifications::Toast::error(format!(
+                                "Save failed: {}",
+                                e
+                            )));
                     }
                 }
             }
@@ -2079,7 +2328,11 @@ impl Humanboard {
     }
 
     /// Cancel textbox editing with explicit window access (preferred when window available)
-    pub fn cancel_textbox_editing_with_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn cancel_textbox_editing_with_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.editing_textbox_id = None;
         self.textbox_input = None;
 

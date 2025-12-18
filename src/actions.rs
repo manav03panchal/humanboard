@@ -15,72 +15,65 @@ actions!(
     humanboard,
     [
         // === Application ===
-        Quit,           // Quit the application (Cmd+Q)
-        OpenFile,       // Open file picker (Cmd+O)
-        OpenSettings,   // Open settings panel (Cmd+,)
-        ShowShortcuts,  // Show keyboard shortcuts overlay (Cmd+/)
-        GoHome,         // Navigate to landing page (Cmd+H)
-        NewBoard,       // Create a new board (Cmd+N)
-
+        Quit,          // Quit the application (Cmd+Q)
+        OpenFile,      // Open file picker (Cmd+O)
+        OpenSettings,  // Open settings panel (Cmd+,)
+        ShowShortcuts, // Show keyboard shortcuts overlay (Cmd+/)
+        GoHome,        // Navigate to landing page (Cmd+H)
+        NewBoard,      // Create a new board (Cmd+N)
         // === Canvas Navigation ===
-        ZoomIn,         // Zoom in on canvas (Cmd+=)
-        ZoomOut,        // Zoom out on canvas (Cmd+-)
-        ZoomReset,      // Reset zoom to 100% (Cmd+0)
-
+        ZoomIn,    // Zoom in on canvas (Cmd+=)
+        ZoomOut,   // Zoom out on canvas (Cmd+-)
+        ZoomReset, // Reset zoom to 100% (Cmd+0)
         // === Selection ===
-        SelectAll,      // Select all items (Cmd+A)
-        DeselectAll,    // Deselect all items (Escape when items selected)
-        DeleteSelected, // Delete selected items (Backspace/Delete)
+        SelectAll,         // Select all items (Cmd+A)
+        DeselectAll,       // Deselect all items (Escape when items selected)
+        DeleteSelected,    // Delete selected items (Backspace/Delete)
         DuplicateSelected, // Duplicate selected items (Cmd+D)
-        Copy,           // Copy selected items to clipboard (Cmd+C)
-        Paste,          // Paste from clipboard (Cmd+V)
-
+        Copy,              // Copy selected items to clipboard (Cmd+C)
+        Paste,             // Paste from clipboard (Cmd+V)
         // === Item Nudging ===
-        NudgeUp,        // Move selected items up (Arrow Up)
-        NudgeDown,      // Move selected items down (Arrow Down)
-        NudgeLeft,      // Move selected items left (Arrow Left)
-        NudgeRight,     // Move selected items right (Arrow Right)
-
+        NudgeUp,    // Move selected items up (Arrow Up)
+        NudgeDown,  // Move selected items down (Arrow Down)
+        NudgeLeft,  // Move selected items left (Arrow Left)
+        NudgeRight, // Move selected items right (Arrow Right)
         // === History ===
-        Undo,           // Undo last action (Cmd+Z)
-        Redo,           // Redo last undone action (Cmd+Shift+Z)
-        SaveCode,       // Save current code file (Cmd+S)
-
+        Undo,     // Undo last action (Cmd+Z)
+        Redo,     // Redo last undone action (Cmd+Shift+Z)
+        SaveCode, // Save current code file (Cmd+S)
         // === Preview Panel ===
-        ClosePreview,   // Close preview panel (Escape)
-        ToggleSplit,    // Toggle split direction (Cmd+\)
-        NextTab,        // Switch to next tab (Cmd+Shift+])
-        PrevTab,        // Switch to previous tab (Cmd+Shift+[)
-        CloseTab,       // Close current tab (Cmd+W)
-
+        ClosePreview,    // Close preview panel (Escape)
+        ToggleSplit,     // Toggle split direction (Cmd+\)
+        NextTab,         // Switch to next tab (Cmd+Shift+])
+        PrevTab,         // Switch to previous tab (Cmd+Shift+[)
+        CloseTab,        // Close current tab (Cmd+W)
+        ReopenClosedTab, // Reopen last closed tab (Cmd+Shift+T)
+        GoBack,          // Navigate back in tab history (Cmd+[)
+        GoForward,       // Navigate forward in tab history (Cmd+])
         // === PDF Viewer ===
-        NextPage,       // Go to next PDF page
-        PrevPage,       // Go to previous PDF page
-        PdfZoomIn,      // Zoom in PDF
-        PdfZoomOut,     // Zoom out PDF
-        PdfZoomReset,   // Reset PDF zoom
-
+        NextPage,     // Go to next PDF page
+        PrevPage,     // Go to previous PDF page
+        PdfZoomIn,    // Zoom in PDF
+        PdfZoomOut,   // Zoom out PDF
+        PdfZoomReset, // Reset PDF zoom
         // === Command Palette ===
-        CommandPalette,        // Open command palette
-        ToggleCommandPalette,  // Toggle command palette (Cmd+K)
-        CloseCommandPalette,   // Close command palette (Escape)
-        CmdPaletteUp,          // Navigate up in command palette
-        CmdPaletteDown,        // Navigate down in command palette
-        CmdPaletteSelect,      // Select current item in command palette
-
+        CommandPalette,       // Open command palette
+        ToggleCommandPalette, // Toggle command palette (Cmd+K)
+        CloseCommandPalette,  // Close command palette (Escape)
+        CmdPaletteUp,         // Navigate up in command palette
+        CmdPaletteDown,       // Navigate down in command palette
+        CmdPaletteSelect,     // Select current item in command palette
         // === Tool Selection ===
-        ToolSelect,     // Switch to select tool (V or Escape)
-        ToolText,       // Switch to text tool (T)
-        ToolArrow,      // Switch to arrow tool (A)
-        ToolShape,      // Switch to shape tool (S)
-
+        ToolSelect, // Switch to select tool (V or Escape)
+        ToolText,   // Switch to text tool (T)
+        ToolArrow,  // Switch to arrow tool (A)
+        ToolShape,  // Switch to shape tool (S)
         // === TextBox Editing ===
-        CancelTextboxEdit,     // Cancel textbox editing (Escape)
-        CommitTextboxEdit,     // Commit textbox editing (Cmd+Enter or click outside)
-
+        CancelTextboxEdit, // Cancel textbox editing (Escape)
+        CommitTextboxEdit, // Commit textbox editing (Cmd+Enter or click outside)
         // === Focus Management ===
-        FocusCanvas,    // Return focus to canvas
-        FocusPreview,   // Focus preview panel
+        FocusCanvas,  // Return focus to canvas
+        FocusPreview, // Focus preview panel
     ]
 );
 

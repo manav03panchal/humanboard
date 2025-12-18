@@ -24,12 +24,12 @@ pub use preview::{
 };
 
 use crate::actions::{
-    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette,
-    DeleteSelected, DeselectAll, DuplicateSelected, GoHome, NewBoard, NextPage, NextTab,
-    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn,
-    PdfZoomOut, PdfZoomReset, PrevPage, PrevTab, Redo, SaveCode, SelectAll, ShowShortcuts,
-    ToggleCommandPalette, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo,
-    ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, NewBoard, NextPage, NextTab,
+    NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile, OpenSettings, PdfZoomIn, PdfZoomOut,
+    PdfZoomReset, PrevPage, PrevTab, Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts,
+    ToggleCommandPalette, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo, ZoomIn,
+    ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -84,9 +84,11 @@ impl Render for Humanboard {
             if board.should_save() {
                 if let Err(e) = board.flush_save() {
                     // Show error toast for save failures
-                    self.toast_manager.push(
-                        crate::notifications::Toast::error(format!("Save failed: {}", e))
-                    );
+                    self.toast_manager
+                        .push(crate::notifications::Toast::error(format!(
+                            "Save failed: {}",
+                            e
+                        )));
                 }
             }
         }
@@ -118,14 +120,17 @@ impl Render for Humanboard {
                     cx,
                 ))
             })
-            .when(self.show_create_board_modal && self.create_board_input.is_some(), |d| {
-                d.child(render_create_board_modal(
-                    self.create_board_input.as_ref().unwrap(),
-                    &self.create_board_location,
-                    &self.focus.modal,
-                    cx,
-                ))
-            })
+            .when(
+                self.show_create_board_modal && self.create_board_input.is_some(),
+                |d| {
+                    d.child(render_create_board_modal(
+                        self.create_board_input.as_ref().unwrap(),
+                        &self.create_board_location,
+                        &self.focus.modal,
+                        cx,
+                    ))
+                },
+            )
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
                 d.child(render_toast_container(&toasts))
@@ -163,7 +168,9 @@ impl Humanboard {
                     }),
                 )
             })
-            .on_action(cx.listener(|this, _: &NewBoard, window, cx| this.create_new_board(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &NewBoard, window, cx| this.create_new_board(window, cx)),
+            )
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)),
@@ -354,6 +361,9 @@ impl Humanboard {
             .on_action(cx.listener(|this, _: &NextTab, _, cx| this.next_tab(cx)))
             .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.prev_tab(cx)))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.close_current_tab(cx)))
+            .on_action(cx.listener(|this, _: &ReopenClosedTab, _, cx| this.reopen_closed_tab(cx)))
+            .on_action(cx.listener(|this, _: &GoBack, _, cx| this.go_back(cx)))
+            .on_action(cx.listener(|this, _: &GoForward, _, cx| this.go_forward(cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.show_command_palette(window, cx)
