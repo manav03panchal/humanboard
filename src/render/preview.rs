@@ -464,6 +464,75 @@ pub fn render_split_drop_zones(
         )
 }
 
+/// Render a single pane with tab bar and content
+fn render_pane(
+    id: &'static str,
+    content_id: &'static str,
+    tabs: &Vec<PreviewTab>,
+    active_tab: usize,
+    scroll: &ScrollHandle,
+    is_focused: bool,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
+    search_input: Option<&Entity<gpui_component::input::InputState>>,
+    search_match_count: usize,
+    search_current: usize,
+    is_left_pane: bool,
+    cx: &mut Context<Humanboard>,
+) -> Stateful<Div> {
+    let bg = cx.theme().background;
+    let border = cx.theme().border;
+    let primary = cx.theme().primary;
+
+    v_flex()
+        .id(id)
+        .flex_1()
+        .min_h_0()
+        .min_w_0()
+        .bg(bg)
+        .overflow_hidden()
+        .border_1()
+        .border_color(if is_focused { primary } else { border })
+        .rounded(px(4.0))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, _event, _window, cx| {
+                if is_left_pane {
+                    this.focus_left_pane(cx);
+                } else {
+                    this.focus_right_pane(cx);
+                }
+            }),
+        )
+        .child(render_tab_bar(
+            tabs,
+            active_tab,
+            scroll,
+            if is_focused { dragging_tab } else { None },
+            if is_focused { drag_target } else { None },
+            cx,
+        ))
+        .when(is_focused, |d| {
+            d.when_some(search_input, |d, input| {
+                d.child(render_search_bar(
+                    input,
+                    search_match_count,
+                    search_current,
+                    cx,
+                ))
+            })
+        })
+        .child(
+            div()
+                .id(content_id)
+                .flex_1()
+                .overflow_hidden()
+                .when_some(tabs.get(active_tab), |d, tab| {
+                    d.child(render_tab_content(tab, true, active_tab, cx))
+                }),
+        )
+}
+
 /// Render the split pane container when panel is split
 pub fn render_split_panes(
     preview: &crate::app::PreviewPanel,
@@ -478,108 +547,57 @@ pub fn render_split_panes(
 ) -> Div {
     use crate::app::FocusedPane;
 
-    let bg = cx.theme().background;
-    let border = cx.theme().border;
-    let primary = cx.theme().primary;
     let left_focused = preview.focused_pane == FocusedPane::Left;
     let right_focused = preview.focused_pane == FocusedPane::Right;
+    let is_horizontal = preview.pane_split_horizontal;
 
-    h_flex()
-        .size_full()
-        .gap_1()
-        // Left pane
-        .child(
-            v_flex()
-                .id("left-pane")
-                .flex_1()
-                .h_full()
-                .bg(bg)
-                .overflow_hidden()
-                .border_1()
-                .border_color(if left_focused { primary } else { border })
-                .rounded(px(4.0))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _event, _window, cx| {
-                        this.focus_left_pane(cx);
-                    }),
-                )
-                .child(render_tab_bar(
-                    &preview.tabs,
-                    preview.active_tab,
-                    left_scroll,
-                    if left_focused { dragging_tab } else { None },
-                    if left_focused { drag_target } else { None },
-                    cx,
-                ))
-                .when(left_focused, |d| {
-                    d.when_some(search_input, |d, input| {
-                        d.child(render_search_bar(
-                            input,
-                            search_match_count,
-                            search_current,
-                            cx,
-                        ))
-                    })
-                })
-                .child(
-                    div()
-                        .id("left-pane-content")
-                        .flex_1()
-                        .overflow_hidden()
-                        .when_some(preview.tabs.get(preview.active_tab), |d, tab| {
-                            d.child(render_tab_content(tab, true, preview.active_tab, cx))
-                        }),
-                ),
-        )
-        // Right pane
-        .child(
-            v_flex()
-                .id("right-pane")
-                .flex_1()
-                .h_full()
-                .bg(bg)
-                .overflow_hidden()
-                .border_1()
-                .border_color(if right_focused { primary } else { border })
-                .rounded(px(4.0))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _event, _window, cx| {
-                        this.focus_right_pane(cx);
-                    }),
-                )
-                .child(render_tab_bar(
-                    &preview.right_tabs,
-                    preview.right_active_tab,
-                    right_scroll,
-                    if right_focused { dragging_tab } else { None },
-                    if right_focused { drag_target } else { None },
-                    cx,
-                ))
-                .when(right_focused, |d| {
-                    d.when_some(search_input, |d, input| {
-                        d.child(render_search_bar(
-                            input,
-                            search_match_count,
-                            search_current,
-                            cx,
-                        ))
-                    })
-                })
-                .child(
-                    div()
-                        .id("right-pane-content")
-                        .flex_1()
-                        .overflow_hidden()
-                        .when_some(
-                            preview.right_tabs.get(preview.right_active_tab),
-                            |d, tab| {
-                                d.child(render_tab_content(tab, true, preview.right_active_tab, cx))
-                            },
-                        ),
-                ),
-        )
+    let first_pane = render_pane(
+        "first-pane",
+        "first-pane-content",
+        &preview.tabs,
+        preview.active_tab,
+        left_scroll,
+        left_focused,
+        dragging_tab,
+        drag_target,
+        search_input,
+        search_match_count,
+        search_current,
+        true,
+        cx,
+    );
+
+    let second_pane = render_pane(
+        "second-pane",
+        "second-pane-content",
+        &preview.right_tabs,
+        preview.right_active_tab,
+        right_scroll,
+        right_focused,
+        dragging_tab,
+        drag_target,
+        search_input,
+        search_match_count,
+        search_current,
+        false,
+        cx,
+    );
+
+    if is_horizontal {
+        // Top/Bottom split
+        v_flex()
+            .size_full()
+            .gap_1()
+            .child(first_pane)
+            .child(second_pane)
+    } else {
+        // Left/Right split
+        h_flex()
+            .size_full()
+            .gap_1()
+            .child(first_pane)
+            .child(second_pane)
+    }
 }
 
 /// Render the content area for a preview tab

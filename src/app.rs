@@ -263,6 +263,7 @@ pub struct PreviewPanel {
     pub split: SplitDirection, // Split with canvas (vertical/horizontal)
     pub size: f32,             // Panel size (0.0 to 1.0)
     pub is_pane_split: bool,   // Whether panel itself is split into two panes
+    pub pane_split_horizontal: bool, // True = top/bottom, False = left/right
     pub focused_pane: FocusedPane, // Which pane has focus
     pub pane_ratio: f32,       // Ratio between left/right panes (0.5 = equal)
 }
@@ -284,6 +285,7 @@ impl PreviewPanel {
             split,
             size,
             is_pane_split: false,
+            pane_split_horizontal: false,
             focused_pane: FocusedPane::Left,
             pane_ratio: 0.5,
         }
@@ -2165,6 +2167,9 @@ impl Humanboard {
                     if !preview.is_pane_split {
                         preview.is_pane_split = true;
                         preview.pane_ratio = 0.5;
+                        // Set direction based on zone
+                        preview.pane_split_horizontal =
+                            matches!(zone, SplitDropZone::Top | SplitDropZone::Bottom);
                     }
 
                     match zone {
@@ -2175,7 +2180,7 @@ impl Humanboard {
                             preview.focused_pane = FocusedPane::Right;
                         }
                         SplitDropZone::Left | SplitDropZone::Top => {
-                            // Move current left tabs to right, put new tab in left/top
+                            // Move current left tabs to right/bottom, put new tab in left/top
                             let left_tabs: Vec<PreviewTab> = preview.tabs.drain(..).collect();
                             preview.tabs.push(tab);
                             preview.active_tab = 0;
