@@ -207,7 +207,7 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-f", TogglePreviewSearch, None),
         KeyBinding::new("cmd-g", NextSearchMatch, None),
         KeyBinding::new("cmd-shift-g", PrevSearchMatch, None),
-        KeyBinding::new("cmd-shift-\\", TogglePaneSplit, None),
+        KeyBinding::new("cmd-shift-d", TogglePaneSplit, None),
         KeyBinding::new("cmd-alt-shift-right", MoveTabToOtherPane, None),
         KeyBinding::new("cmd-alt-shift-left", MoveTabToOtherPane, None),
         KeyBinding::new("cmd-n", NewBoard, None),

@@ -236,6 +236,13 @@ pub enum FocusedPane {
     Right,
 }
 
+/// Drop zone for dragging tabs to create splits
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SplitDropZone {
+    Left,
+    Right,
+}
+
 pub struct PreviewPanel {
     // Left/primary pane
     pub tabs: Vec<PreviewTab>,
@@ -324,6 +331,7 @@ pub struct Humanboard {
     pub preview: Option<PreviewPanel>,
     pub dragging_tab: Option<usize>,    // Index of tab being dragged
     pub tab_drag_target: Option<usize>, // Target position for tab drop
+    pub tab_drag_split_zone: Option<SplitDropZone>, // Drop zone for creating split
     pub preview_search: Option<Entity<InputState>>, // Search input for preview panel
     pub preview_search_query: String,   // Current search query
     pub preview_search_matches: Vec<(usize, usize)>, // (line, column) positions of matches
@@ -436,6 +444,7 @@ impl Humanboard {
             preview: None,
             dragging_tab: None,
             tab_drag_target: None,
+            tab_drag_split_zone: None,
             preview_search: None,
             preview_search_query: String::new(),
             preview_search_matches: Vec::new(),
@@ -2081,19 +2090,85 @@ impl Humanboard {
     pub fn start_tab_drag(&mut self, tab_index: usize, cx: &mut Context<Self>) {
         self.dragging_tab = Some(tab_index);
         self.tab_drag_target = Some(tab_index);
+        self.tab_drag_split_zone = None;
         cx.notify();
     }
 
     /// Update the drag target position as mouse moves over tabs
     pub fn update_tab_drag_target(&mut self, target_index: usize, cx: &mut Context<Self>) {
-        if self.dragging_tab.is_some() && self.tab_drag_target != Some(target_index) {
-            self.tab_drag_target = Some(target_index);
+        if self.dragging_tab.is_some() {
+            // Clear split zone when hovering over tabs
+            if self.tab_drag_split_zone.is_some() {
+                self.tab_drag_split_zone = None;
+            }
+            if self.tab_drag_target != Some(target_index) {
+                self.tab_drag_target = Some(target_index);
+            }
             cx.notify();
         }
     }
 
-    /// Finish tab drag and reorder if needed
+    /// Set the split drop zone when dragging to edges
+    pub fn set_tab_drag_split_zone(&mut self, zone: Option<SplitDropZone>, cx: &mut Context<Self>) {
+        if self.dragging_tab.is_some() && self.tab_drag_split_zone != zone {
+            self.tab_drag_split_zone = zone;
+            // Clear tab target when in split zone
+            if zone.is_some() {
+                self.tab_drag_target = None;
+            }
+            cx.notify();
+        }
+    }
+
+    /// Finish tab drag - either reorder or create split
     pub fn finish_tab_drag(&mut self, cx: &mut Context<Self>) {
+        // Check if dropping on a split zone
+        if let (Some(from), Some(zone)) = (self.dragging_tab, self.tab_drag_split_zone) {
+            if let Some(ref mut preview) = self.preview {
+                if from < preview.tabs.len() {
+                    let tab = preview.tabs.remove(from);
+
+                    // Update active tab if needed
+                    if preview.active_tab >= preview.tabs.len() {
+                        preview.active_tab = preview.tabs.len().saturating_sub(1);
+                    } else if preview.active_tab > from {
+                        preview.active_tab -= 1;
+                    }
+
+                    // Create split and add tab to appropriate pane
+                    if !preview.is_pane_split {
+                        preview.is_pane_split = true;
+                        preview.pane_ratio = 0.5;
+                    }
+
+                    match zone {
+                        SplitDropZone::Right => {
+                            preview.right_tabs.push(tab);
+                            preview.right_active_tab = preview.right_tabs.len() - 1;
+                            preview.focused_pane = FocusedPane::Right;
+                        }
+                        SplitDropZone::Left => {
+                            // Move current left tabs to right, put new tab in left
+                            let left_tabs: Vec<PreviewTab> = preview.tabs.drain(..).collect();
+                            preview.tabs.push(tab);
+                            preview.active_tab = 0;
+                            for t in left_tabs {
+                                preview.right_tabs.push(t);
+                            }
+                            preview.right_active_tab = 0;
+                            preview.focused_pane = FocusedPane::Left;
+                        }
+                    }
+                }
+            }
+            self.dragging_tab = None;
+            self.tab_drag_target = None;
+            self.tab_drag_split_zone = None;
+            cx.notify();
+            return;
+        }
+
+        // Normal tab reorder
         if let (Some(from), Some(to)) = (self.dragging_tab, self.tab_drag_target) {
             if from != to {
                 if let Some(ref mut preview) = self.preview {
@@ -2134,6 +2209,7 @@ impl Humanboard {
         }
         self.dragging_tab = None;
         self.tab_drag_target = None;
+        self.tab_drag_split_zone = None;
         cx.notify();
     }
 
@@ -2141,6 +2217,7 @@ impl Humanboard {
     pub fn cancel_tab_drag(&mut self, cx: &mut Context<Self>) {
         self.dragging_tab = None;
         self.tab_drag_target = None;
+        self.tab_drag_split_zone = None;
         cx.notify();
     }
 

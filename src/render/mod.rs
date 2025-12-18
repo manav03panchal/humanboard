@@ -19,8 +19,8 @@ pub use overlays::{
     render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
-    render_preview_panel, render_search_bar, render_selected_item_label, render_split_panes,
-    render_splitter, render_tab_bar, render_tab_content,
+    render_preview_panel, render_search_bar, render_selected_item_label, render_split_drop_zones,
+    render_split_panes, render_splitter, render_tab_bar, render_tab_content,
 };
 
 use crate::actions::{
@@ -532,8 +532,11 @@ impl Humanboard {
                                             cx,
                                         ))
                                     } else {
-                                        // Render single pane
+                                        // Render single pane with drop zones overlay
+                                        let dragging = self.dragging_tab;
+                                        let split_zone = self.tab_drag_split_zone;
                                         container
+                                            .relative()
                                             .child(render_tab_bar(
                                                 tabs,
                                                 active_tab,
@@ -562,9 +565,16 @@ impl Humanboard {
                                                     ))
                                                     .flex_1()
                                                     .overflow_hidden()
+                                                    .relative()
                                                     .when_some(tabs.get(active_tab), |d, tab| {
                                                         d.child(render_tab_content(
                                                             tab, true, active_tab, cx,
+                                                        ))
+                                                    })
+                                                    // Show drop zones when dragging a tab
+                                                    .when(dragging.is_some(), |d| {
+                                                        d.child(render_split_drop_zones(
+                                                            split_zone, cx,
                                                         ))
                                                     }),
                                             )
@@ -636,8 +646,11 @@ impl Humanboard {
                                             cx,
                                         ))
                                     } else {
-                                        // Render single pane
+                                        // Render single pane with drop zones overlay
+                                        let dragging = self.dragging_tab;
+                                        let split_zone = self.tab_drag_split_zone;
                                         container
+                                            .relative()
                                             .child(render_tab_bar(
                                                 tabs,
                                                 active_tab,
@@ -666,9 +679,16 @@ impl Humanboard {
                                                     ))
                                                     .flex_1()
                                                     .overflow_hidden()
+                                                    .relative()
                                                     .when_some(tabs.get(active_tab), |d, tab| {
                                                         d.child(render_tab_content(
                                                             tab, true, active_tab, cx,
+                                                        ))
+                                                    })
+                                                    // Show drop zones when dragging a tab
+                                                    .when(dragging.is_some(), |d| {
+                                                        d.child(render_split_drop_zones(
+                                                            split_zone, cx,
                                                         ))
                                                     }),
                                             )

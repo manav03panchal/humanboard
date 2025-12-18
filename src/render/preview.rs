@@ -197,6 +197,114 @@ pub fn render_tab_bar(
         )
 }
 
+/// Render split drop zones when dragging a tab
+pub fn render_split_drop_zones(
+    active_zone: Option<crate::app::SplitDropZone>,
+    cx: &mut Context<Humanboard>,
+) -> Div {
+    use crate::app::SplitDropZone;
+
+    let primary = cx.theme().primary;
+    let zone_bg = primary.opacity(0.15);
+    let zone_border = primary.opacity(0.6);
+    let active_bg = primary.opacity(0.3);
+
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        // Left drop zone
+        .child(
+            div()
+                .id("split-zone-left")
+                .w(px(80.0))
+                .h_full()
+                .border_r_2()
+                .border_color(if active_zone == Some(SplitDropZone::Left) {
+                    zone_border
+                } else {
+                    gpui::transparent_black()
+                })
+                .bg(if active_zone == Some(SplitDropZone::Left) {
+                    active_bg
+                } else {
+                    zone_bg
+                })
+                .flex()
+                .items_center()
+                .justify_center()
+                .on_mouse_move(cx.listener(|this, _event, _window, cx| {
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Left), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(primary)
+                        .child("◀ Split Left"),
+                ),
+        )
+        // Center area - clears the split zone when hovering
+        .child(
+            div()
+                .id("split-zone-center")
+                .flex_1()
+                .h_full()
+                .on_mouse_move(cx.listener(|this, _event, _window, cx| {
+                    this.set_tab_drag_split_zone(None, cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                ),
+        )
+        // Right drop zone
+        .child(
+            div()
+                .id("split-zone-right")
+                .w(px(80.0))
+                .h_full()
+                .border_l_2()
+                .border_color(if active_zone == Some(SplitDropZone::Right) {
+                    zone_border
+                } else {
+                    gpui::transparent_black()
+                })
+                .bg(if active_zone == Some(SplitDropZone::Right) {
+                    active_bg
+                } else {
+                    zone_bg
+                })
+                .flex()
+                .items_center()
+                .justify_center()
+                .on_mouse_move(cx.listener(|this, _event, _window, cx| {
+                    this.set_tab_drag_split_zone(Some(SplitDropZone::Right), cx);
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, _event, _window, cx| {
+                        this.finish_tab_drag(cx);
+                    }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(primary)
+                        .child("Split Right ▶"),
+                ),
+        )
+}
+
 /// Render the split pane container when panel is split
 pub fn render_split_panes(
     preview: &crate::app::PreviewPanel,
