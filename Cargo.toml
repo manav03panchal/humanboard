@@ -36,6 +36,9 @@ log = "0.4"
 # For once_cell patterns used by Zed
 once_cell = "1.19"
 
+# File watching for settings hot-reload
+notify = "6.1"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 core-text = "20.1"
 

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::thread::{self, JoinHandle};
 use tiny_http::{Response, Server};
+use tracing::error;
 use wry::WebViewBuilder;
 
 // Global port counter for unique server ports
@@ -33,7 +34,7 @@ impl YouTubeWebView {
             let server = match Server::http(&addr) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to start YouTube embed server: {}", e);
+                    error!("Failed to start YouTube embed server on port {}: {}", port, e);
                     return;
                 }
             };

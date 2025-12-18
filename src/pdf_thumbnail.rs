@@ -1,15 +1,29 @@
 use pdfium_render::prelude::*;
 use std::path::{Path, PathBuf};
+use tracing::{debug, info_span, warn};
 
 /// Generate a thumbnail image for a PDF's first page
 pub fn generate_pdf_thumbnail<P: AsRef<Path>>(pdf_path: P) -> Option<PathBuf> {
     let pdf_path = pdf_path.as_ref();
+    let _span = info_span!("generate_pdf_thumbnail", path = ?pdf_path).entered();
 
     // Load pdfium
-    let pdfium = load_pdfium().ok()?;
+    let pdfium = match load_pdfium() {
+        Ok(p) => p,
+        Err(e) => {
+            warn!("Failed to load pdfium library: {}", e);
+            return None;
+        }
+    };
 
     // Load PDF document
-    let document = pdfium.load_pdf_from_file(pdf_path, None).ok()?;
+    let document = match pdfium.load_pdf_from_file(pdf_path, None) {
+        Ok(d) => d,
+        Err(e) => {
+            warn!("Failed to load PDF {:?}: {:?}", pdf_path, e);
+            return None;
+        }
+    };
 
     // Get first page
     let page = document.pages().get(0).ok()?;
@@ -34,14 +48,20 @@ pub fn generate_pdf_thumbnail<P: AsRef<Path>>(pdf_path: P) -> Option<PathBuf> {
 
     // Save as PNG
     let mut png_data = Vec::new();
-    image
-        .write_to(
-            &mut std::io::Cursor::new(&mut png_data),
-            image::ImageFormat::Png,
-        )
-        .ok()?;
-    std::fs::write(&thumbnail_path, &png_data).ok()?;
+    if let Err(e) = image.write_to(
+        &mut std::io::Cursor::new(&mut png_data),
+        image::ImageFormat::Png,
+    ) {
+        warn!("Failed to encode PDF thumbnail as PNG: {:?}", e);
+        return None;
+    }
 
+    if let Err(e) = std::fs::write(&thumbnail_path, &png_data) {
+        warn!("Failed to save PDF thumbnail to {:?}: {:?}", thumbnail_path, e);
+        return None;
+    }
+
+    debug!("Generated PDF thumbnail: {:?}", thumbnail_path);
     Some(thumbnail_path)
 }
 

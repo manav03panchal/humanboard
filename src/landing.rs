@@ -41,8 +41,8 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 .small()
                 .icon(Icon::new(IconName::Plus))
                 .label("New Board")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.create_new_board(cx);
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.create_new_board(window, cx);
                 })),
         )
 }
@@ -197,6 +197,100 @@ pub fn render_board_card(
         )
 }
 
+/// Render a single trashed board card (with restore/delete options)
+pub fn render_trashed_board_card(
+    metadata: &BoardMetadata,
+    cx: &mut Context<crate::app::Humanboard>,
+) -> Div {
+    let board_id_for_restore = metadata.id.clone();
+    let board_id_for_delete = metadata.id.clone();
+
+    let bg = cx.theme().popover;
+    let border = cx.theme().border;
+    let muted = cx.theme().muted;
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+
+    v_flex()
+        .w(px(200.0))
+        .bg(bg)
+        .border_1()
+        .border_color(border)
+        .rounded(px(12.0))
+        .overflow_hidden()
+        .opacity(0.7)
+        .child(
+            // Thumbnail area (greyed out)
+            div()
+                .h(px(100.0))
+                .w_full()
+                .bg(muted)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    Icon::new(IconName::Delete)
+                        .size(px(32.0))
+                        .text_color(muted_fg),
+                ),
+        )
+        .child(
+            // Info area
+            v_flex()
+                .p_3()
+                .gap_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(fg)
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(metadata.name.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(format!(
+                            "Deleted {}",
+                            metadata.deleted_ago().unwrap_or_else(|| "recently".to_string())
+                        )),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .mt_1()
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "restore-{}",
+                                board_id_for_restore
+                            )))
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::ArrowLeft).size(px(12.0)))
+                            .label("Restore")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.restore_board(board_id_for_restore.clone(), cx);
+                            })),
+                        )
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "perma-delete-{}",
+                                board_id_for_delete
+                            )))
+                            .danger()
+                            .xsmall()
+                            .icon(Icon::new(IconName::Close).size(px(12.0)))
+                            .label("Delete")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.permanently_delete_board(board_id_for_delete.clone(), cx);
+                            })),
+                        ),
+                ),
+        )
+}
+
 /// Render the empty state when no boards exist
 pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
     let fg = cx.theme().foreground;
@@ -231,32 +325,136 @@ pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 .primary()
                 .icon(Icon::new(IconName::Plus))
                 .label("Create Board")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.create_new_board(cx);
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.create_new_board(window, cx);
                 })),
         )
 }
 
 /// Render the board grid
 pub fn render_board_grid(
-    boards: &[BoardMetadata],
+    boards: Vec<&BoardMetadata>,
     editing_board_id: Option<&str>,
     edit_input: Option<&Entity<InputState>>,
     cx: &mut Context<crate::app::Humanboard>,
 ) -> Div {
     div()
-        .flex_1()
-        .p_6()
+        .flex()
+        .flex_wrap()
+        .gap_4()
+        .children(boards.iter().map(|meta| {
+            let is_editing = editing_board_id == Some(&meta.id);
+            let input = if is_editing { edit_input } else { None };
+            render_board_card(meta, is_editing, input, cx)
+        }))
+}
+
+/// Render the Recently Deleted section
+/// Render a small "Show Recently Deleted" toggle button
+pub fn render_trash_toggle(
+    trash_count: usize,
+    is_expanded: bool,
+    cx: &mut Context<crate::app::Humanboard>,
+) -> Div {
+    let muted_fg = cx.theme().muted_foreground;
+    let border = cx.theme().border;
+
+    div()
+        .w_full()
+        .mt_6()
+        .pt_4()
+        .border_t_1()
+        .border_color(border)
+        .child(
+            h_flex()
+                .items_center()
+                .gap_2()
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
+                    this.toggle_trash(cx);
+                }))
+                .child(
+                    Icon::new(if is_expanded { IconName::ChevronDown } else { IconName::ChevronRight })
+                        .size(px(14.0))
+                        .text_color(muted_fg),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(format!("Recently Deleted ({})", trash_count)),
+                ),
+        )
+}
+
+/// Render the expanded trash section with boards
+pub fn render_trash_section(
+    trashed_boards: Vec<&BoardMetadata>,
+    cx: &mut Context<crate::app::Humanboard>,
+) -> Div {
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let border = cx.theme().border;
+
+    v_flex()
+        .w_full()
+        .mt_6()
+        .pt_4()
+        .border_t_1()
+        .border_color(border)
+        .gap_4()
+        .child(
+            h_flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .cursor_pointer()
+                        .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
+                            this.toggle_trash(cx);
+                        }))
+                        .child(
+                            Icon::new(IconName::ChevronDown)
+                                .size(px(14.0))
+                                .text_color(muted_fg),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(fg)
+                                .child("Recently Deleted"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .child(format!("({}) - auto-deleted after 30 days", trashed_boards.len())),
+                        ),
+                )
+                .child(
+                    Button::new("empty-trash")
+                        .danger()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Delete).size(px(12.0)))
+                        .label("Empty Trash")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.empty_trash(cx);
+                        })),
+                ),
+        )
         .child(
             div()
                 .flex()
                 .flex_wrap()
                 .gap_4()
-                .children(boards.iter().map(|meta| {
-                    let is_editing = editing_board_id == Some(&meta.id);
-                    let input = if is_editing { edit_input } else { None };
-                    render_board_card(meta, is_editing, input, cx)
-                })),
+                .children(
+                    trashed_boards
+                        .iter()
+                        .map(|meta| render_trashed_board_card(meta, cx)),
+                ),
         )
 }
 
@@ -343,9 +541,12 @@ pub fn render_landing_page(
     editing_board_id: Option<&str>,
     edit_input: Option<&Entity<InputState>>,
     deleting_board: Option<(&str, &str)>, // (id, name)
+    show_trash: bool,
     cx: &mut Context<crate::app::Humanboard>,
 ) -> Div {
     let bg = cx.theme().background;
+    let active_boards = board_index.active_boards();
+    let trashed_boards = board_index.trashed_boards();
 
     let base = div()
         .size_full()
@@ -354,15 +555,45 @@ pub fn render_landing_page(
         .flex_col()
         .child(render_landing_header(cx));
 
-    let base = if board_index.boards.is_empty() {
+    let has_active = !active_boards.is_empty();
+    let has_trashed = !trashed_boards.is_empty();
+    let trash_count = trashed_boards.len();
+
+    let base = if !has_active && !has_trashed {
         base.child(render_empty_state(cx))
     } else {
-        base.child(render_board_grid(
-            &board_index.boards,
-            editing_board_id,
-            edit_input,
-            cx,
-        ))
+        base.child(
+            div()
+                .id("landing-content")
+                .flex_1()
+                .flex()
+                .flex_col()
+                .p_6()
+                .overflow_y_scroll()
+                .when(has_active, |d| {
+                    d.child(render_board_grid(
+                        active_boards,
+                        editing_board_id,
+                        edit_input,
+                        cx,
+                    ))
+                })
+                .when(!has_active && has_trashed, |d| {
+                    d.child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("No active boards"),
+                    )
+                })
+                // Show collapsed toggle or expanded trash section
+                .when(has_trashed && !show_trash, |d| {
+                    d.child(render_trash_toggle(trash_count, false, cx))
+                })
+                .when(has_trashed && show_trash, |d| {
+                    d.child(render_trash_section(trashed_boards, cx))
+                }),
+        )
     };
 
     // Add delete confirmation dialog if needed

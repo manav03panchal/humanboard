@@ -272,6 +272,7 @@ impl FocusManager {
                 | FocusContext::Preview
                 | FocusContext::Landing
                 | FocusContext::Modal
+                | FocusContext::TextboxEditing
         )
     }
 

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::thread::{self, JoinHandle};
 use tiny_http::{Header, Response, Server, StatusCode};
+use tracing::error;
 use wry::WebViewBuilder;
 
 // Global port counter for unique server ports
@@ -33,7 +34,7 @@ impl VideoWebView {
             let server = match Server::http(&addr) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to start video server: {}", e);
+                    error!("Failed to start video server on port {}: {}", port, e);
                     return;
                 }
             };

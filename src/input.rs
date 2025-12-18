@@ -1,13 +1,8 @@
-//! Input Handling Module
-//!
-//! This module handles mouse and scroll events on the canvas,
-//! including item selection, dragging, resizing, and drawing.
-
 use crate::app::{Humanboard, SplitDirection};
-use crate::hit_testing::{HitTestContentType, HitTestItem, HitTestResult, ItemHitArea, PreviewSplit};
+use crate::constants::{DEFAULT_FONT_SIZE, HEADER_HEIGHT, SPLITTER_WIDTH};
+use crate::render::dock::DOCK_WIDTH;
 use crate::types::{ArrowHead, ItemContent, ShapeType, ToolType};
 use gpui::*;
-use tracing::{debug, trace};
 
 impl Humanboard {
     pub fn handle_mouse_down(
@@ -16,258 +11,238 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(ref board) = self.board else { return };
         let mouse_pos = event.position;
-        let bounds = window.bounds();
-        let window_size = bounds.size;
 
-        // Extract data from board for hit testing (scoped borrow)
-        let (hit_test_items, canvas_offset, zoom) = {
-            let Some(ref board) = self.board else { return };
-            let items: Vec<HitTestItem> = board.items.iter().map(|item| {
-                HitTestItem {
-                    id: item.id,
-                    position: item.position,
-                    size: item.size,
-                    content_type: HitTestContentType::from_content(&item.content),
-                }
-            }).collect();
-            (items, board.canvas_offset, board.zoom)
-        };
+        // Check if clicking on splitter bar
+        if let Some(ref preview) = self.preview {
+            let bounds = window.bounds();
+            let window_size = bounds.size;
 
-        // Build preview split info for hit testing
-        let preview_split = self.preview.as_ref().map(|preview| {
-            match preview.split {
+            let is_on_splitter = match preview.split {
                 SplitDirection::Vertical => {
-                    let x = (1.0 - preview.size) * f32::from(window_size.width);
-                    PreviewSplit::Vertical { x, width: preview.size * f32::from(window_size.width) }
+                    let splitter_x = (1.0 - preview.size) * f32::from(window_size.width);
+                    (f32::from(mouse_pos.x) - splitter_x).abs() < SPLITTER_WIDTH
                 }
                 SplitDirection::Horizontal => {
-                    let y = (1.0 - preview.size) * f32::from(window_size.height);
-                    PreviewSplit::Horizontal { y, height: preview.size * f32::from(window_size.height) }
+                    let splitter_y = (1.0 - preview.size) * f32::from(window_size.height);
+                    (f32::from(mouse_pos.y) - splitter_y).abs() < SPLITTER_WIDTH
                 }
-            }
-        });
+            };
 
-        // Perform hit test using the structured hit tester
-        let hit_result = self.hit_tester.hit_test(
-            mouse_pos,
-            hit_test_items.into_iter(),
-            canvas_offset,
-            zoom,
-            window_size,
-            preview_split,
-        );
-
-        trace!("Hit test result: {:?}", hit_result);
-
-        // Handle hit test results
-        match hit_result {
-            HitTestResult::Header => {
-                // Header clicks handled by header UI
-                return;
-            }
-            HitTestResult::Dock => {
-                // Dock clicks handled by dock UI
-                return;
-            }
-            HitTestResult::Splitter => {
-                debug!("Starting splitter drag");
+            if is_on_splitter {
                 self.dragging_splitter = true;
                 self.splitter_drag_start = Some(mouse_pos);
                 cx.notify();
                 return;
             }
-            HitTestResult::PreviewPanel => {
-                // Preview panel handles its own clicks
-                return;
-            }
-            HitTestResult::Canvas => {
-                // Clicking on canvas - reset focus to canvas
-                self.focus.force_canvas_focus(window);
 
-                // Handle drawing tools or marquee selection
-                self.handle_canvas_click(event, mouse_pos, cx);
-            }
-            HitTestResult::Item(item_hit) => {
-                let item_id = item_hit.item_id;
-
-                // Check if clicking on resize corner FIRST - this takes priority
-                // so users can resize textboxes even while editing
-                if item_hit.area == ItemHitArea::ResizeCorner {
-                    debug!("Click on resize corner of item {}", item_id);
-                    // If editing a textbox, finish editing first before resizing
-                    if self.editing_textbox_id.is_some() {
-                        self.finish_textbox_editing_with_window(window, cx);
-                    }
-                    // Select the item if not selected
-                    if !self.selected_items.contains(&item_id) {
-                        self.selected_items.clear();
-                        self.selected_items.insert(item_id);
-                    }
-                    self.handle_item_interaction(item_id, item_hit.area, mouse_pos);
-                    cx.notify();
-                    return;
+            // Check if click is in preview panel area - if so, don't handle here
+            let in_preview = match preview.split {
+                SplitDirection::Vertical => {
+                    let preview_start = (1.0 - preview.size) * f32::from(window_size.width);
+                    f32::from(mouse_pos.x) > preview_start
                 }
-
-                // If we're already editing this textbox, don't process further clicks
-                // (prevents clicks from stealing focus from input)
-                if self.editing_textbox_id == Some(item_id) {
-                    return;
+                SplitDirection::Horizontal => {
+                    let preview_start = (1.0 - preview.size) * f32::from(window_size.height);
+                    f32::from(mouse_pos.y) > preview_start
                 }
-
-                // If we're editing a DIFFERENT textbox, finish that edit first
-                if self.editing_textbox_id.is_some() {
-                    self.finish_textbox_editing_with_window(window, cx);
-                }
-
-                // Handle selection with Shift modifier for multi-select
-                if event.modifiers.shift {
-                    if self.selected_items.contains(&item_id) {
-                        self.selected_items.remove(&item_id);
-                    } else {
-                        self.selected_items.insert(item_id);
-                    }
-                } else if !self.selected_items.contains(&item_id) {
-                    self.selected_items.clear();
-                    self.selected_items.insert(item_id);
-                }
-
-                // Single click on textbox body starts editing
-                if let Some(ref board) = self.board {
-                    let is_textbox = board
-                        .get_item(item_id)
-                        .map(|item| matches!(&item.content, ItemContent::TextBox { .. }))
-                        .unwrap_or(false);
-
-                    if is_textbox {
-                        debug!("Single click on textbox {} body, starting edit", item_id);
-                        self.start_textbox_editing(item_id, window, cx);
-                        return;
-                    }
-                }
-
-                // Double-click for preview (PDF, Markdown, Code)
-                if event.click_count == 2 {
-                    if self.handle_double_click(item_id, window, cx) {
-                        return;
-                    }
-                }
-
-                // Handle body drag for non-textbox items
-                self.handle_item_interaction(item_id, item_hit.area, mouse_pos);
+            };
+            if in_preview {
+                return; // Let preview panel handle its own clicks
             }
         }
 
-        cx.notify();
-    }
+        // Don't reset focus yet - we need to check for textbox editing first
+        // self.focus.force_canvas_focus(window) is called later if needed
 
-    /// Handle item resize or drag interaction
-    fn handle_item_interaction(
-        &mut self,
-        item_id: u64,
-        area: ItemHitArea,
-        mouse_pos: Point<Pixels>,
-    ) {
-        let Some(ref board) = self.board else { return };
+        // If a drawing tool is selected, prioritize drawing over item selection
+        let header_offset = HEADER_HEIGHT;
+        let dock_offset = DOCK_WIDTH;
 
-        match area {
-            ItemHitArea::ResizeCorner => {
-                debug!("Starting resize of item {}", item_id);
-                if let Some(item) = board.get_item(item_id) {
+        if matches!(
+            self.selected_tool,
+            ToolType::Text | ToolType::Arrow | ToolType::Shape
+        ) {
+            // Start drawing regardless of what's under the cursor
+            self.drawing_start = Some(mouse_pos);
+            self.drawing_current = Some(mouse_pos);
+            self.selected_items.clear();
+            cx.notify();
+            return;
+        }
+
+        // Check if clicking on an item (in reverse order so top items are checked first)
+        // Extract only the ID to avoid cloning the entire item
+        // Account for 40px header offset and dock width
+        let clicked_item_id = board
+            .items
+            .iter()
+            .rev()
+            .find(|item| {
+                let scaled_x =
+                    item.position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
+                let scaled_y =
+                    item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
+                let scaled_width = item.size.0 * board.zoom;
+                let scaled_height = item.size.1 * board.zoom;
+
+                let mx = f32::from(mouse_pos.x);
+                let my = f32::from(mouse_pos.y);
+
+                let in_bounds = mx >= scaled_x
+                    && mx <= scaled_x + scaled_width
+                    && my >= scaled_y
+                    && my <= scaled_y + scaled_height;
+
+                if !in_bounds {
+                    return false;
+                }
+
+                // For Shape items, only select if clicking on the border (not interior)
+                // This allows clicking through to items inside the shape
+                if let ItemContent::Shape { border_width, .. } = &item.content {
+                    let border_hit_area = (border_width * board.zoom).max(8.0); // Min 8px hit area
+                    let near_left = mx - scaled_x < border_hit_area;
+                    let near_right = (scaled_x + scaled_width) - mx < border_hit_area;
+                    let near_top = my - scaled_y < border_hit_area;
+                    let near_bottom = (scaled_y + scaled_height) - my < border_hit_area;
+
+                    // Only hit if near any edge
+                    return near_left || near_right || near_top || near_bottom;
+                }
+
+                true
+            })
+            .map(|item| item.id);
+
+        if let Some(item_id) = clicked_item_id {
+            // Handle selection with Shift modifier for multi-select
+            if event.modifiers.shift {
+                // Toggle selection: add if not selected, remove if already selected
+                if self.selected_items.contains(&item_id) {
+                    self.selected_items.remove(&item_id);
+                } else {
+                    self.selected_items.insert(item_id);
+                }
+            } else if self.selected_items.contains(&item_id) {
+                // Clicked on an already-selected item - keep the selection for group move
+                // (don't clear, don't change anything)
+            } else {
+                // Clicked on an unselected item - clear and select only this item
+                self.selected_items.clear();
+                self.selected_items.insert(item_id);
+            }
+
+            // Handle double-click for PDF/Markdown/Code preview or TextBox editing
+            if event.click_count == 2 {
+                // Check if it's a TextBox - start editing
+                let is_textbox = board
+                    .get_item(item_id)
+                    .map(|item| matches!(&item.content, ItemContent::TextBox { .. }))
+                    .unwrap_or(false);
+
+                if is_textbox {
+                    self.start_textbox_editing(item_id, window, cx);
+                    return;
+                }
+
+                let content_path = board
+                    .get_item(item_id)
+                    .and_then(|item| match &item.content {
+                        ItemContent::Pdf { path, .. } => Some(path.clone()),
+                        ItemContent::Markdown { path, .. } => Some(path.clone()),
+                        ItemContent::Code { path, .. } => Some(path.clone()),
+                        _ => None,
+                    });
+
+                if let Some(path) = content_path {
+                    self.open_preview(path, window, cx);
+                    return;
+                }
+            }
+
+            // Check if clicking on resize corner (bottom-right corner)
+            // Use get_item for O(1) lookup - extract needed values
+            let item_info = board
+                .get_item(item_id)
+                .map(|item| (item.position, item.size, &item.content));
+
+            if let Some((position, size, content)) = item_info {
+                let is_resizable = true;
+                let scaled_x =
+                    position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
+                let scaled_y =
+                    position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
+                let scaled_width = size.0 * board.zoom;
+                let scaled_height = size.1 * board.zoom;
+
+                let corner_x = scaled_x + scaled_width;
+                let corner_y = scaled_y + scaled_height;
+                let corner_size = 30.0 * board.zoom;
+
+                let in_corner = is_resizable
+                    && f32::from(mouse_pos.x) >= corner_x - corner_size
+                    && f32::from(mouse_pos.x) <= corner_x + 5.0
+                    && f32::from(mouse_pos.y) >= corner_y - corner_size
+                    && f32::from(mouse_pos.y) <= corner_y + 5.0;
+
+                if in_corner {
                     self.resizing_item = Some(item_id);
-                    self.resize_start_size = Some(item.size);
+                    self.resize_start_size = Some(size);
                     self.resize_start_pos = Some(mouse_pos);
+                    // Store font size for TextBox scaling
                     self.resize_start_font_size =
-                        if let ItemContent::TextBox { font_size, .. } = &item.content {
+                        if let ItemContent::TextBox { font_size, .. } = content {
                             Some(*font_size)
                         } else {
                             None
                         };
-                }
-            }
-            ItemHitArea::Body | ItemHitArea::ShapeBorder => {
-                debug!("Starting drag of item {}", item_id);
-                if let Some(item) = board.get_item(item_id) {
-                    // Convert item canvas position to screen position
-                    let item_screen_pos = self.hit_tester.canvas_to_screen(
-                        point(px(item.position.0), px(item.position.1)),
-                        board.canvas_offset,
-                        board.zoom,
-                    );
-
+                } else {
                     self.dragging_item = Some(item_id);
                     self.item_drag_offset = Some(point(
-                        mouse_pos.x - item_screen_pos.x,
-                        mouse_pos.y - item_screen_pos.y,
+                        mouse_pos.x - px(scaled_x),
+                        mouse_pos.y - px(scaled_y),
                     ));
                 }
             }
-        }
-    }
+        // Reset focus to canvas for non-textbox interactions
+            self.focus.force_canvas_focus(window);
+        } else {
+            // Clicked on empty canvas - reset focus
+            self.focus.force_canvas_focus(window);
 
-    /// Handle clicks on empty canvas area
-    fn handle_canvas_click(
-        &mut self,
-        event: &MouseDownEvent,
-        mouse_pos: Point<Pixels>,
-        cx: &mut Context<Self>,
-    ) {
-        match self.selected_tool {
-            ToolType::Select => {
-                // Start marquee selection
-                trace!("Starting marquee selection at {:?}", mouse_pos);
-                self.marquee_start = Some(mouse_pos);
-                self.marquee_current = Some(mouse_pos);
+            // Check if we have a drawing tool selected
+            match self.selected_tool {
+                ToolType::Select => {
+                    // Start marquee selection
+                    self.marquee_start = Some(mouse_pos);
+                    self.marquee_current = Some(mouse_pos);
 
-                if !event.modifiers.shift {
-                    self.selected_items.clear();
+                    // Clear selection unless shift is held
+                    if !event.modifiers.shift {
+                        self.selected_items.clear();
+                    }
+                }
+                ToolType::Text => {
+                    // Start drawing a text box (drag to size)
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
+                ToolType::Arrow => {
+                    // Start drawing an arrow
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
+                ToolType::Shape => {
+                    // Start drawing a shape
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
                 }
             }
-            ToolType::Text | ToolType::Arrow | ToolType::Shape => {
-                trace!("Starting {:?} drawing at {:?}", self.selected_tool, mouse_pos);
-                self.drawing_start = Some(mouse_pos);
-                self.drawing_current = Some(mouse_pos);
-            }
         }
+
         cx.notify();
-    }
-
-    /// Handle double-click on an item. Returns true if handled.
-    fn handle_double_click(
-        &mut self,
-        item_id: u64,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(ref board) = self.board else { return false };
-
-        // Check if it's a TextBox - start editing
-        let is_textbox = board
-            .get_item(item_id)
-            .map(|item| matches!(&item.content, ItemContent::TextBox { .. }))
-            .unwrap_or(false);
-
-        if is_textbox {
-            debug!("Starting textbox editing for item {}", item_id);
-            self.start_textbox_editing(item_id, window, cx);
-            return true;
-        }
-
-        // Check for previewable content (PDF, Markdown, Code)
-        let content_path = board.get_item(item_id).and_then(|item| match &item.content {
-            ItemContent::Pdf { path, .. } => Some(path.clone()),
-            ItemContent::Markdown { path, .. } => Some(path.clone()),
-            ItemContent::Code { path, .. } => Some(path.clone()),
-            _ => None,
-        });
-
-        if let Some(path) = content_path {
-            debug!("Opening preview for {:?}", path);
-            self.open_preview(path, window, cx);
-            return true;
-        }
-
-        false
     }
 
     pub fn handle_mouse_up(
@@ -283,13 +258,19 @@ impl Humanboard {
             if let Some(ref mut board) = self.board {
                 board.push_history();
                 // Force save after drag/resize completes
-                board.flush_save();
+                if let Err(e) = board.flush_save() {
+                    self.toast_manager.push(
+                        crate::notifications::Toast::error(format!("Save failed: {}", e))
+                    );
+                }
             }
         }
 
         // Finalize marquee selection
         if let (Some(start), Some(end)) = (self.marquee_start, self.marquee_current) {
             if let Some(ref board) = self.board {
+                let header_offset = HEADER_HEIGHT;
+
                 // Calculate marquee bounds in screen space
                 let min_x = f32::from(start.x).min(f32::from(end.x));
                 let max_x = f32::from(start.x).max(f32::from(end.x));
@@ -300,14 +281,12 @@ impl Humanboard {
                 if (max_x - min_x) > 5.0 || (max_y - min_y) > 5.0 {
                     // Find all items that intersect with marquee
                     for item in &board.items {
-                        // Convert item position to screen coordinates using HitTester
-                        let item_screen_pos = self.hit_tester.canvas_to_screen(
-                            point(px(item.position.0), px(item.position.1)),
-                            board.canvas_offset,
-                            board.zoom,
-                        );
-                        let item_x = f32::from(item_screen_pos.x);
-                        let item_y = f32::from(item_screen_pos.y);
+                        let item_x = item.position.0 * board.zoom
+                            + f32::from(board.canvas_offset.x)
+                            + DOCK_WIDTH;
+                        let item_y = item.position.1 * board.zoom
+                            + f32::from(board.canvas_offset.y)
+                            + header_offset;
                         let item_w = item.size.0 * board.zoom;
                         let item_h = item.size.1 * board.zoom;
 
@@ -337,6 +316,7 @@ impl Humanboard {
         // Finalize arrow/shape drawing
         if let Some(start) = self.drawing_start {
             let end = event.position;
+            let header_offset = HEADER_HEIGHT;
 
             // Calculate screen distance first (before converting to canvas coords)
             let screen_width = (f32::from(end.x) - f32::from(start.x)).abs();
@@ -351,9 +331,9 @@ impl Humanboard {
                 return;
             }
 
-            // Calculate canvas positions using HitTester
-            let start_canvas = self.screen_to_canvas(start);
-            let end_canvas = self.screen_to_canvas(end);
+            // Calculate canvas positions
+            let start_canvas = self.screen_to_canvas(start, header_offset);
+            let end_canvas = self.screen_to_canvas(end, header_offset);
 
             let start_x = f32::from(start_canvas.x);
             let start_y = f32::from(start_canvas.y);
@@ -425,7 +405,7 @@ impl Humanboard {
                             point(px(pos_x), px(pos_y)),
                             ItemContent::TextBox {
                                 text: "".to_string(),
-                                font_size: 16.0,
+                                font_size: DEFAULT_FONT_SIZE,
                                 color: "".to_string(), // Empty = use theme foreground
                             },
                         );
@@ -463,10 +443,14 @@ impl Humanboard {
         cx.notify();
     }
 
-    /// Convert screen position to canvas position using HitTester
-    fn screen_to_canvas(&self, pos: Point<Pixels>) -> Point<Pixels> {
+    /// Convert screen position to canvas position (returns Point<Pixels>)
+    fn screen_to_canvas(&self, pos: Point<Pixels>, header_offset: f32) -> Point<Pixels> {
         if let Some(ref board) = self.board {
-            self.hit_tester.screen_to_canvas(pos, board.canvas_offset, board.zoom)
+            // Account for dock width on the left side
+            let x = (f32::from(pos.x) - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
+            let y =
+                (f32::from(pos.y) - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
+            point(px(x), px(y))
         } else {
             pos
         }
@@ -582,15 +566,16 @@ impl Humanboard {
             }
         } else if let Some(item_id) = self.dragging_item {
             if let Some(offset) = self.item_drag_offset {
-                // Convert screen position (minus drag offset) to canvas coordinates
-                let adjusted_pos = point(event.position.x - offset.x, event.position.y - offset.y);
-                let canvas_pos = self.hit_tester.screen_to_canvas(
-                    adjusted_pos,
-                    board.canvas_offset,
-                    board.zoom,
-                );
-                let new_x = f32::from(canvas_pos.x);
-                let new_y = f32::from(canvas_pos.y);
+                // Capture values before mutable borrow
+                let zoom = board.zoom;
+                let canvas_offset_x = f32::from(board.canvas_offset.x);
+                let canvas_offset_y = f32::from(board.canvas_offset.y);
+                let header_offset = HEADER_HEIGHT; // Account for header bar
+                let new_x =
+                    (f32::from(event.position.x - offset.x) - DOCK_WIDTH - canvas_offset_x) / zoom;
+                let new_y =
+                    (f32::from(event.position.y - offset.y) - canvas_offset_y - header_offset)
+                        / zoom;
 
                 // Get current position of dragged item to calculate delta
                 let old_pos = board.get_item(item_id).map(|i| i.position);

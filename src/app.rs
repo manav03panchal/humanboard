@@ -1,12 +1,14 @@
 use crate::audio_webview::AudioWebView;
+use crate::background::BackgroundExecutor;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
 use crate::focus::{FocusContext, FocusManager};
 use crate::hit_testing::HitTester;
-use crate::notifications::ToastManager;
+use crate::notifications::{Toast, ToastManager};
 use crate::pdf_webview::PdfWebView;
+use crate::perf::PerfMonitor;
 use crate::settings::Settings;
-
+use crate::settings_watcher::{SettingsEvent, SettingsWatcher};
 use crate::types::{ItemContent, ToolType};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -16,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
+use tracing::error;
 
 #[derive(Clone, Debug)]
 pub enum AppView {
@@ -41,6 +44,64 @@ pub enum SettingsTab {
     #[default]
     Appearance,
     Integrations,
+}
+
+/// Storage location options for boards
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum StorageLocation {
+    /// Default application data directory
+    #[default]
+    Default,
+    /// iCloud Drive for cross-device sync
+    ICloud,
+    /// Custom user-specified path
+    Custom(std::path::PathBuf),
+}
+
+impl StorageLocation {
+    /// Get the display name for this location
+    pub fn display_name(&self) -> &str {
+        match self {
+            StorageLocation::Default => "Local (Application Support)",
+            StorageLocation::ICloud => "iCloud Drive",
+            StorageLocation::Custom(_) => "Custom Location",
+        }
+    }
+
+    /// Get the base path for this storage location
+    pub fn base_path(&self) -> Option<std::path::PathBuf> {
+        match self {
+            StorageLocation::Default => {
+                dirs::data_dir().map(|p| p.join("humanboard").join("boards"))
+            }
+            StorageLocation::ICloud => {
+                // macOS iCloud Drive path
+                dirs::home_dir().map(|p| {
+                    p.join("Library")
+                        .join("Mobile Documents")
+                        .join("com~apple~CloudDocs")
+                        .join("Humanboard")
+                })
+            }
+            StorageLocation::Custom(path) => Some(path.clone()),
+        }
+    }
+
+    /// Check if this location is available
+    pub fn is_available(&self) -> bool {
+        match self {
+            StorageLocation::Default => true,
+            StorageLocation::ICloud => {
+                // Check if iCloud Drive exists
+                if let Some(path) = self.base_path() {
+                    path.parent().map(|p| p.exists()).unwrap_or(false)
+                } else {
+                    false
+                }
+            }
+            StorageLocation::Custom(path) => path.exists() || path.parent().map(|p| p.exists()).unwrap_or(false),
+        }
+    }
 }
 
 pub enum PreviewTab {
@@ -127,6 +188,15 @@ pub struct Humanboard {
     pub edit_input: Option<Entity<InputState>>,
     pub deleting_board_id: Option<String>,
 
+    // Board creation modal state
+    pub show_create_board_modal: bool,
+    pub create_board_input: Option<Entity<InputState>>,
+    pub create_board_location: StorageLocation,
+    pub create_board_backdrop_clicked: bool,
+
+    // Trash visibility on landing page
+    pub show_trash: bool,
+
     // Board state (only populated when view is Board)
     pub board: Option<Board>,
     pub dragging: bool,
@@ -199,9 +269,19 @@ pub struct Humanboard {
     pub drawing_current: Option<Point<Pixels>>, // Current position while drawing (for preview)
     pub editing_textbox_id: Option<u64>,      // ID of textbox being edited
     pub textbox_input: Option<Entity<gpui_component::input::InputState>>, // Input for editing textbox
+    pub pending_textbox_drag: Option<(u64, Point<Pixels>)>, // Deferred drag for textboxes (to allow double-click)
 
     // Hit testing
     pub hit_tester: HitTester,
+
+    // Performance monitoring
+    pub perf_monitor: PerfMonitor,
+
+    // Background task executor
+    pub background: BackgroundExecutor,
+
+    // Settings file watcher for hot-reload
+    pub settings_watcher: Option<SettingsWatcher>,
 }
 
 /// Animation state for smooth panning to a target position
@@ -222,6 +302,11 @@ impl Humanboard {
             editing_board_id: None,
             edit_input: None,
             deleting_board_id: None,
+            show_create_board_modal: false,
+            create_board_input: None,
+            create_board_location: StorageLocation::default(),
+            create_board_backdrop_clicked: false,
+            show_trash: false,
             board: None,
             dragging: false,
             last_mouse_pos: None,
@@ -271,7 +356,36 @@ impl Humanboard {
             drawing_current: None,
             editing_textbox_id: None,
             textbox_input: None,
+            pending_textbox_drag: None,
             hit_tester: HitTester::new(),
+            perf_monitor: PerfMonitor::new(),
+            background: BackgroundExecutor::with_default_workers(),
+            settings_watcher: crate::settings_watcher::default_settings_path()
+                .and_then(|p| SettingsWatcher::new(p).ok()),
+        }
+    }
+
+    /// Check for settings file changes and reload if needed.
+    pub fn check_settings_reload(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref mut watcher) = self.settings_watcher {
+            if let Some(event) = watcher.poll() {
+                match event {
+                    SettingsEvent::Modified | SettingsEvent::Created => {
+                        tracing::info!("Settings file changed, reloading...");
+                        // Reload settings
+                        self.settings = Settings::load();
+                        self.toast_manager.push(Toast::info("Settings reloaded"));
+                        cx.notify();
+                    }
+                    SettingsEvent::Deleted => {
+                        tracing::warn!("Settings file deleted");
+                        self.toast_manager.push(Toast::warning("Settings file deleted"));
+                    }
+                    SettingsEvent::Error(e) => {
+                        tracing::error!("Settings watch error: {}", e);
+                    }
+                }
+            }
         }
     }
 
@@ -406,59 +520,47 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn toggle_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx
-            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
-            .is_some()
-        {
+    /// Close all settings dropdowns
+    fn close_all_dropdowns(&mut self, cx: &mut Context<Self>) {
+        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
-        } else {
-            // Close font dropdown if open
-            if cx
-                .try_global::<crate::render::overlays::FontDropdownOpen>()
-                .is_some()
-            {
-                cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
-            }
+        }
+        if cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some() {
+            cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
+        }
+    }
+
+    pub fn toggle_theme_dropdown(&mut self, cx: &mut Context<Self>) {
+        let was_open = cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some();
+        // Always close all dropdowns first
+        self.close_all_dropdowns(cx);
+        // Only open theme dropdown if it wasn't already open
+        if !was_open {
             cx.set_global(crate::render::overlays::ThemeDropdownOpen);
         }
         cx.notify();
     }
 
     pub fn close_theme_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx
-            .try_global::<crate::render::overlays::ThemeDropdownOpen>()
-            .is_some()
-        {
+        if cx.try_global::<crate::render::overlays::ThemeDropdownOpen>().is_some() {
             cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
         }
         cx.notify();
     }
 
     pub fn toggle_font_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx
-            .try_global::<crate::render::overlays::FontDropdownOpen>()
-            .is_some()
-        {
-            cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
-        } else {
-            // Close theme dropdown if open
-            if cx
-                .try_global::<crate::render::overlays::ThemeDropdownOpen>()
-                .is_some()
-            {
-                cx.remove_global::<crate::render::overlays::ThemeDropdownOpen>();
-            }
+        let was_open = cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some();
+        // Always close all dropdowns first
+        self.close_all_dropdowns(cx);
+        // Only open font dropdown if it wasn't already open
+        if !was_open {
             cx.set_global(crate::render::overlays::FontDropdownOpen);
         }
         cx.notify();
     }
 
     pub fn close_font_dropdown(&mut self, cx: &mut Context<Self>) {
-        if cx
-            .try_global::<crate::render::overlays::FontDropdownOpen>()
-            .is_some()
-        {
+        if cx.try_global::<crate::render::overlays::FontDropdownOpen>().is_some() {
             cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         }
         cx.notify();
@@ -946,10 +1048,79 @@ impl Humanboard {
 
     // ==================== Landing Page Methods ====================
 
-    pub fn create_new_board(&mut self, cx: &mut Context<Self>) {
-        let metadata = self.board_index.create_board("Untitled Board".to_string());
-        // Open the new board immediately
+    /// Show the create board modal with input field
+    pub fn show_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus.focus(FocusContext::Modal, window);
+
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Enter board name...")
+        });
+
+        // Focus the input
+        input.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+
+        self.create_board_input = Some(input);
+        self.create_board_location = StorageLocation::default();
+        self.show_create_board_modal = true;
+        cx.notify();
+    }
+
+    /// Close the create board modal without creating
+    pub fn close_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_create_board_modal = false;
+        self.create_board_input = None;
+        self.create_board_location = StorageLocation::default();
+        self.focus.release(FocusContext::Modal, window);
+        cx.notify();
+    }
+
+    /// Set the storage location for the new board
+    pub fn set_create_board_location(&mut self, location: StorageLocation, cx: &mut Context<Self>) {
+        self.create_board_location = location;
+        cx.notify();
+    }
+
+    /// Create a new board with custom name and storage location
+    pub fn confirm_create_board(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self.create_board_input
+            .as_ref()
+            .map(|input| input.read(cx).text().to_string())
+            .unwrap_or_default();
+
+        let name = if name.trim().is_empty() {
+            "Untitled Board".to_string()
+        } else {
+            name.trim().to_string()
+        };
+
+        let location = self.create_board_location.clone();
+
+        // Create the board with custom location
+        let metadata = self.board_index.create_board_at(name, location.clone());
+
+        // Close modal
+        self.show_create_board_modal = false;
+        self.create_board_input = None;
+        self.create_board_location = StorageLocation::default();
+        self.focus.release(FocusContext::Modal, window);
+
+        // Show success toast with location info
+        let location_name = location.display_name();
+        self.toast_manager.push(
+            crate::notifications::Toast::success(format!("Board created in {}", location_name))
+        );
+
+        // Open the new board
         self.open_board(metadata.id, cx);
+    }
+
+    /// Quick create (backwards compatible) - creates with default name and location
+    pub fn create_new_board(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Show modal instead of directly creating
+        self.show_create_board_modal(window, cx);
     }
 
     pub fn open_board(&mut self, id: String, cx: &mut Context<Self>) {
@@ -963,7 +1134,11 @@ impl Humanboard {
     pub fn go_home(&mut self, cx: &mut Context<Self>) {
         // Force save current board before leaving
         if let Some(ref mut board) = self.board {
-            board.flush_save();
+            if let Err(e) = board.flush_save() {
+                self.toast_manager.push(
+                    crate::notifications::Toast::error(format!("Save failed: {}", e))
+                );
+            }
         }
         self.board = None;
         self.preview = None;
@@ -1019,14 +1194,63 @@ impl Humanboard {
         cx.notify();
     }
 
+    /// Soft delete - moves to trash
     pub fn delete_board(&mut self, id: String, cx: &mut Context<Self>) {
         self.board_index.delete_board(&id);
         self.deleting_board_id = None;
+        self.toast_manager.push(
+            crate::notifications::Toast::info("Board moved to trash")
+        );
         cx.notify();
     }
 
     pub fn cancel_delete(&mut self, cx: &mut Context<Self>) {
         self.deleting_board_id = None;
+        cx.notify();
+    }
+
+    /// Restore a board from trash
+    pub fn restore_board(&mut self, id: String, cx: &mut Context<Self>) {
+        if self.board_index.restore_board(&id) {
+            self.toast_manager.push(
+                crate::notifications::Toast::success("Board restored")
+            );
+        }
+        cx.notify();
+    }
+
+    /// Permanently delete a board (no recovery)
+    pub fn permanently_delete_board(&mut self, id: String, cx: &mut Context<Self>) {
+        if self.board_index.permanently_delete_board(&id) {
+            self.toast_manager.push(
+                crate::notifications::Toast::info("Board permanently deleted")
+            );
+        }
+        cx.notify();
+    }
+
+    /// Empty all boards from trash
+    pub fn empty_trash(&mut self, cx: &mut Context<Self>) {
+        let count = self.board_index.empty_trash();
+        if count > 0 {
+            self.toast_manager.push(
+                crate::notifications::Toast::info(format!("Permanently deleted {} board(s)", count))
+            );
+        }
+        // Hide trash section if empty
+        if self.board_index.trashed_boards().is_empty() {
+            self.show_trash = false;
+        }
+        cx.notify();
+    }
+
+    /// Toggle trash section visibility
+    pub fn toggle_trash(&mut self, cx: &mut Context<Self>) {
+        // Don't toggle if a modal is open
+        if self.show_settings || self.show_create_board_modal {
+            return;
+        }
+        self.show_trash = !self.show_trash;
         cx.notify();
     }
 
@@ -1116,7 +1340,7 @@ impl Humanboard {
                                 *webview = Some(wv);
                             }
                             Err(e) => {
-                                eprintln!("Failed to create PDF WebView: {}", e);
+                                error!("Failed to create PDF WebView: {}", e);
                             }
                         }
                     } else if let Some(wv) = webview {
@@ -1264,7 +1488,7 @@ impl Humanboard {
                             // Save to file
                             let path_clone = path.clone();
                             if let Err(e) = std::fs::write(&path_clone, &new_content) {
-                                eprintln!("Failed to save code file: {}", e);
+                                error!("Failed to save code file: {}", e);
                             }
                             *dirty = false;
                             // Keep editor for viewing
@@ -1339,7 +1563,7 @@ impl Humanboard {
                         self.youtube_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
-                        eprintln!("Failed to create YouTube WebView: {}", e);
+                        error!("Failed to create YouTube WebView for video {}: {}", video_id, e);
                     }
                 }
             }
@@ -1381,7 +1605,7 @@ impl Humanboard {
                         self.audio_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
-                        eprintln!("Failed to create Audio WebView: {}", e);
+                        error!("Failed to create Audio WebView for {:?}: {}", path, e);
                     }
                 }
             }
@@ -1422,7 +1646,7 @@ impl Humanboard {
                         self.video_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
-                        eprintln!("Failed to create Video WebView: {}", e);
+                        error!("Failed to create Video WebView for {:?}: {}", path, e);
                     }
                 }
             }
@@ -1699,6 +1923,14 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Clear any pending drag/resize state from the first click of the double-click
+        self.dragging_item = None;
+        self.item_drag_offset = None;
+        self.resizing_item = None;
+        self.resize_start_size = None;
+        self.resize_start_pos = None;
+        self.resize_start_font_size = None;
+
         // Get the current text from the item
         let current_text = if let Some(ref board) = self.board {
             board.get_item(item_id).and_then(|item| {
@@ -1727,18 +1959,18 @@ impl Humanboard {
                     .default_value(text)
             });
 
-            // Focus the input and move cursor to end
-            input.update(cx, |state, cx| {
-                state.focus(window, cx);
-                // Move cursor to end of text (last line, last character)
-                state.set_cursor_position(
-                    gpui_component::input::Position {
+            // Focus the input and position cursor at end after it's been added to the render tree
+            // We need to defer this because the Input isn't mounted yet
+            let input_clone = input.clone();
+            window.defer(cx, move |window, cx| {
+                input_clone.update(cx, |state, cx| {
+                    // Position cursor at the end of the text
+                    let end_pos = gpui_component::input::Position {
                         line: last_line,
                         character: last_char,
-                    },
-                    window,
-                    cx,
-                );
+                    };
+                    state.set_cursor_position(end_pos, window, cx);
+                });
             });
 
             // Subscribe to input events
@@ -1773,7 +2005,7 @@ impl Humanboard {
             )
             .detach();
 
-            // Update focus context to TextboxEditing (without stealing focus from Input)
+            // Set focus context to TextboxEditing so keyboard shortcuts don't intercept input
             self.focus.set_context_without_focus(FocusContext::TextboxEditing);
 
             self.editing_textbox_id = Some(item_id);
@@ -1795,7 +2027,11 @@ impl Humanboard {
                         }
                     }
                     board.push_history();
-                    board.flush_save();
+                    if let Err(e) = board.flush_save() {
+                        self.toast_manager.push(
+                            crate::notifications::Toast::error(format!("Save failed: {}", e))
+                        );
+                    }
                 }
             }
         }
@@ -1818,7 +2054,11 @@ impl Humanboard {
                         }
                     }
                     board.push_history();
-                    board.flush_save();
+                    if let Err(e) = board.flush_save() {
+                        self.toast_manager.push(
+                            crate::notifications::Toast::error(format!("Save failed: {}", e))
+                        );
+                    }
                 }
             }
         }

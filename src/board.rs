@@ -6,13 +6,14 @@
 use crate::board_index::BoardIndex;
 use crate::error::BoardError;
 use crate::types::{CanvasItem, ItemContent};
+use crate::validation::validate_items;
 use gpui::{point, px, Pixels, Point, Size};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, info_span, trace, warn};
 
 /// Save debounce delay - saves are batched within this window
 const SAVE_DEBOUNCE_MS: u64 = 500;
@@ -98,18 +99,37 @@ pub struct Board {
     // Debounced save tracking
     dirty: bool,
     last_change: Instant,
+
+    // Storage location for this board (used to determine if files should be copied)
+    storage_location: crate::board_index::StoredLocation,
 }
 
 impl Board {
     /// Load a board by ID, or create a new empty one.
     ///
     /// If the board file doesn't exist or can't be loaded, a new empty
-    /// board is created.
+    /// board is created. Uses the board index to find the correct storage location.
     pub fn load(id: String) -> Self {
-        let board_path = BoardIndex::board_path(&id);
+        let _span = info_span!("board_load", board_id = %id).entered();
 
-        if let Some(state) = BoardState::try_load(&board_path) {
-            info!("Loaded board '{}' with {} items", id, state.items.len());
+        // Try to get path and storage location from board index
+        let index = BoardIndex::load();
+        let (board_path, storage_location) = index.get_board(&id)
+            .map(|b| (b.board_path(), b.storage_location.clone()))
+            .unwrap_or_else(|| (BoardIndex::board_path(&id), crate::board_index::StoredLocation::Default));
+
+        if let Some(mut state) = BoardState::try_load(&board_path) {
+            info!(items = state.items.len(), "Loaded board");
+
+            // Validate and fix any invalid item properties
+            let fixed_count = validate_items(&mut state.items);
+            if fixed_count > 0 {
+                warn!(
+                    "Fixed {} items with invalid properties in board '{}'",
+                    fixed_count, id
+                );
+            }
+
             let items_index = Self::build_items_index(&state.items);
             let initial_state = state.clone();
             Self {
@@ -121,17 +141,23 @@ impl Board {
                 next_item_id: state.next_item_id,
                 history: VecDeque::from([initial_state]),
                 history_index: 0,
-                dirty: false,
+                dirty: fixed_count > 0, // Mark dirty if we fixed anything
                 last_change: Instant::now(),
+                storage_location,
             }
         } else {
             debug!("Creating new empty board '{}'", id);
-            Self::new_empty(id)
+            Self::new_empty_with_location(id, storage_location)
         }
     }
 
-    /// Create a new empty board with the given ID
+    /// Create a new empty board with the given ID and default storage location
     pub fn new_empty(id: String) -> Self {
+        Self::new_empty_with_location(id, crate::board_index::StoredLocation::Default)
+    }
+
+    /// Create a new empty board with the given ID and storage location
+    pub fn new_empty_with_location(id: String, storage_location: crate::board_index::StoredLocation) -> Self {
         let initial_state = BoardState {
             canvas_offset: (0.0, 0.0),
             zoom: 1.0,
@@ -149,6 +175,7 @@ impl Board {
             history_index: 0,
             dirty: false,
             last_change: Instant::now(),
+            storage_location,
         }
     }
 
@@ -205,6 +232,8 @@ impl Board {
     }
 
     /// Handle file drop - batched operation (single history push + save)
+    /// For iCloud boards, files are copied to the board's files/ directory
+    /// so they sync across devices.
     pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             return;
@@ -215,7 +244,17 @@ impl Board {
         const STAGGER_Y: f32 = 30.0;
 
         for (i, path) in paths.iter().enumerate() {
-            let content = ItemContent::from_path(path);
+            // For iCloud boards, copy the file to the board's files directory
+            let actual_path = if self.should_copy_files() {
+                self.copy_file_to_board(path).unwrap_or_else(|e| {
+                    warn!("Failed to copy file to board storage: {}", e);
+                    path.clone()
+                })
+            } else {
+                path.clone()
+            };
+
+            let content = ItemContent::from_path(&actual_path);
             let base_pos = self.screen_to_canvas(position);
             let staggered_pos = point(
                 px(f32::from(base_pos.x) + (i as f32 * STAGGER_X)),
@@ -227,6 +266,51 @@ impl Board {
         // Single history push and save for the entire batch
         self.push_history();
         self.mark_dirty();
+    }
+
+    /// Check if files should be copied to the board's storage
+    /// Returns true for iCloud boards (files need to be synced)
+    fn should_copy_files(&self) -> bool {
+        matches!(self.storage_location, crate::board_index::StoredLocation::ICloud)
+    }
+
+    /// Get the files directory for this board
+    pub fn files_dir(&self) -> PathBuf {
+        self.storage_location.base_path().join(&self.id).join("files")
+    }
+
+    /// Copy a file to the board's files directory
+    /// Returns the new path to the copied file
+    fn copy_file_to_board(&self, source: &PathBuf) -> Result<PathBuf, std::io::Error> {
+        let files_dir = self.files_dir();
+        std::fs::create_dir_all(&files_dir)?;
+
+        // Get original filename
+        let filename = source
+            .file_name()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "No filename"))?;
+
+        // Generate unique filename if it already exists
+        let mut dest = files_dir.join(filename);
+        if dest.exists() {
+            let stem = source.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+            let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() % 100000;
+
+            let new_name = if ext.is_empty() {
+                format!("{}_{}", stem, timestamp)
+            } else {
+                format!("{}_{}.{}", stem, timestamp, ext)
+            };
+            dest = files_dir.join(new_name);
+        }
+
+        std::fs::copy(source, &dest)?;
+        info!("Copied file to board storage: {:?} -> {:?}", source, dest);
+        Ok(dest)
     }
 
     /// Add URL (YouTube or generic link)
@@ -375,18 +459,19 @@ impl Board {
     }
 
     /// Flush save if dirty (call this periodically or on app idle)
-    pub fn flush_save(&mut self) {
+    /// Returns Ok(true) if saved successfully, Ok(false) if not dirty, Err on failure
+    pub fn flush_save(&mut self) -> Result<bool, BoardError> {
         if self.dirty {
-            self.save_immediate();
+            self.try_save()?;
             self.dirty = false;
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 
-    /// Force immediate save (used when leaving board).
-    ///
-    /// Logs any errors but doesn't propagate them since this is
-    /// typically called during cleanup.
-    pub fn save_immediate(&self) {
+    /// Try to save, returning any errors
+    pub fn try_save(&self) -> Result<(), BoardError> {
         let state = BoardState {
             canvas_offset: (
                 f32::from(self.canvas_offset.x),
@@ -396,12 +481,24 @@ impl Board {
             items: self.items.clone(),
             next_item_id: self.next_item_id,
         };
-        let board_path = BoardIndex::board_path(&self.id);
 
-        if let Err(e) = state.save_to_path(&board_path) {
+        // Get path from board index (supports custom storage locations)
+        let index = BoardIndex::load();
+        let board_path = index.get_board_path(&self.id)
+            .unwrap_or_else(|| BoardIndex::board_path(&self.id));
+
+        state.save_to_path(&board_path)?;
+        debug!("Board '{}' saved with {} items", self.id, self.items.len());
+        Ok(())
+    }
+
+    /// Force immediate save (used when leaving board).
+    ///
+    /// Logs any errors but doesn't propagate them since this is
+    /// typically called during cleanup.
+    pub fn save_immediate(&self) {
+        if let Err(e) = self.try_save() {
             error!("Failed to save board '{}': {}", self.id, e);
-        } else {
-            debug!("Board '{}' saved with {} items", self.id, self.items.len());
         }
     }
 

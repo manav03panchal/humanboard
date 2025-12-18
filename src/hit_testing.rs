@@ -15,6 +15,7 @@
 //! - **Shape border**: For shape items, only the border is clickable
 //! - **Splitter**: The divider between canvas and preview panel
 
+use crate::constants::{DOCK_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT, MIN_HIT_AREA, SPLITTER_WIDTH};
 use crate::types::ItemContent;
 use gpui::*;
 
@@ -74,12 +75,12 @@ pub struct HitTestConfig {
 impl Default for HitTestConfig {
     fn default() -> Self {
         Self {
-            header_height: 40.0,
-            dock_width: 48.0,
-            footer_height: 28.0,
+            header_height: HEADER_HEIGHT,
+            dock_width: DOCK_WIDTH,
+            footer_height: FOOTER_HEIGHT,
             resize_corner_size: 30.0,
-            splitter_width: 16.0,
-            min_border_hit_area: 8.0,
+            splitter_width: SPLITTER_WIDTH,
+            min_border_hit_area: MIN_HIT_AREA,
         }
     }
 }

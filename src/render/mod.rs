@@ -15,8 +15,8 @@ pub mod preview;
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use dock::render_tool_dock;
 pub use overlays::{
-    render_command_palette, render_footer_bar, render_header_bar, render_settings_modal,
-    render_shortcuts_overlay,
+    render_command_palette, render_create_board_modal, render_footer_bar, render_header_bar,
+    render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
     render_preview_panel, render_selected_item_label, render_splitter, render_tab_bar,
@@ -48,6 +48,9 @@ pub const UI_FONT: &str = "Iosevka Nerd Font";
 
 impl Render for Humanboard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Start frame timing
+        self.perf_monitor.begin_frame();
+
         self.update_fps();
 
         // Process any pending command from Enter key press
@@ -70,16 +73,30 @@ impl Render for Humanboard {
         // Remove expired toasts
         self.toast_manager.remove_expired();
 
+        // Process completed background tasks
+        self.background.process_results();
+
+        // Check for settings file changes
+        self.check_settings_reload(cx);
+
         // Check for debounced save
         if let Some(ref mut board) = self.board {
             if board.should_save() {
-                board.flush_save();
+                if let Err(e) = board.flush_save() {
+                    // Show error toast for save failures
+                    self.toast_manager.push(
+                        crate::notifications::Toast::error(format!("Save failed: {}", e))
+                    );
+                }
             }
         }
 
         // Wrap everything in a container with overlays on top
         let bg = cx.theme().background;
         let toasts = self.toast_manager.toasts().to_vec();
+
+        // End frame timing (measures our render logic, not GPUI's paint)
+        self.perf_monitor.end_frame();
 
         div()
             .size_full()
@@ -97,6 +114,14 @@ impl Render for Humanboard {
                     self.settings_theme_index,
                     &self.settings_theme_scroll,
                     self.settings_tab,
+                    &self.focus.modal,
+                    cx,
+                ))
+            })
+            .when(self.show_create_board_modal && self.create_board_input.is_some(), |d| {
+                d.child(render_create_board_modal(
+                    self.create_board_input.as_ref().unwrap(),
+                    &self.create_board_location,
                     &self.focus.modal,
                     cx,
                 ))
@@ -138,7 +163,7 @@ impl Humanboard {
                     }),
                 )
             })
-            .on_action(cx.listener(|this, _: &NewBoard, _, cx| this.create_new_board(cx)))
+            .on_action(cx.listener(|this, _: &NewBoard, window, cx| this.create_new_board(window, cx)))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _, cx| this.toggle_shortcuts(cx)))
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)),
@@ -164,6 +189,7 @@ impl Humanboard {
                 self.editing_board_id.as_deref(),
                 self.edit_input.as_ref(),
                 deleting_board,
+                self.show_trash,
                 cx,
             ))
     }

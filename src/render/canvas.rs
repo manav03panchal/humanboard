@@ -18,16 +18,67 @@ use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme as _, h_flex, v_flex};
 use std::collections::HashMap;
 
+/// Theme-aware colors for different content types
+#[derive(Clone, Copy)]
+pub struct ContentTypeColors {
+    pub video: Hsla,
+    pub audio: Hsla,
+    pub text: Hsla,
+    pub pdf: Hsla,
+    pub link: Hsla,
+    pub youtube: Hsla,
+    pub unknown: Hsla,
+    pub border: Hsla,
+}
+
+impl ContentTypeColors {
+    /// Create content type colors from the current theme
+    pub fn from_theme(theme: &gpui_component::theme::Theme) -> Self {
+        let is_dark = theme.mode.is_dark();
+
+        // Use theme-aware colors with good contrast in both light and dark modes
+        // Colors are chosen to be visually distinct while respecting theme luminance
+        let base_saturation = if is_dark { 0.5 } else { 0.6 };
+        let base_lightness = if is_dark { 0.4 } else { 0.55 };
+        let alpha = 0.9;
+
+        Self {
+            video: hsla(280.0 / 360.0, base_saturation, base_lightness, alpha),    // Purple for video
+            audio: hsla(320.0 / 360.0, base_saturation, base_lightness, alpha),    // Pink for audio
+            text: hsla(210.0 / 360.0, base_saturation, base_lightness, alpha),     // Blue for text
+            pdf: hsla(25.0 / 360.0, base_saturation + 0.1, base_lightness, alpha), // Orange for PDF
+            link: hsla(180.0 / 360.0, base_saturation, base_lightness, alpha),     // Cyan for links
+            youtube: hsla(0.0, 0.7, if is_dark { 0.45 } else { 0.5 }, alpha),      // Red for YouTube
+            unknown: theme.muted,
+            border: theme.border.opacity(0.5),
+        }
+    }
+
+    /// Get color for a specific content type
+    pub fn for_content(&self, content: &ItemContent) -> Hsla {
+        match content {
+            ItemContent::Video(_) => self.video,
+            ItemContent::Audio(_) => self.audio,
+            ItemContent::Text(_) => self.text,
+            ItemContent::Pdf { .. } => self.pdf,
+            ItemContent::Link(_) => self.link,
+            ItemContent::YouTube(_) => self.youtube,
+            _ => self.unknown,
+        }
+    }
+}
+
 /// Render the main canvas with item backgrounds
 pub fn render_canvas(
     canvas_offset: Point<Pixels>,
     zoom: f32,
     items: Vec<CanvasItem>,
+    colors: ContentTypeColors,
 ) -> impl IntoElement {
     canvas(
         move |_bounds, _window, _cx| (),
         move |bounds, _data, window, _cx| {
-            render_item_backgrounds(bounds, window, &items, canvas_offset, zoom);
+            render_item_backgrounds(bounds, window, &items, canvas_offset, zoom, colors);
         },
     )
     .absolute()
@@ -41,6 +92,7 @@ fn render_item_backgrounds(
     items: &[CanvasItem],
     canvas_offset: Point<Pixels>,
     zoom: f32,
+    colors: ContentTypeColors,
 ) {
     for item in items {
         // Skip items that render themselves (images, markdown cards, code files, shapes, arrows, textboxes)
@@ -64,24 +116,15 @@ fn render_item_backgrounds(
             size: size(px(item.size.0 * zoom), px(item.size.1 * zoom)),
         };
 
-        // Use semantic colors based on content type for better theme integration
-        // Each type has a distinct hue for visual differentiation
-        let bg_color = match &item.content {
-            ItemContent::Video(_) => hsla(280.0 / 360.0, 0.6, 0.45, 0.85), // Purple/magenta for video
-            ItemContent::Audio(_) => hsla(320.0 / 360.0, 0.6, 0.45, 0.85), // Pink/magenta for audio
-            ItemContent::Text(_) => hsla(210.0 / 360.0, 0.6, 0.45, 0.85),  // Blue for text
-            ItemContent::Pdf { .. } => hsla(15.0 / 360.0, 0.7, 0.5, 0.85), // Orange for documents
-            ItemContent::Link(_) => hsla(180.0 / 360.0, 0.6, 0.4, 0.85),   // Cyan for links
-            ItemContent::YouTube(_) => hsla(0.0 / 360.0, 0.75, 0.5, 0.85), // Red for YouTube
-            _ => hsla(0.0, 0.0, 0.4, 0.85),                                // Gray for unknown
-        };
+        // Use theme-aware colors for content types
+        let bg_color = colors.for_content(&item.content);
 
         window.paint_quad(quad(
             item_bounds,
             px(8.0 * zoom),
             bg_color,
             px(2.0 * zoom),
-            hsla(0.0, 0.0, 1.0, 0.3),
+            colors.border,
             Default::default(),
         ));
     }
@@ -425,12 +468,9 @@ fn render_item_content(
             if is_editing {
                 if let Some(input) = textbox_input {
                     // Render the input field for inline editing (multiline)
-                    // No background - transparent textbox with just a border
                     div()
                         .size_full()
                         .rounded(px(4.0 * zoom))
-                        .border_1()
-                        .border_color(fg.opacity(0.3))
                         .overflow_hidden()
                         .child(Input::new(input).appearance(false).size_full())
                 } else {
@@ -649,6 +689,11 @@ pub fn render_items(
             let h = item.size.1 * zoom;
             let is_selected = selected_items.contains(&item.id);
 
+            // Check if this textbox is currently being edited
+            let is_editing_this = editing_textbox_id == Some(item.id);
+            // Don't show selection border while editing textbox (it has its own editing border)
+            let show_selection = is_selected && !is_editing_this;
+
             div()
                 .absolute()
                 .left(px(x))
@@ -668,7 +713,7 @@ pub fn render_items(
                     muted_bg,
                     danger,
                 ))
-                .when(is_selected, |d| {
+                .when(show_selection, |d| {
                     d
                         // Selection border
                         .border_2()
@@ -709,13 +754,14 @@ pub fn render_canvas_area(
     let bg = cx.theme().background;
     let primary = cx.theme().primary;
     let fg = cx.theme().foreground;
+    let content_colors = ContentTypeColors::from_theme(cx.theme());
 
     div()
         .size_full()
         .bg(bg)
         .overflow_hidden()
         .relative()
-        .child(render_canvas(canvas_offset, zoom, items.to_vec()))
+        .child(render_canvas(canvas_offset, zoom, items.to_vec(), content_colors))
         .children(render_items(
             items,
             canvas_offset,
