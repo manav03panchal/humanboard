@@ -343,6 +343,7 @@ pub struct Humanboard {
     pub preview_search_current: usize,  // Current match index
     pub dragging_splitter: bool,
     pub splitter_drag_start: Option<Point<Pixels>>,
+    pub dragging_pane_splitter: bool, // Dragging the splitter between split panes
     pub last_drop_pos: Option<Point<Pixels>>,
     pub file_drop_rx: Option<Receiver<(Point<Pixels>, Vec<PathBuf>)>>,
 
@@ -457,6 +458,7 @@ impl Humanboard {
             preview_search_current: 0,
             dragging_splitter: false,
             splitter_drag_start: None,
+            dragging_pane_splitter: false,
             last_drop_pos: None,
             file_drop_rx: None,
             show_shortcuts: false,
@@ -1571,6 +1573,8 @@ impl Humanboard {
             };
 
             // Calculate pane bounds (left/top pane and right/bottom pane)
+            let pane_ratio = preview.pane_ratio;
+            let splitter_size = 6.0; // Splitter handle size
             let (
                 left_pane_x,
                 left_pane_y,
@@ -1581,31 +1585,38 @@ impl Humanboard {
                 right_pane_w,
                 right_pane_h,
             ) = if is_pane_split {
-                let gap = 4.0; // Gap between panes
                 if is_horizontal_split {
-                    // Top/Bottom split
-                    let pane_height = (panel_height - tab_bar_height * 2.0 - gap) / 2.0;
+                    // Top/Bottom split - use pane_ratio for heights
+                    let available_height = panel_height - tab_bar_height * 2.0 - splitter_size;
+                    let first_pane_height = available_height * pane_ratio;
+                    let second_pane_height = available_height * (1.0 - pane_ratio);
                     (
                         panel_x,
                         panel_y + tab_bar_height,
                         panel_width,
-                        pane_height,
+                        first_pane_height,
                         panel_x,
-                        panel_y + tab_bar_height + pane_height + gap + tab_bar_height,
+                        panel_y
+                            + tab_bar_height
+                            + first_pane_height
+                            + splitter_size
+                            + tab_bar_height,
                         panel_width,
-                        pane_height,
+                        second_pane_height,
                     )
                 } else {
-                    // Left/Right split
-                    let pane_width = (panel_width - gap) / 2.0;
+                    // Left/Right split - use pane_ratio for widths
+                    let available_width = panel_width - splitter_size;
+                    let first_pane_width = available_width * pane_ratio;
+                    let second_pane_width = available_width * (1.0 - pane_ratio);
                     (
                         panel_x,
                         panel_y + tab_bar_height,
-                        pane_width,
+                        first_pane_width,
                         panel_height - tab_bar_height,
-                        panel_x + pane_width + gap,
+                        panel_x + first_pane_width + splitter_size,
                         panel_y + tab_bar_height,
-                        pane_width,
+                        second_pane_width,
                         panel_height - tab_bar_height,
                     )
                 }

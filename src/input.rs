@@ -206,7 +206,7 @@ impl Humanboard {
                     ));
                 }
             }
-        // Reset focus to canvas for non-textbox interactions
+            // Reset focus to canvas for non-textbox interactions
             self.focus.force_canvas_focus(window);
         } else {
             // Clicked on empty canvas - reset focus
@@ -259,9 +259,11 @@ impl Humanboard {
                 board.push_history();
                 // Force save after drag/resize completes
                 if let Err(e) = board.flush_save() {
-                    self.toast_manager.push(
-                        crate::notifications::Toast::error(format!("Save failed: {}", e))
-                    );
+                    self.toast_manager
+                        .push(crate::notifications::Toast::error(format!(
+                            "Save failed: {}",
+                            e
+                        )));
                 }
             }
         }
@@ -437,6 +439,7 @@ impl Humanboard {
         self.resize_start_pos = None;
         self.resize_start_font_size = None;
         self.dragging_splitter = false;
+        self.dragging_pane_splitter = false;
         self.splitter_drag_start = None;
         self.marquee_start = None;
         self.marquee_current = None;
@@ -464,7 +467,7 @@ impl Humanboard {
     ) {
         self.last_drop_pos = Some(event.position);
 
-        // Handle splitter dragging
+        // Handle splitter dragging (canvas/preview split)
         if self.dragging_splitter {
             if let Some(ref mut preview) = self.preview {
                 let bounds = window.bounds();
@@ -483,6 +486,68 @@ impl Humanboard {
                     }
                 }
                 cx.notify();
+            }
+            return;
+        }
+
+        // Handle pane splitter dragging (between split panes)
+        if self.dragging_pane_splitter {
+            if let Some(ref mut preview) = self.preview {
+                if preview.is_pane_split {
+                    let bounds = window.bounds();
+                    let window_width = f32::from(bounds.size.width);
+                    let window_height = f32::from(bounds.size.height);
+                    let mouse_x = f32::from(event.position.x);
+                    let mouse_y = f32::from(event.position.y);
+
+                    // Calculate panel bounds
+                    let header_height = 40.0;
+                    let footer_height = 28.0;
+                    let dock_width = 40.0;
+
+                    let (panel_start, panel_size) = match preview.split {
+                        SplitDirection::Vertical => {
+                            let panel_x =
+                                dock_width + (window_width - dock_width) * (1.0 - preview.size);
+                            let panel_width = (window_width - dock_width) * preview.size;
+                            if preview.pane_split_horizontal {
+                                // Top/bottom split within vertical panel
+                                let panel_y = header_height;
+                                let panel_height = window_height - header_height - footer_height;
+                                (panel_y, panel_height)
+                            } else {
+                                // Left/right split within vertical panel
+                                (panel_x, panel_width)
+                            }
+                        }
+                        SplitDirection::Horizontal => {
+                            let panel_y = header_height
+                                + (window_height - header_height - footer_height)
+                                    * (1.0 - preview.size);
+                            let panel_height =
+                                (window_height - header_height - footer_height) * preview.size;
+                            if preview.pane_split_horizontal {
+                                // Top/bottom split
+                                (panel_y, panel_height)
+                            } else {
+                                // Left/right split
+                                (dock_width, window_width - dock_width)
+                            }
+                        }
+                    };
+
+                    // Calculate new ratio based on mouse position
+                    let new_ratio = if preview.pane_split_horizontal {
+                        // Horizontal pane split (top/bottom)
+                        ((mouse_y - panel_start) / panel_size).clamp(0.2, 0.8)
+                    } else {
+                        // Vertical pane split (left/right)
+                        ((mouse_x - panel_start) / panel_size).clamp(0.2, 0.8)
+                    };
+
+                    preview.pane_ratio = new_ratio;
+                    cx.notify();
+                }
             }
             return;
         }

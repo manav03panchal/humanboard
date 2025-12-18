@@ -549,11 +549,13 @@ pub fn render_split_panes(
     cx: &mut Context<Humanboard>,
 ) -> Div {
     use crate::app::{FocusedPane, SplitDropZone};
+    use gpui::DefiniteLength::Fraction;
 
     let left_focused = preview.focused_pane == FocusedPane::Left;
     let right_focused = preview.focused_pane == FocusedPane::Right;
     let is_horizontal = preview.pane_split_horizontal;
     let is_dragging = dragging_tab.is_some();
+    let pane_ratio = preview.pane_ratio;
 
     let first_pane = render_pane(
         "first-pane",
@@ -588,6 +590,7 @@ pub fn render_split_panes(
     );
 
     // Wrap panes with drop zone overlays when dragging
+    // Use Fraction for sizing based on pane_ratio
     let first_pane_wrapped = if is_dragging {
         let target_zone = if is_horizontal {
             SplitDropZone::Top
@@ -599,7 +602,8 @@ pub fn render_split_panes(
 
         div()
             .id("first-pane-drop")
-            .flex_1()
+            .when(is_horizontal, |d| d.h(Fraction(pane_ratio)).w_full())
+            .when(!is_horizontal, |d| d.w(Fraction(pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
             .relative()
@@ -638,7 +642,8 @@ pub fn render_split_panes(
     } else {
         div()
             .id("first-pane-wrap")
-            .flex_1()
+            .when(is_horizontal, |d| d.h(Fraction(pane_ratio)).w_full())
+            .when(!is_horizontal, |d| d.w(Fraction(pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
             .child(first_pane)
@@ -655,7 +660,8 @@ pub fn render_split_panes(
 
         div()
             .id("second-pane-drop")
-            .flex_1()
+            .when(is_horizontal, |d| d.h(Fraction(1.0 - pane_ratio)).w_full())
+            .when(!is_horizontal, |d| d.w(Fraction(1.0 - pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
             .relative()
@@ -694,30 +700,82 @@ pub fn render_split_panes(
     } else {
         div()
             .id("second-pane-wrap")
-            .flex_1()
+            .when(is_horizontal, |d| d.h(Fraction(1.0 - pane_ratio)).w_full())
+            .when(!is_horizontal, |d| d.w(Fraction(1.0 - pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
             .child(second_pane)
     };
 
+    // Pane splitter (draggable divider)
+    let pane_splitter = render_pane_splitter(is_horizontal, cx);
+
     if is_horizontal {
-        // Top/Bottom split - use flex_1 to fill parent
+        // Top/Bottom split
         v_flex()
             .flex_1()
             .min_h_0()
             .w_full()
-            .gap_1()
             .child(first_pane_wrapped)
+            .child(pane_splitter)
             .child(second_pane_wrapped)
     } else {
-        // Left/Right split - use flex_1 to fill parent
+        // Left/Right split
         h_flex()
             .flex_1()
             .min_w_0()
             .h_full()
-            .gap_1()
             .child(first_pane_wrapped)
+            .child(pane_splitter)
             .child(second_pane_wrapped)
+    }
+}
+
+/// Render the draggable splitter between split panes
+fn render_pane_splitter(is_horizontal: bool, cx: &mut Context<Humanboard>) -> Stateful<Div> {
+    let border = cx.theme().border;
+    let list_hover = cx.theme().list_hover;
+
+    if is_horizontal {
+        // Horizontal splitter (for top/bottom split)
+        div()
+            .id("pane-splitter")
+            .h(px(6.0))
+            .w_full()
+            .cursor(CursorStyle::ResizeUpDown)
+            .bg(gpui::transparent_black())
+            .hover(|s| s.bg(list_hover))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                    this.dragging_pane_splitter = true;
+                    cx.notify();
+                }),
+            )
+            .child(div().h(px(2.0)).w(px(40.0)).bg(border).rounded(px(1.0)))
+    } else {
+        // Vertical splitter (for left/right split)
+        div()
+            .id("pane-splitter")
+            .w(px(6.0))
+            .h_full()
+            .cursor(CursorStyle::ResizeLeftRight)
+            .bg(gpui::transparent_black())
+            .hover(|s| s.bg(list_hover))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                    this.dragging_pane_splitter = true;
+                    cx.notify();
+                }),
+            )
+            .child(div().w(px(2.0)).h(px(40.0)).bg(border).rounded(px(1.0)))
     }
 }
 
