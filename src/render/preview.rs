@@ -526,6 +526,8 @@ fn render_pane(
             div()
                 .id(content_id)
                 .flex_1()
+                .min_h_0()
+                .min_w_0()
                 .overflow_hidden()
                 .when_some(tabs.get(active_tab), |d, tab| {
                     d.child(render_tab_content(tab, true, active_tab, cx))
@@ -543,13 +545,15 @@ pub fn render_split_panes(
     search_input: Option<&Entity<gpui_component::input::InputState>>,
     search_match_count: usize,
     search_current: usize,
+    split_zone: Option<crate::app::SplitDropZone>,
     cx: &mut Context<Humanboard>,
 ) -> Div {
-    use crate::app::FocusedPane;
+    use crate::app::{FocusedPane, SplitDropZone};
 
     let left_focused = preview.focused_pane == FocusedPane::Left;
     let right_focused = preview.focused_pane == FocusedPane::Right;
     let is_horizontal = preview.pane_split_horizontal;
+    let is_dragging = dragging_tab.is_some();
 
     let first_pane = render_pane(
         "first-pane",
@@ -583,20 +587,137 @@ pub fn render_split_panes(
         cx,
     );
 
-    if is_horizontal {
-        // Top/Bottom split
-        v_flex()
-            .size_full()
-            .gap_1()
+    // Wrap panes with drop zone overlays when dragging
+    let first_pane_wrapped = if is_dragging {
+        let target_zone = if is_horizontal {
+            SplitDropZone::Top
+        } else {
+            SplitDropZone::Left
+        };
+        let is_active = split_zone == Some(target_zone);
+        let primary = cx.theme().primary;
+
+        div()
+            .id("first-pane-drop")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .relative()
             .child(first_pane)
-            .child(second_pane)
+            .child(
+                // Drop zone overlay
+                div()
+                    .id("first-pane-overlay")
+                    .absolute()
+                    .inset_0()
+                    .bg(if is_active {
+                        primary.opacity(0.2)
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .border_2()
+                    .border_color(if is_active {
+                        primary
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .rounded(px(4.0))
+                    .on_mouse_move(
+                        cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
+                            this.update_tab_drag_position(event.position, cx);
+                            this.set_tab_drag_split_zone(Some(target_zone), cx);
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _event, _window, cx| {
+                            this.finish_tab_drag(cx);
+                        }),
+                    ),
+            )
     } else {
-        // Left/Right split
-        h_flex()
-            .size_full()
-            .gap_1()
+        div()
+            .id("first-pane-wrap")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
             .child(first_pane)
+    };
+
+    let second_pane_wrapped = if is_dragging {
+        let target_zone = if is_horizontal {
+            SplitDropZone::Bottom
+        } else {
+            SplitDropZone::Right
+        };
+        let is_active = split_zone == Some(target_zone);
+        let primary = cx.theme().primary;
+
+        div()
+            .id("second-pane-drop")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .relative()
             .child(second_pane)
+            .child(
+                // Drop zone overlay
+                div()
+                    .id("second-pane-overlay")
+                    .absolute()
+                    .inset_0()
+                    .bg(if is_active {
+                        primary.opacity(0.2)
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .border_2()
+                    .border_color(if is_active {
+                        primary
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .rounded(px(4.0))
+                    .on_mouse_move(
+                        cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
+                            this.update_tab_drag_position(event.position, cx);
+                            this.set_tab_drag_split_zone(Some(target_zone), cx);
+                        }),
+                    )
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _event, _window, cx| {
+                            this.finish_tab_drag(cx);
+                        }),
+                    ),
+            )
+    } else {
+        div()
+            .id("second-pane-wrap")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .child(second_pane)
+    };
+
+    if is_horizontal {
+        // Top/Bottom split - use flex_1 to fill parent
+        v_flex()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .gap_1()
+            .child(first_pane_wrapped)
+            .child(second_pane_wrapped)
+    } else {
+        // Left/Right split - use flex_1 to fill parent
+        h_flex()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .gap_1()
+            .child(first_pane_wrapped)
+            .child(second_pane_wrapped)
     }
 }
 
@@ -613,10 +734,11 @@ pub fn render_tab_content(
     let muted_fg = cx.theme().muted_foreground;
 
     match tab {
-        PreviewTab::Pdf { webview, .. } => div()
-            .size_full()
-            .overflow_hidden()
-            .when_some(webview.as_ref(), |d, wv| d.child(wv.webview())),
+        PreviewTab::Pdf { .. } => {
+            // PDF webviews are positioned explicitly via set_bounds in ensure_pdf_webview
+            // We just need an empty container - the webview renders as a native overlay
+            div().size_full()
+        }
         PreviewTab::Markdown {
             content,
             editing,

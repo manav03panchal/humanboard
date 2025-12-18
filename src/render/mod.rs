@@ -530,6 +530,7 @@ impl Humanboard {
                                             self.preview_search.as_ref(),
                                             self.preview_search_matches.len(),
                                             self.preview_search_current,
+                                            self.tab_drag_split_zone,
                                             cx,
                                         ))
                                     } else {
@@ -650,6 +651,7 @@ impl Humanboard {
                                             self.preview_search.as_ref(),
                                             self.preview_search_matches.len(),
                                             self.preview_search_current,
+                                            self.tab_drag_split_zone,
                                             cx,
                                         ))
                                     } else {

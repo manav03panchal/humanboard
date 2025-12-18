@@ -1485,14 +1485,31 @@ impl Humanboard {
         };
 
         if let Some(ref mut preview) = self.preview {
-            // Check if file is already open in a tab
+            // Check if file is already open in left pane
             if let Some(index) = preview.tabs.iter().position(|t| t.path() == &path) {
                 // File already open - just switch to it and make permanent if not preview mode
                 if !as_preview {
                     preview.tabs[index].make_permanent();
                 }
                 preview.active_tab = index;
-            } else if as_preview {
+                preview.focused_pane = FocusedPane::Left;
+                cx.notify();
+                return;
+            }
+            // Check if file is already open in right pane (when split)
+            if preview.is_pane_split {
+                if let Some(index) = preview.right_tabs.iter().position(|t| t.path() == &path) {
+                    if !as_preview {
+                        preview.right_tabs[index].make_permanent();
+                    }
+                    preview.right_active_tab = index;
+                    preview.focused_pane = FocusedPane::Right;
+                    cx.notify();
+                    return;
+                }
+            }
+            // File not open yet - add it
+            if as_preview {
                 // Preview mode: replace existing preview tab if one exists
                 if let Some(preview_idx) = preview.tabs.iter().position(|t| t.is_preview()) {
                     preview.tabs[preview_idx] = tab;
@@ -1519,16 +1536,101 @@ impl Humanboard {
     pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
         if let Some(ref mut preview) = self.preview {
             let active_tab = preview.active_tab;
+            let right_active_tab = preview.right_active_tab;
+            let is_pane_split = preview.is_pane_split;
+            let is_horizontal_split = preview.pane_split_horizontal;
 
-            // Ensure all PDF tabs have their WebViews created, and hide/show based on active
+            // Calculate preview panel bounds
+            let bounds = window.bounds();
+            let window_width = f32::from(bounds.size.width);
+            let window_height = f32::from(bounds.size.height);
+
+            // Preview panel position and size
+            let header_height = 40.0;
+            let footer_height = 28.0;
+            let dock_width = 40.0; // Tool dock on left
+            let tab_bar_height = 36.0;
+
+            let (panel_x, panel_y, panel_width, panel_height) = match preview.split {
+                SplitDirection::Vertical => {
+                    let panel_x = dock_width + (window_width - dock_width) * (1.0 - preview.size);
+                    let panel_y = header_height;
+                    let panel_width = (window_width - dock_width) * preview.size;
+                    let panel_height = window_height - header_height - footer_height;
+                    (panel_x, panel_y, panel_width, panel_height)
+                }
+                SplitDirection::Horizontal => {
+                    let panel_x = dock_width;
+                    let panel_y = header_height
+                        + (window_height - header_height - footer_height) * (1.0 - preview.size);
+                    let panel_width = window_width - dock_width;
+                    let panel_height =
+                        (window_height - header_height - footer_height) * preview.size;
+                    (panel_x, panel_y, panel_width, panel_height)
+                }
+            };
+
+            // Calculate pane bounds (left/top pane and right/bottom pane)
+            let (
+                left_pane_x,
+                left_pane_y,
+                left_pane_w,
+                left_pane_h,
+                right_pane_x,
+                right_pane_y,
+                right_pane_w,
+                right_pane_h,
+            ) = if is_pane_split {
+                let gap = 4.0; // Gap between panes
+                if is_horizontal_split {
+                    // Top/Bottom split
+                    let pane_height = (panel_height - tab_bar_height * 2.0 - gap) / 2.0;
+                    (
+                        panel_x,
+                        panel_y + tab_bar_height,
+                        panel_width,
+                        pane_height,
+                        panel_x,
+                        panel_y + tab_bar_height + pane_height + gap + tab_bar_height,
+                        panel_width,
+                        pane_height,
+                    )
+                } else {
+                    // Left/Right split
+                    let pane_width = (panel_width - gap) / 2.0;
+                    (
+                        panel_x,
+                        panel_y + tab_bar_height,
+                        pane_width,
+                        panel_height - tab_bar_height,
+                        panel_x + pane_width + gap,
+                        panel_y + tab_bar_height,
+                        pane_width,
+                        panel_height - tab_bar_height,
+                    )
+                }
+            } else {
+                // Single pane
+                (
+                    panel_x,
+                    panel_y + tab_bar_height,
+                    panel_width,
+                    panel_height - tab_bar_height,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0, // Right pane not used
+                )
+            };
+
+            // Ensure all PDF tabs in left pane have their WebViews created and positioned
             for (idx, tab) in preview.tabs.iter_mut().enumerate() {
                 if let PreviewTab::Pdf { path, webview, .. } = tab {
                     if webview.is_none() {
                         match PdfWebView::new(path.clone(), window, cx) {
                             Ok(wv) => {
-                                // Hide if not active tab
                                 if idx != active_tab {
-                                    wv.webview().update(cx, |view, _| view.hide());
+                                    wv.hide(cx);
                                 }
                                 *webview = Some(wv);
                             }
@@ -1536,12 +1638,50 @@ impl Humanboard {
                                 error!("Failed to create PDF WebView: {}", e);
                             }
                         }
-                    } else if let Some(wv) = webview {
-                        // Show/hide existing webviews based on active tab
+                    }
+
+                    if let Some(wv) = webview {
                         if idx == active_tab {
-                            wv.webview().update(cx, |view, _| view.show());
+                            wv.set_bounds(left_pane_x, left_pane_y, left_pane_w, left_pane_h, cx);
+                            wv.show(cx);
                         } else {
-                            wv.webview().update(cx, |view, _| view.hide());
+                            wv.hide(cx);
+                        }
+                    }
+                }
+            }
+
+            // Ensure all PDF tabs in right pane have their WebViews created and positioned (when split)
+            if is_pane_split {
+                for (idx, tab) in preview.right_tabs.iter_mut().enumerate() {
+                    if let PreviewTab::Pdf { path, webview, .. } = tab {
+                        if webview.is_none() {
+                            match PdfWebView::new(path.clone(), window, cx) {
+                                Ok(wv) => {
+                                    if idx != right_active_tab {
+                                        wv.hide(cx);
+                                    }
+                                    *webview = Some(wv);
+                                }
+                                Err(e) => {
+                                    error!("Failed to create PDF WebView for right pane: {}", e);
+                                }
+                            }
+                        }
+
+                        if let Some(wv) = webview {
+                            if idx == right_active_tab {
+                                wv.set_bounds(
+                                    right_pane_x,
+                                    right_pane_y,
+                                    right_pane_w,
+                                    right_pane_h,
+                                    cx,
+                                );
+                                wv.show(cx);
+                            } else {
+                                wv.hide(cx);
+                            }
                         }
                     }
                 }
@@ -1552,6 +1692,9 @@ impl Humanboard {
     /// Ensure code editors are created for code tabs (for syntax-highlighted viewing)
     pub fn ensure_code_editors(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
+            let is_split = preview.is_pane_split;
+
+            // Ensure code editors for left pane
             for tab in preview.tabs.iter_mut() {
                 if let PreviewTab::Code {
                     content,
@@ -1575,6 +1718,34 @@ impl Humanboard {
                         // Check if content changed (for dirty indicator)
                         let editor_content = ed.read(cx).text().to_string();
                         *dirty = editor_content != *content;
+                    }
+                }
+            }
+
+            // Ensure code editors for right pane (when split)
+            if is_split {
+                for tab in preview.right_tabs.iter_mut() {
+                    if let PreviewTab::Code {
+                        content,
+                        language,
+                        editor,
+                        dirty,
+                        ..
+                    } = tab
+                    {
+                        if editor.is_none() {
+                            let content_clone = content.clone();
+                            let lang = language.clone();
+                            *editor = Some(cx.new(|cx| {
+                                InputState::new(_window, cx)
+                                    .code_editor(lang)
+                                    .line_number(true)
+                                    .default_value(content_clone)
+                            }));
+                        } else if let Some(ed) = editor {
+                            let editor_content = ed.read(cx).text().to_string();
+                            *dirty = editor_content != *content;
+                        }
                     }
                 }
             }
@@ -1985,31 +2156,66 @@ impl Humanboard {
 
     pub fn close_tab(&mut self, tab_index: usize, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
-            if tab_index < preview.tabs.len() {
-                // Don't close pinned tabs
-                if preview.tabs[tab_index].is_pinned() {
-                    return;
-                }
-
-                // Save to closed_tabs for recovery (max 20)
-                let closed_tab = preview.tabs.remove(tab_index);
-                preview.closed_tabs.push(closed_tab);
-                if preview.closed_tabs.len() > 20 {
-                    preview.closed_tabs.remove(0);
-                }
-
-                if preview.tabs.is_empty() {
-                    // No more tabs, close preview panel
-                    self.preview = None;
-                } else {
-                    // Adjust active tab if needed
-                    if preview.active_tab >= preview.tabs.len() {
-                        preview.active_tab = preview.tabs.len() - 1;
-                    } else if tab_index < preview.active_tab {
-                        preview.active_tab -= 1;
+            // Close tab in the focused pane
+            if preview.is_pane_split && preview.focused_pane == FocusedPane::Right {
+                // Closing from right pane
+                if tab_index < preview.right_tabs.len() {
+                    if preview.right_tabs[tab_index].is_pinned() {
+                        return;
                     }
+
+                    let closed_tab = preview.right_tabs.remove(tab_index);
+                    preview.closed_tabs.push(closed_tab);
+                    if preview.closed_tabs.len() > 20 {
+                        preview.closed_tabs.remove(0);
+                    }
+
+                    if preview.right_tabs.is_empty() {
+                        // Right pane empty, close the split
+                        preview.is_pane_split = false;
+                        preview.focused_pane = FocusedPane::Left;
+                    } else {
+                        if preview.right_active_tab >= preview.right_tabs.len() {
+                            preview.right_active_tab = preview.right_tabs.len() - 1;
+                        } else if tab_index < preview.right_active_tab {
+                            preview.right_active_tab -= 1;
+                        }
+                    }
+                    cx.notify();
                 }
-                cx.notify();
+            } else {
+                // Closing from left pane
+                if tab_index < preview.tabs.len() {
+                    if preview.tabs[tab_index].is_pinned() {
+                        return;
+                    }
+
+                    let closed_tab = preview.tabs.remove(tab_index);
+                    preview.closed_tabs.push(closed_tab);
+                    if preview.closed_tabs.len() > 20 {
+                        preview.closed_tabs.remove(0);
+                    }
+
+                    if preview.tabs.is_empty() {
+                        if preview.is_pane_split && !preview.right_tabs.is_empty() {
+                            // Left pane empty but right has tabs - move right to left
+                            preview.tabs = preview.right_tabs.drain(..).collect();
+                            preview.active_tab = preview.right_active_tab;
+                            preview.is_pane_split = false;
+                            preview.focused_pane = FocusedPane::Left;
+                        } else {
+                            // No tabs anywhere, close preview panel
+                            self.preview = None;
+                        }
+                    } else {
+                        if preview.active_tab >= preview.tabs.len() {
+                            preview.active_tab = preview.tabs.len() - 1;
+                        } else if tab_index < preview.active_tab {
+                            preview.active_tab -= 1;
+                        }
+                    }
+                    cx.notify();
+                }
             }
         }
     }
@@ -2153,34 +2359,52 @@ impl Humanboard {
         // Check if dropping on a split zone
         if let (Some(from), Some(zone)) = (self.dragging_tab, self.tab_drag_split_zone) {
             if let Some(ref mut preview) = self.preview {
-                if from < preview.tabs.len() {
-                    let tab = preview.tabs.remove(from);
+                // Determine which pane we're dragging from
+                let from_right_pane =
+                    preview.is_pane_split && preview.focused_pane == FocusedPane::Right;
 
-                    // Update active tab if needed
-                    if preview.active_tab >= preview.tabs.len() {
-                        preview.active_tab = preview.tabs.len().saturating_sub(1);
-                    } else if preview.active_tab > from {
-                        preview.active_tab -= 1;
+                // Get the source tabs list
+                let (source_tabs, source_active) = if from_right_pane {
+                    (&mut preview.right_tabs, &mut preview.right_active_tab)
+                } else {
+                    (&mut preview.tabs, &mut preview.active_tab)
+                };
+
+                if from < source_tabs.len() {
+                    let tab = source_tabs.remove(from);
+
+                    // Update source active tab
+                    if *source_active >= source_tabs.len() {
+                        *source_active = source_tabs.len().saturating_sub(1);
+                    } else if *source_active > from {
+                        *source_active -= 1;
                     }
 
-                    // Create split and add tab to appropriate pane
+                    // Hide webview before move
+                    if let PreviewTab::Pdf {
+                        webview: Some(wv), ..
+                    } = &tab
+                    {
+                        wv.hide(cx);
+                    }
+
+                    // Determine target based on zone
+                    let target_is_right =
+                        matches!(zone, SplitDropZone::Right | SplitDropZone::Bottom);
+
                     if !preview.is_pane_split {
+                        // Create new split
                         preview.is_pane_split = true;
                         preview.pane_ratio = 0.5;
-                        // Set direction based on zone
                         preview.pane_split_horizontal =
                             matches!(zone, SplitDropZone::Top | SplitDropZone::Bottom);
-                    }
 
-                    match zone {
-                        SplitDropZone::Right | SplitDropZone::Bottom => {
-                            // Tab goes to right/bottom pane
+                        if target_is_right {
                             preview.right_tabs.push(tab);
                             preview.right_active_tab = preview.right_tabs.len() - 1;
                             preview.focused_pane = FocusedPane::Right;
-                        }
-                        SplitDropZone::Left | SplitDropZone::Top => {
-                            // Move current left tabs to right/bottom, put new tab in left/top
+                        } else {
+                            // Move existing tabs to right, put dragged tab in left
                             let left_tabs: Vec<PreviewTab> = preview.tabs.drain(..).collect();
                             preview.tabs.push(tab);
                             preview.active_tab = 0;
@@ -2188,6 +2412,29 @@ impl Humanboard {
                                 preview.right_tabs.push(t);
                             }
                             preview.right_active_tab = 0;
+                            preview.focused_pane = FocusedPane::Left;
+                        }
+                    } else {
+                        // Already split - move tab to target pane
+                        if target_is_right {
+                            preview.right_tabs.push(tab);
+                            preview.right_active_tab = preview.right_tabs.len() - 1;
+                            preview.focused_pane = FocusedPane::Right;
+                        } else {
+                            preview.tabs.push(tab);
+                            preview.active_tab = preview.tabs.len() - 1;
+                            preview.focused_pane = FocusedPane::Left;
+                        }
+
+                        // Check if source pane is now empty - close split
+                        if from_right_pane && preview.right_tabs.is_empty() {
+                            preview.is_pane_split = false;
+                            preview.focused_pane = FocusedPane::Left;
+                        } else if !from_right_pane && preview.tabs.is_empty() {
+                            // Move right tabs to left
+                            preview.tabs = preview.right_tabs.drain(..).collect();
+                            preview.active_tab = preview.right_active_tab;
+                            preview.is_pane_split = false;
                             preview.focused_pane = FocusedPane::Left;
                         }
                     }
@@ -2430,7 +2677,11 @@ impl Humanboard {
 
     pub fn close_current_tab(&mut self, cx: &mut Context<Self>) {
         if let Some(ref preview) = self.preview {
-            let active = preview.active_tab;
+            let active = if preview.is_pane_split && preview.focused_pane == FocusedPane::Right {
+                preview.right_active_tab
+            } else {
+                preview.active_tab
+            };
             self.close_tab(active, cx);
         }
     }
