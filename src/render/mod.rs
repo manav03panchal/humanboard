@@ -567,10 +567,16 @@ impl Humanboard {
                                                     .flex_1()
                                                     .overflow_hidden()
                                                     .relative()
-                                                    .when_some(tabs.get(active_tab), |d, tab| {
-                                                        d.child(render_tab_content(
-                                                            tab, true, active_tab, cx,
-                                                        ))
+                                                    // Hide content when dragging (webviews overlap everything)
+                                                    .when(dragging.is_none(), |d| {
+                                                        d.when_some(
+                                                            tabs.get(active_tab),
+                                                            |d, tab| {
+                                                                d.child(render_tab_content(
+                                                                    tab, true, active_tab, cx,
+                                                                ))
+                                                            },
+                                                        )
                                                     })
                                                     // Show drop zones when dragging a tab
                                                     .when(dragging.is_some(), |d| {
@@ -681,10 +687,16 @@ impl Humanboard {
                                                     .flex_1()
                                                     .overflow_hidden()
                                                     .relative()
-                                                    .when_some(tabs.get(active_tab), |d, tab| {
-                                                        d.child(render_tab_content(
-                                                            tab, true, active_tab, cx,
-                                                        ))
+                                                    // Hide content when dragging (webviews overlap everything)
+                                                    .when(dragging.is_none(), |d| {
+                                                        d.when_some(
+                                                            tabs.get(active_tab),
+                                                            |d, tab| {
+                                                                d.child(render_tab_content(
+                                                                    tab, true, active_tab, cx,
+                                                                ))
+                                                            },
+                                                        )
                                                     })
                                                     // Show drop zones when dragging a tab
                                                     .when(dragging.is_some(), |d| {
