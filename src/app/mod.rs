@@ -1633,7 +1633,7 @@ impl Humanboard {
 
             match preview.focused_pane {
                 FocusedPane::Left => {
-                    if !preview.tabs.is_empty() {
+                    if !preview.tabs.is_empty() && preview.active_tab < preview.tabs.len() {
                         let tab = preview.tabs.remove(preview.active_tab);
                         preview.right_tabs.push(tab);
                         preview.right_active_tab = preview.right_tabs.len() - 1;
@@ -1646,7 +1646,9 @@ impl Humanboard {
                     }
                 }
                 FocusedPane::Right => {
-                    if !preview.right_tabs.is_empty() {
+                    if !preview.right_tabs.is_empty()
+                        && preview.right_active_tab < preview.right_tabs.len()
+                    {
                         let tab = preview.right_tabs.remove(preview.right_active_tab);
                         preview.tabs.push(tab);
                         preview.active_tab = preview.tabs.len() - 1;
