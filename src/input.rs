@@ -613,6 +613,17 @@ impl Humanboard {
                             let height = width / MD_ASPECT_RATIO;
                             (width, height)
                         }
+                        Some(arrow_type) if arrow_type.starts_with("arrow_") => {
+                            // Arrows maintain aspect ratio to preserve diagonal angle
+                            // Calculate uniform scale factor from both deltas
+                            let scale_x = (start_size.0 + delta_x) / start_size.0;
+                            let scale_y = (start_size.1 + delta_y) / start_size.1;
+                            // Use the average of both scale factors for uniform scaling
+                            let scale = ((scale_x + scale_y) / 2.0).max(0.1);
+                            let width = (start_size.0 * scale).max(20.0);
+                            let height = (start_size.1 * scale).max(20.0);
+                            (width, height)
+                        }
                         _ => {
                             // Other items can resize freely
                             let width = (start_size.0 + delta_x).max(50.0);
