@@ -225,9 +225,10 @@ fn test_screen_to_canvas_conversion() {
     let screen_pos = point(px(300.0), px(150.0));
     let canvas_pos = board.screen_to_canvas(screen_pos);
 
-    // (300 - 100) / 2 = 100, (150 - 50) / 2 = 50
-    assert_eq!(f32::from(canvas_pos.x), 100.0);
-    assert_eq!(f32::from(canvas_pos.y), 50.0);
+    // (300 - 44 - 100) / 2 = 78, (150 - 40 - 50) / 2 = 30
+    // (accounts for dock width 44px and header height 40px)
+    assert_eq!(f32::from(canvas_pos.x), 78.0);
+    assert_eq!(f32::from(canvas_pos.y), 30.0);
 }
 
 #[test]
@@ -702,9 +703,8 @@ fn test_remove_item_with_undo() {
         ItemContent::Text("Second".to_string()),
     );
 
-    // Remove an item and push history
+    // Remove an item (remove_item internally calls push_history)
     board.remove_item(0);
-    board.push_history();
     assert_eq!(board.items.len(), 1);
     assert!(board.get_item(0).is_none());
     assert!(board.get_item(1).is_some());
