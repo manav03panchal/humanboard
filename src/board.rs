@@ -285,16 +285,23 @@ impl Board {
         let files_dir = self.files_dir();
         std::fs::create_dir_all(&files_dir)?;
 
-        // Get original filename
+        // Get original filename and sanitize it to prevent path traversal attacks
         let filename = source
             .file_name()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "No filename"))?;
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "No filename"))?
+            .to_str()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid filename encoding"))?;
+
+        // Sanitize filename: remove path separators and reject dangerous names
+        let sanitized = sanitize_filename(filename)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid filename"))?;
 
         // Generate unique filename if it already exists
-        let mut dest = files_dir.join(filename);
+        let mut dest = files_dir.join(&sanitized);
         if dest.exists() {
-            let stem = source.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
-            let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
+            let path = std::path::Path::new(&sanitized);
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -306,6 +313,21 @@ impl Board {
                 format!("{}_{}.{}", stem, timestamp, ext)
             };
             dest = files_dir.join(new_name);
+        }
+
+        // Final safety check: verify destination is within files_dir
+        let canonical_files_dir = files_dir.canonicalize().unwrap_or(files_dir.clone());
+        let canonical_dest = dest.parent()
+            .and_then(|p| p.canonicalize().ok())
+            .map(|p| p.join(dest.file_name().unwrap_or_default()));
+
+        if let Some(ref canonical) = canonical_dest {
+            if !canonical.starts_with(&canonical_files_dir) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "Path traversal attempt detected",
+                ));
+            }
         }
 
         std::fs::copy(source, &dest)?;
@@ -571,6 +593,38 @@ impl Board {
     pub fn new_for_test() -> Self {
         Self::new_empty("test-board".to_string())
     }
+}
+
+/// Sanitize a filename to prevent path traversal attacks.
+/// Returns None if the filename is invalid or dangerous.
+fn sanitize_filename(filename: &str) -> Option<String> {
+    // Reject empty filenames
+    if filename.is_empty() {
+        return None;
+    }
+
+    // Reject dangerous names
+    if filename == "." || filename == ".." {
+        return None;
+    }
+
+    // Remove any path separators (both Unix and Windows style)
+    let sanitized: String = filename
+        .chars()
+        .filter(|&c| c != '/' && c != '\\')
+        .collect();
+
+    // Reject if sanitization resulted in empty string or dangerous name
+    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
+        return None;
+    }
+
+    // Reject filenames that start with a dot followed by dot (hidden traversal)
+    if sanitized.starts_with("..") {
+        return None;
+    }
+
+    Some(sanitized)
 }
 
 #[cfg(test)]
