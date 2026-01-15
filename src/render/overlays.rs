@@ -70,7 +70,8 @@ pub fn render_header_bar(
                         .py_1()
                         .rounded(px(4.0))
                         .cursor(CursorStyle::PointingHand)
-                        .hover(|s| s.bg(list_hover))
+                        .hover(|s| s.bg(muted.opacity(0.5)))
+                        .active(|s| s.bg(muted.opacity(0.7)))
                         .text_sm()
                         .text_color(muted_fg)
                         .child("←")
@@ -141,6 +142,8 @@ pub fn render_header_bar(
                         })
                         .when(!is_open, |d| {
                             d.cursor(CursorStyle::PointingHand)
+                                .hover(|s| s.border_color(muted_fg.opacity(0.4)))
+                                .active(|s| s.bg(muted.opacity(0.3)))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.show_command_palette(window, cx);
                                 }))
