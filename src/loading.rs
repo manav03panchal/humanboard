@@ -109,12 +109,3 @@ pub fn render_text_skeleton(lines: usize, muted: Hsla) -> Div {
 
     container
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_loading_components_exist() {
-        // Basic compilation test
-        assert!(true);
-    }
-}

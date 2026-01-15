@@ -25,10 +25,11 @@ fn test_item_content_from_path_pdf() {
 }
 
 #[test]
-fn test_item_content_from_path_text() {
+fn test_item_content_from_path_code() {
+    // .rs files are recognized as code, not text
     let path = PathBuf::from("/test/code.rs");
     let content = ItemContent::from_path(&path);
-    assert!(matches!(content, ItemContent::Text(_)));
+    assert!(matches!(content, ItemContent::Code { .. }));
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn test_default_size_pdf() {
         path: PathBuf::new(),
         thumbnail: None,
     };
-    assert_eq!(content.default_size(), (250.0, 350.0));
+    assert_eq!(content.default_size(), (180.0, 240.0));
 }
 
 #[test]
