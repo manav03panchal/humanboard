@@ -811,11 +811,20 @@ impl Humanboard {
             }
         }
 
-        // Remove WebViews for deleted items
+        // Remove WebViews for deleted items (hide before dropping to prevent orphaned UI)
         let youtube_ids: std::collections::HashSet<u64> =
             youtube_items.iter().map(|(id, _)| *id).collect();
-        self.youtube_webviews
-            .retain(|id, _| youtube_ids.contains(id));
+        let ids_to_remove: Vec<u64> = self
+            .youtube_webviews
+            .keys()
+            .filter(|id| !youtube_ids.contains(id))
+            .copied()
+            .collect();
+        for id in ids_to_remove {
+            if let Some(webview) = self.youtube_webviews.remove(&id) {
+                webview.hide(cx);
+            }
+        }
     }
 
     pub fn ensure_audio_webviews(&mut self, window: &mut Window, cx: &mut App) {
@@ -853,10 +862,20 @@ impl Humanboard {
             }
         }
 
-        // Remove WebViews for deleted items
+        // Remove WebViews for deleted items (hide before dropping to prevent orphaned UI)
         let audio_ids: std::collections::HashSet<u64> =
             audio_items.iter().map(|(id, _)| *id).collect();
-        self.audio_webviews.retain(|id, _| audio_ids.contains(id));
+        let ids_to_remove: Vec<u64> = self
+            .audio_webviews
+            .keys()
+            .filter(|id| !audio_ids.contains(id))
+            .copied()
+            .collect();
+        for id in ids_to_remove {
+            if let Some(webview) = self.audio_webviews.remove(&id) {
+                webview.hide(cx);
+            }
+        }
     }
 
     pub fn ensure_video_webviews(&mut self, window: &mut Window, cx: &mut App) {
@@ -894,10 +913,20 @@ impl Humanboard {
             }
         }
 
-        // Remove WebViews for deleted items
+        // Remove WebViews for deleted items (hide before dropping to prevent orphaned UI)
         let video_ids: std::collections::HashSet<u64> =
             video_items.iter().map(|(id, _)| *id).collect();
-        self.video_webviews.retain(|id, _| video_ids.contains(id));
+        let ids_to_remove: Vec<u64> = self
+            .video_webviews
+            .keys()
+            .filter(|id| !video_ids.contains(id))
+            .copied()
+            .collect();
+        for id in ids_to_remove {
+            if let Some(webview) = self.video_webviews.remove(&id) {
+                webview.hide(cx);
+            }
+        }
     }
 
     /// Update webview visibility based on canvas viewport

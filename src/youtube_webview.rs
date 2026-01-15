@@ -174,6 +174,11 @@ impl YouTubeWebView {
     pub fn shutdown(&self) {
         self.shutdown_flag.store(true, Ordering::Relaxed);
     }
+
+    /// Hide the webview (should be called before dropping to prevent orphaned UI)
+    pub fn hide(&self, cx: &mut App) {
+        self.webview_entity.update(cx, |wv, _| wv.hide());
+    }
 }
 
 impl Drop for YouTubeWebView {

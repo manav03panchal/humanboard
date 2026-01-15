@@ -135,6 +135,11 @@ impl VideoWebView {
         })
     }
 
+    /// Hide the webview (should be called before dropping to prevent orphaned UI)
+    pub fn hide(&self, cx: &mut App) {
+        self.webview_entity.update(cx, |wv, _| wv.hide());
+    }
+
     fn serve_video_file(path: &PathBuf, request: tiny_http::Request) {
         let mut file = match std::fs::File::open(path) {
             Ok(f) => f,
