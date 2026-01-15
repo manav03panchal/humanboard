@@ -14,6 +14,7 @@ use humanboard::actions::{
     ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
+use humanboard::focus::FocusContext;
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::time::Instant;
@@ -255,72 +256,72 @@ fn register_keybindings(cx: &mut App) {
 
     // Canvas-specific shortcuts (undo/redo - code editor handles its own)
     cx.bind_keys([
-        KeyBinding::new("cmd-z", Undo, Some("Canvas")),
-        KeyBinding::new("ctrl-z", Undo, Some("Canvas")),
-        KeyBinding::new("cmd-shift-z", Redo, Some("Canvas")),
-        KeyBinding::new("ctrl-shift-z", Redo, Some("Canvas")),
-        KeyBinding::new("ctrl-y", Redo, Some("Canvas")), // Windows-style redo
+        KeyBinding::new("cmd-z", Undo, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-z", Undo, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("cmd-shift-z", Redo, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-shift-z", Redo, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-y", Redo, Some(FocusContext::KEY_CANVAS)), // Windows-style redo
     ]);
 
     // Save shortcuts for different contexts
     cx.bind_keys([
-        KeyBinding::new("cmd-s", SaveCode, Some("CodeEditor")),
-        KeyBinding::new("ctrl-s", SaveCode, Some("CodeEditor")),
-        KeyBinding::new("cmd-s", SaveCode, Some("Canvas")),
-        KeyBinding::new("ctrl-s", SaveCode, Some("Canvas")),
-        KeyBinding::new("cmd-s", SaveCode, Some("CanvasInputActive")),
-        KeyBinding::new("ctrl-s", SaveCode, Some("CanvasInputActive")),
+        KeyBinding::new("cmd-s", SaveCode, Some(FocusContext::KEY_CODE_EDITOR)),
+        KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_CODE_EDITOR)),
+        KeyBinding::new("cmd-s", SaveCode, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("cmd-s", SaveCode, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
+        KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
     ]);
 
     // Canvas-only shortcuts (not active when text input is focused)
     cx.bind_keys([
         // Selection actions
-        KeyBinding::new("backspace", DeleteSelected, Some("Canvas")),
-        KeyBinding::new("delete", DeleteSelected, Some("Canvas")),
-        KeyBinding::new("cmd-d", DuplicateSelected, Some("Canvas")),
-        KeyBinding::new("ctrl-d", DuplicateSelected, Some("Canvas")),
-        KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
-        KeyBinding::new("ctrl-a", SelectAll, Some("Canvas")),
-        KeyBinding::new("escape", DeselectAll, Some("Canvas")),
+        KeyBinding::new("backspace", DeleteSelected, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("delete", DeleteSelected, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("cmd-d", DuplicateSelected, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-d", DuplicateSelected, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("cmd-a", SelectAll, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-a", SelectAll, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("escape", DeselectAll, Some(FocusContext::KEY_CANVAS)),
         // Paste (handles URLs including YouTube)
-        KeyBinding::new("cmd-v", Paste, Some("Canvas")),
-        KeyBinding::new("ctrl-v", Paste, Some("Canvas")),
+        KeyBinding::new("cmd-v", Paste, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-v", Paste, Some(FocusContext::KEY_CANVAS)),
         // Command palette (cmd-k / ctrl-k toggles open/close)
-        KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
-        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("Canvas")),
+        KeyBinding::new("cmd-k", ToggleCommandPalette, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some(FocusContext::KEY_CANVAS)),
         // Arrow keys to nudge selected items
-        KeyBinding::new("up", NudgeUp, Some("Canvas")),
-        KeyBinding::new("down", NudgeDown, Some("Canvas")),
-        KeyBinding::new("left", NudgeLeft, Some("Canvas")),
-        KeyBinding::new("right", NudgeRight, Some("Canvas")),
+        KeyBinding::new("up", NudgeUp, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("down", NudgeDown, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("left", NudgeLeft, Some(FocusContext::KEY_CANVAS)),
+        KeyBinding::new("right", NudgeRight, Some(FocusContext::KEY_CANVAS)),
     ]);
 
     // Shortcuts that work even when input is active
     cx.bind_keys([
-        KeyBinding::new("cmd-k", ToggleCommandPalette, Some("CanvasInputActive")),
-        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("CanvasInputActive")),
-        KeyBinding::new("escape", CancelTextboxEdit, Some("CanvasInputActive")),
+        KeyBinding::new("cmd-k", ToggleCommandPalette, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
+        KeyBinding::new("escape", CancelTextboxEdit, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
     ]);
 
     // Landing page shortcuts
     cx.bind_keys([
-        KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Landing")),
-        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("Landing")),
+        KeyBinding::new("cmd-k", ToggleCommandPalette, Some(FocusContext::KEY_LANDING)),
+        KeyBinding::new("ctrl-k", ToggleCommandPalette, Some(FocusContext::KEY_LANDING)),
     ]);
 
     // Command palette navigation (higher priority than Input context)
     cx.bind_keys([
-        KeyBinding::new("up", CmdPaletteUp, Some("CommandPalette")),
-        KeyBinding::new("down", CmdPaletteDown, Some("CommandPalette")),
-        KeyBinding::new("enter", CmdPaletteSelect, Some("CommandPalette")),
+        KeyBinding::new("up", CmdPaletteUp, Some(FocusContext::KEY_COMMAND_PALETTE)),
+        KeyBinding::new("down", CmdPaletteDown, Some(FocusContext::KEY_COMMAND_PALETTE)),
+        KeyBinding::new("enter", CmdPaletteSelect, Some(FocusContext::KEY_COMMAND_PALETTE)),
     ]);
 
     // Modal context shortcuts (settings, dialogs)
     // Focus trap: Tab and Shift+Tab are consumed to prevent focus from escaping modal
     cx.bind_keys([
-        KeyBinding::new("escape", OpenSettings, Some("Modal")),
-        KeyBinding::new("tab", ModalFocusTrap, Some("Modal")),
-        KeyBinding::new("shift-tab", ModalFocusTrap, Some("Modal")),
+        KeyBinding::new("escape", OpenSettings, Some(FocusContext::KEY_MODAL)),
+        KeyBinding::new("tab", ModalFocusTrap, Some(FocusContext::KEY_MODAL)),
+        KeyBinding::new("shift-tab", ModalFocusTrap, Some(FocusContext::KEY_MODAL)),
     ]);
 
     debug!("Keybindings registered");

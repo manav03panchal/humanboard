@@ -9,6 +9,7 @@
 
 use crate::actions::{CmdPaletteDown, CmdPaletteUp, ModalFocusTrap, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
+use crate::focus::FocusContext;
 use crate::settings::Settings;
 
 use gpui::prelude::FluentBuilder;
@@ -92,7 +93,7 @@ pub fn render_header_bar(
                 .w(px(400.0))
                 .relative()
                 .track_focus(palette_focus)
-                .key_context("CommandPalette")
+                .key_context(FocusContext::KEY_COMMAND_PALETTE)
                 // Intercept Input's MoveUp/MoveDown actions to navigate results
                 // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                 .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
@@ -747,7 +748,7 @@ pub fn render_command_palette(
                     .rounded(px(12.0))
                     .shadow_lg()
                     .overflow_hidden()
-                    .key_context("CommandPalette")
+                    .key_context(FocusContext::KEY_COMMAND_PALETTE)
                     // Intercept Input's MoveUp/MoveDown actions to navigate results
                     // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                     .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
@@ -1076,7 +1077,7 @@ pub fn render_settings_modal(
                 h_flex()
                     .id("settings-modal")
                     .track_focus(modal_focus)
-                    .key_context("Modal")
+                    .key_context(FocusContext::KEY_MODAL)
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, _, _| {
@@ -1522,7 +1523,7 @@ pub fn render_create_board_modal(
                 v_flex()
                     .id("create-board-modal")
                     .track_focus(modal_focus)
-                    .key_context("Modal")
+                    .key_context(FocusContext::KEY_MODAL)
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, _, _| {

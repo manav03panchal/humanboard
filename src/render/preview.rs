@@ -7,6 +7,7 @@
 //! - Resizable splitter
 
 use crate::app::{Humanboard, PreviewTab, SplitDirection};
+use crate::focus::FocusContext;
 use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -908,7 +909,7 @@ pub fn render_tab_content(
                         .overflow_y_scroll()
                         .bg(bg)
                         .track_focus(&code_editor_focus)
-                        .key_context("CodeEditor")
+                        .key_context(FocusContext::KEY_CODE_EDITOR)
                         .on_click(cx.listener(move |this, _event, window, cx| {
                             // Set focus context to CodeEditor and focus the editor
                             this.focus

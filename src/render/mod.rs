@@ -34,6 +34,7 @@ use crate::actions::{
     Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
+use crate::focus::FocusContext;
 use crate::home::render_home_screen;
 use crate::landing::render_landing_page;
 use crate::notifications::render_toast_container;
@@ -172,7 +173,7 @@ impl Humanboard {
         div()
             .size_full()
             .track_focus(&self.focus.landing)
-            .key_context("Landing")
+            .key_context(FocusContext::KEY_LANDING)
             // Only steal focus when not editing (so Input can receive focus)
             .when(!is_editing, |d| {
                 d.on_mouse_down(
@@ -311,9 +312,9 @@ impl Humanboard {
         // When input is active, we use a different key context to avoid shortcut conflicts
         let input_active = self.focus.is_input_active();
         let key_context = if input_active {
-            "CanvasInputActive"
+            FocusContext::KEY_CANVAS_INPUT_ACTIVE
         } else {
-            "Canvas"
+            FocusContext::KEY_CANVAS
         };
 
         let base = div()
