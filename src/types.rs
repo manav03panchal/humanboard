@@ -1,13 +1,26 @@
+//! Core types for the Humanboard canvas system.
+//!
+//! This module defines the fundamental data structures used throughout the application,
+//! including canvas items, content types, and helper functions for content detection.
+
 use crate::pdf_thumbnail::generate_pdf_thumbnail;
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// An item placed on the infinite canvas.
+///
+/// Each canvas item has a unique ID, position, size, and content type.
+/// Items can be images, videos, PDFs, text boxes, shapes, arrows, and more.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CanvasItem {
+    /// Unique identifier for this item
     pub id: u64,
+    /// Position on the canvas in canvas coordinates (x, y)
     pub position: (f32, f32),
+    /// Size of the item in canvas units (width, height)
     pub size: (f32, f32),
+    /// The content this item displays
     pub content: ItemContent,
 }
 
@@ -40,45 +53,76 @@ pub enum ArrowHead {
     Circle,
 }
 
+/// The content type of a canvas item.
+///
+/// Determines how the item is rendered and what interactions are available.
+/// Each variant represents a different type of media or element.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ItemContent {
+    /// An image file (PNG, JPEG, GIF, WebP, etc.)
     Image(PathBuf),
+    /// Plain text content
     Text(String),
+    /// A video file (MP4, MOV, WebM, etc.)
     Video(PathBuf),
+    /// An audio file (MP3, WAV, OGG, etc.)
     Audio(PathBuf),
+    /// A PDF document with optional thumbnail
     Pdf {
+        /// Path to the PDF file
         path: PathBuf,
+        /// Path to generated thumbnail image
         thumbnail: Option<PathBuf>,
     },
+    /// A web link/URL
     Link(String),
-    YouTube(String), // Video ID
+    /// An embedded YouTube video (stores video ID)
+    YouTube(String),
+    /// A markdown document
     Markdown {
+        /// Path to the markdown file
         path: PathBuf,
+        /// Document title (extracted from first heading or filename)
         title: String,
-        content: String, // Store content for preview
+        /// Full markdown content for preview
+        content: String,
     },
+    /// A source code file with syntax highlighting
     Code {
+        /// Path to the code file
         path: PathBuf,
-        language: String, // e.g., "rust", "python", "javascript"
+        /// Language identifier for syntax highlighting (e.g., "rust", "python")
+        language: String,
     },
     /// Editable text box (Miro-style)
     TextBox {
+        /// The text content
         text: String,
+        /// Font size in points
         font_size: f32,
-        color: String, // hex color like "#ffffff"
+        /// Text color as hex string (e.g., "#ffffff")
+        color: String,
     },
     /// Arrow/line connecting points
     Arrow {
-        end_offset: (f32, f32), // relative offset from item position to end point
+        /// Relative offset from item position to end point
+        end_offset: (f32, f32),
+        /// Arrow color as hex string
         color: String,
+        /// Line thickness in pixels
         thickness: f32,
+        /// Style of the arrow head
         head_style: ArrowHead,
     },
     /// Shape with optional fill and border
     Shape {
+        /// The type of shape to render
         shape_type: ShapeType,
+        /// Optional fill color as hex string
         fill_color: Option<String>,
+        /// Border color as hex string
         border_color: String,
+        /// Border width in pixels
         border_width: f32,
     },
 }

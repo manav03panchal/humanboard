@@ -1,3 +1,19 @@
+//! WebView-based audio player with metadata display.
+//!
+//! This module provides an audio player implemented as a WebView with a local
+//! HTTP server that supports range requests for seeking. It extracts and displays
+//! metadata (title, artist, album art) from audio files.
+//!
+//! ## Architecture
+//!
+//! Each audio player spawns a local HTTP server on a unique port that serves:
+//! - HTML/CSS/JS for the player UI
+//! - Audio data with HTTP range request support for seeking
+//!
+//! ## Supported Formats
+//!
+//! MP3, WAV, OGG, M4A, AAC, FLAC
+
 use base64::Engine;
 use gpui::*;
 use gpui_component::webview::WebView;

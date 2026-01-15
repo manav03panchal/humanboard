@@ -1,3 +1,19 @@
+//! WebView-based PDF viewer using native platform rendering.
+//!
+//! This module provides PDF viewing by loading PDFs directly into a WebView,
+//! which uses the platform's native PDF rendering (PDFKit on macOS via WKWebView).
+//!
+//! ## Security
+//!
+//! File paths are properly URL-encoded component-by-component to prevent
+//! path traversal attacks (CWE-22).
+//!
+//! ## Features
+//!
+//! - Native PDF rendering with zoom and scroll
+//! - Bounds control for positioning within the canvas
+//! - Show/hide for visibility management
+
 use gpui::*;
 use gpui_component::webview::WebView;
 use std::path::{Path, PathBuf};

@@ -1,3 +1,20 @@
+//! Board index and metadata management.
+//!
+//! This module provides persistence for board metadata, enabling multiple boards
+//! with different storage locations (local, iCloud, custom paths). It handles:
+//!
+//! - Board creation, renaming, and deletion (soft-delete with trash)
+//! - iCloud sync discovery across devices
+//! - Automatic purging of old trashed boards (30+ days)
+//! - Legacy board migration from single-board format
+//!
+//! ## Storage Locations
+//!
+//! Boards can be stored in three locations:
+//! - **Default**: Local app data directory
+//! - **iCloud**: Apple iCloud Drive (enables cross-device sync)
+//! - **Custom**: User-specified directory
+
 use crate::app::StorageLocation;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -56,12 +73,22 @@ impl StoredLocation {
     }
 }
 
+/// Metadata for a single board stored in the index.
+///
+/// Contains identification, timestamps, and storage location info.
+/// Does not include the actual board content (items), which is stored
+/// separately in the board's directory.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BoardMetadata {
+    /// Unique identifier (UUID-like hex string)
     pub id: String,
+    /// User-visible board name
     pub name: String,
+    /// Unix timestamp when board was created
     pub created_at: u64,
+    /// Unix timestamp of last modification
     pub updated_at: u64,
+    /// Where this board's data is stored
     #[serde(default)]
     pub storage_location: StoredLocation,
     /// Timestamp when board was moved to trash (None = not deleted)
@@ -190,8 +217,14 @@ impl BoardMetadata {
     }
 }
 
+/// Central index of all known boards across storage locations.
+///
+/// The index is stored locally and tracks boards from all storage locations.
+/// On load, it discovers any new boards from iCloud that may have been
+/// created on other devices.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BoardIndex {
+    /// All known boards, sorted by updated_at (most recent first)
     pub boards: Vec<BoardMetadata>,
 }
 

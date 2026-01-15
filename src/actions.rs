@@ -1,14 +1,25 @@
+//! Action definitions and handlers for the Humanboard application.
+//!
+//! This module defines all user-invocable actions following Zed's patterns.
+//! Actions are type-safe commands that can be bound to keyboard shortcuts
+//! or triggered programmatically through the command palette.
+//!
+//! ## Action Categories
+//!
+//! - **Application**: Quit, open file, settings, shortcuts
+//! - **Canvas Navigation**: Zoom in/out/reset
+//! - **Selection**: Select all, deselect, delete, duplicate, copy/paste
+//! - **Item Nudging**: Arrow key movement of selected items
+//! - **History**: Undo/redo operations
+//! - **Preview Panel**: Tab management, split controls, navigation
+//! - **PDF Viewer**: Page navigation and zoom
+//! - **Command Palette**: Open/close, navigation, selection
+//! - **Tool Selection**: Select, text, arrow, shape tools
+//! - **Focus Management**: Canvas and preview focus control
+
 use crate::app::Humanboard;
 use gpui::*;
 use std::sync::mpsc;
-
-// ============================================================================
-// Action Definitions
-// ============================================================================
-//
-// Actions are organized into categories following Zed's patterns.
-// Each action represents a user-invocable command that can be bound to
-// keyboard shortcuts or triggered programmatically.
 
 // Application-level actions
 actions!(
