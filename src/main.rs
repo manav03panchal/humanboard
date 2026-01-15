@@ -9,7 +9,7 @@ use humanboard::actions::{
     CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, DeleteSelected,
     DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, ModalFocusTrap, MoveTabToOtherPane,
     NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab, SaveCode, SelectAll,
+    OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab, SaveCode, SelectAll,
     ShowShortcuts, ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch, Undo, ZoomIn,
     ZoomOut, ZoomReset,
 };
@@ -282,6 +282,9 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-a", SelectAll, Some("Canvas")),
         KeyBinding::new("ctrl-a", SelectAll, Some("Canvas")),
         KeyBinding::new("escape", DeselectAll, Some("Canvas")),
+        // Paste (handles URLs including YouTube)
+        KeyBinding::new("cmd-v", Paste, Some("Canvas")),
+        KeyBinding::new("ctrl-v", Paste, Some("Canvas")),
         // Command palette (cmd-k / ctrl-k toggles open/close)
         KeyBinding::new("cmd-k", ToggleCommandPalette, Some("Canvas")),
         KeyBinding::new("ctrl-k", ToggleCommandPalette, Some("Canvas")),
