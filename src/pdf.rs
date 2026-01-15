@@ -1,6 +1,9 @@
 use pdfium_render::prelude::*;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use tempfile::NamedTempFile;
 
 pub struct PdfDocument {
     pdf_path: PathBuf,
@@ -110,14 +113,7 @@ impl PdfDocument {
         let bitmap = page.render_with_config(&render_config).ok()?;
         let image = bitmap.as_image();
 
-        // Save to temp file
-        let temp_dir = std::env::temp_dir().join("humanboard").join("pdf_pages");
-        std::fs::create_dir_all(&temp_dir).ok()?;
-
-        // Use hash of pdf path + page number + zoom for unique filename
-        let pdf_hash = self.pdf_path.to_string_lossy().len(); // Simple hash
-        let image_path = temp_dir.join(format!("{}_{}_{}.png", pdf_hash, page_num, zoom_key));
-
+        // Encode image to PNG data first
         let mut png_data = Vec::new();
         image
             .write_to(
@@ -125,7 +121,26 @@ impl PdfDocument {
                 image::ImageFormat::Png,
             )
             .ok()?;
-        std::fs::write(&image_path, &png_data).ok()?;
+
+        // Save to secure temp file
+        let temp_dir = std::env::temp_dir().join("humanboard").join("pdf_pages");
+        std::fs::create_dir_all(&temp_dir).ok()?;
+
+        // Generate cryptographic hash of the full canonical path for unique filename
+        let canonical_path = self
+            .pdf_path
+            .canonicalize()
+            .unwrap_or_else(|_| self.pdf_path.clone());
+        let mut hasher = Sha256::new();
+        hasher.update(canonical_path.to_string_lossy().as_bytes());
+        let path_hash = format!("{:x}", hasher.finalize());
+        let image_path = temp_dir.join(format!("{}_{}_{}.png", &path_hash[..16], page_num, zoom_key));
+
+        // Use atomic write: create temp file, write, then persist
+        // This prevents TOCTOU race conditions and symlink attacks
+        let mut temp_file = NamedTempFile::new_in(&temp_dir).ok()?;
+        temp_file.write_all(&png_data).ok()?;
+        temp_file.persist(&image_path).ok()?;
 
         self.page_cache.insert(cache_key, image_path.clone());
         Some(image_path)
