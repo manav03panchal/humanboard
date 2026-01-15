@@ -255,7 +255,7 @@ pub fn render_header_bar(
                                                             .text_color(if is_selected {
                                                                 fg
                                                             } else {
-                                                                fg
+                                                                muted_fg
                                                             })
                                                             .overflow_hidden()
                                                             .whitespace_nowrap()
