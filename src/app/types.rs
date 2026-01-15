@@ -1,0 +1,295 @@
+//! Types and enums used by the Humanboard application.
+
+use crate::pdf_webview::PdfWebView;
+use gpui::Point;
+use gpui::Pixels;
+use gpui_component::input::InputState;
+use gpui::Entity;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+/// The current view state of the application
+#[derive(Clone, Debug)]
+pub enum AppView {
+    Landing,
+    Board(String), // Board ID
+}
+
+/// Direction of the preview panel split with the canvas
+#[derive(Clone, Copy, PartialEq)]
+pub enum SplitDirection {
+    Vertical,   // Panel on the right
+    Horizontal, // Panel on the bottom
+}
+
+/// Current mode of the command palette
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum CmdPaletteMode {
+    #[default]
+    Items, // Searching canvas items
+    Themes, // Selecting theme
+}
+
+/// Tab in the settings modal
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum SettingsTab {
+    #[default]
+    Appearance,
+    Integrations,
+}
+
+/// Storage location options for boards
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum StorageLocation {
+    /// Default application data directory
+    #[default]
+    Default,
+    /// iCloud Drive for cross-device sync
+    ICloud,
+    /// Custom user-specified path
+    Custom(std::path::PathBuf),
+}
+
+impl StorageLocation {
+    /// Get the display name for this location
+    pub fn display_name(&self) -> &str {
+        match self {
+            StorageLocation::Default => "Local (Application Support)",
+            StorageLocation::ICloud => "iCloud Drive",
+            StorageLocation::Custom(_) => "Custom Location",
+        }
+    }
+
+    /// Get the base path for this storage location
+    pub fn base_path(&self) -> Option<std::path::PathBuf> {
+        match self {
+            StorageLocation::Default => {
+                dirs::data_dir().map(|p| p.join("humanboard").join("boards"))
+            }
+            StorageLocation::ICloud => {
+                // macOS iCloud Drive path
+                dirs::home_dir().map(|p| {
+                    p.join("Library")
+                        .join("Mobile Documents")
+                        .join("com~apple~CloudDocs")
+                        .join("Humanboard")
+                })
+            }
+            StorageLocation::Custom(path) => Some(path.clone()),
+        }
+    }
+
+    /// Check if this location is available
+    pub fn is_available(&self) -> bool {
+        match self {
+            StorageLocation::Default => true,
+            StorageLocation::ICloud => {
+                // Check if iCloud Drive exists
+                if let Some(path) = self.base_path() {
+                    path.parent().map(|p| p.exists()).unwrap_or(false)
+                } else {
+                    false
+                }
+            }
+            StorageLocation::Custom(path) => {
+                path.exists() || path.parent().map(|p| p.exists()).unwrap_or(false)
+            }
+        }
+    }
+}
+
+/// Tab metadata shared across all tab types
+#[derive(Clone, Copy, Default)]
+pub struct TabMeta {
+    /// Preview tabs are temporary and get replaced by the next preview open
+    pub is_preview: bool,
+    /// Pinned tabs resist close operations and stay at the left
+    pub is_pinned: bool,
+}
+
+/// A tab in the preview panel
+pub enum PreviewTab {
+    Pdf {
+        path: PathBuf,
+        webview: Option<PdfWebView>,
+        meta: TabMeta,
+    },
+    Markdown {
+        path: PathBuf,
+        content: String,
+        editing: bool,
+        editor: Option<Entity<InputState>>,
+        meta: TabMeta,
+    },
+    Code {
+        path: PathBuf,
+        language: String,
+        content: String,
+        editing: bool,
+        dirty: bool,
+        editor: Option<Entity<InputState>>,
+        meta: TabMeta,
+    },
+}
+
+impl PreviewTab {
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            PreviewTab::Pdf { path, .. } => path,
+            PreviewTab::Markdown { path, .. } => path,
+            PreviewTab::Code { path, .. } => path,
+        }
+    }
+
+    pub fn title(&self) -> String {
+        match self {
+            PreviewTab::Markdown { content, path, .. } => {
+                // Try to extract title from first line (# Title)
+                if let Some(first_line) = content.lines().next() {
+                    if first_line.starts_with("# ") {
+                        return first_line.trim_start_matches("# ").to_string();
+                    }
+                }
+                // Fallback to filename without extension
+                path.file_stem()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("Untitled")
+                    .to_string()
+            }
+            PreviewTab::Pdf { path, .. } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Untitled")
+                .to_string(),
+            PreviewTab::Code { path, .. } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Untitled")
+                .to_string(),
+        }
+    }
+
+    pub fn is_editing(&self) -> bool {
+        matches!(self, PreviewTab::Code { editing: true, .. })
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        matches!(self, PreviewTab::Code { dirty: true, .. })
+    }
+
+    /// Get tab metadata
+    pub fn meta(&self) -> &TabMeta {
+        match self {
+            PreviewTab::Pdf { meta, .. } => meta,
+            PreviewTab::Markdown { meta, .. } => meta,
+            PreviewTab::Code { meta, .. } => meta,
+        }
+    }
+
+    /// Get mutable tab metadata
+    pub fn meta_mut(&mut self) -> &mut TabMeta {
+        match self {
+            PreviewTab::Pdf { meta, .. } => meta,
+            PreviewTab::Markdown { meta, .. } => meta,
+            PreviewTab::Code { meta, .. } => meta,
+        }
+    }
+
+    /// Check if this is a preview (temporary) tab
+    pub fn is_preview(&self) -> bool {
+        self.meta().is_preview
+    }
+
+    /// Check if this tab is pinned
+    pub fn is_pinned(&self) -> bool {
+        self.meta().is_pinned
+    }
+
+    /// Convert preview tab to permanent
+    pub fn make_permanent(&mut self) {
+        self.meta_mut().is_preview = false;
+    }
+
+    /// Toggle pinned state
+    pub fn toggle_pinned(&mut self) {
+        let meta = self.meta_mut();
+        meta.is_pinned = !meta.is_pinned;
+        // Pinned tabs are never previews
+        if meta.is_pinned {
+            meta.is_preview = false;
+        }
+    }
+}
+
+/// Which pane is focused in split view
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
+pub enum FocusedPane {
+    #[default]
+    Left,
+    Right,
+}
+
+/// Drop zone for dragging tabs to create splits
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SplitDropZone {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+/// State for the preview panel with tab management
+pub struct PreviewPanel {
+    // Left/primary pane
+    pub tabs: Vec<PreviewTab>,
+    pub active_tab: usize,
+    pub back_stack: Vec<usize>,
+    pub forward_stack: Vec<usize>,
+    pub closed_tabs: Vec<PreviewTab>,
+
+    // Right/secondary pane (only used when is_pane_split is true)
+    pub right_tabs: Vec<PreviewTab>,
+    pub right_active_tab: usize,
+    pub right_back_stack: Vec<usize>,
+    pub right_forward_stack: Vec<usize>,
+
+    // Split state
+    pub split: SplitDirection, // Split with canvas (vertical/horizontal)
+    pub size: f32,             // Panel size (0.0 to 1.0)
+    pub is_pane_split: bool,   // Whether panel itself is split into two panes
+    pub pane_split_horizontal: bool, // True = top/bottom, False = left/right
+    pub focused_pane: FocusedPane, // Which pane has focus
+    pub pane_ratio: f32,       // Ratio between left/right panes (0.5 = equal)
+}
+
+impl PreviewPanel {
+    pub fn new(split: SplitDirection, size: f32) -> Self {
+        Self {
+            tabs: Vec::new(),
+            active_tab: 0,
+            back_stack: Vec::new(),
+            forward_stack: Vec::new(),
+            closed_tabs: Vec::new(),
+
+            right_tabs: Vec::new(),
+            right_active_tab: 0,
+            right_back_stack: Vec::new(),
+            right_forward_stack: Vec::new(),
+
+            split,
+            size,
+            is_pane_split: false,
+            pane_split_horizontal: false,
+            focused_pane: FocusedPane::Left,
+            pane_ratio: 0.5,
+        }
+    }
+}
+
+/// Animation state for smooth panning to a target position
+pub struct PanAnimation {
+    pub start_offset: Point<Pixels>,
+    pub target_offset: Point<Pixels>,
+    pub start_time: Instant,
+    pub duration: Duration,
+}
