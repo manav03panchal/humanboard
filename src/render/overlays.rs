@@ -1676,6 +1676,9 @@ pub fn render_create_board_modal(
                                                                 );
                                                             }))
                                                     })
+                                                    .when(!is_icloud_available, |d| {
+                                                        d.cursor(CursorStyle::OperationNotAllowed)
+                                                    })
                                                     .gap(px(12.0))
                                                     .child(
                                                         Icon::new(IconName::Globe)
