@@ -219,6 +219,7 @@ pub fn render_trashed_board_card(
         .rounded(px(12.0))
         .overflow_hidden()
         .opacity(0.7)
+        .cursor(CursorStyle::Arrow)
         .child(
             // Thumbnail area (greyed out)
             div()
