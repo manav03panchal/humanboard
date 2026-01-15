@@ -34,6 +34,7 @@ use crate::actions::{
     Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
+use crate::home::render_home_screen;
 use crate::landing::render_landing_page;
 use crate::notifications::render_toast_container;
 use gpui::DefiniteLength::Fraction;
@@ -68,6 +69,7 @@ impl Render for Humanboard {
 
         // Route based on current view
         let content = match &self.view {
+            AppView::Home => self.render_home_view(window, cx),
             AppView::Landing => self.render_landing_view(cx),
             AppView::Board(_) => self.render_board_view(window, cx),
         };
@@ -147,6 +149,14 @@ impl Render for Humanboard {
 // ============================================================================
 
 impl Humanboard {
+    /// Render the home screen with countdown view
+    fn render_home_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        // Request animation frame to update countdown every second
+        window.request_animation_frame();
+
+        render_home_screen(self.countdown.as_ref(), cx)
+    }
+
     /// Render the landing page view
     fn render_landing_view(&mut self, cx: &mut Context<Self>) -> Div {
         let deleting_board = self.deleting_board_id.as_ref().and_then(|id| {

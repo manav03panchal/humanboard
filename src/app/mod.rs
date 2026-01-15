@@ -143,6 +143,9 @@ pub struct Humanboard {
 
     // Settings file watcher for hot-reload
     pub settings_watcher: Option<SettingsWatcher>,
+
+    // Home screen countdown state
+    pub countdown: Option<CountdownState>,
 }
 
 impl Humanboard {
@@ -150,7 +153,7 @@ impl Humanboard {
         let board_index = BoardIndex::load();
 
         Self {
-            view: AppView::Landing,
+            view: AppView::Home,
             board_index,
             editing_board_id: None,
             edit_input: None,
@@ -225,6 +228,7 @@ impl Humanboard {
             background: BackgroundExecutor::with_default_workers(),
             settings_watcher: crate::settings_watcher::default_settings_path()
                 .and_then(|p| SettingsWatcher::new(p).ok()),
+            countdown: Some(CountdownState::until_midnight()),
         }
     }
 
