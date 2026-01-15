@@ -363,6 +363,18 @@ impl Board {
         }
     }
 
+    /// Remove multiple items by their IDs
+    /// This is more efficient than calling remove_item multiple times
+    /// as it only rebuilds the index once.
+    pub fn remove_items(&mut self, ids: &[u64]) {
+        if ids.is_empty() {
+            return;
+        }
+        let id_set: std::collections::HashSet<u64> = ids.iter().copied().collect();
+        self.items.retain(|item| !id_set.contains(&item.id));
+        self.rebuild_index();
+    }
+
     /// Convert screen position to canvas position
     #[inline]
     pub fn screen_to_canvas(&self, screen_pos: Point<Pixels>) -> Point<Pixels> {

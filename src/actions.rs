@@ -194,7 +194,8 @@ impl Humanboard {
                     }
                 }
 
-                board.items.retain(|item| !selected.contains(&item.id));
+                let ids_to_remove: Vec<u64> = selected.iter().copied().collect();
+                board.remove_items(&ids_to_remove);
                 self.selected_items.clear();
                 board.push_history();
                 board.save();
