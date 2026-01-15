@@ -1,3 +1,18 @@
+//! WebView-based video player with HTTP streaming.
+//!
+//! This module provides a video player implemented as a WebView with a local
+//! HTTP server that supports range requests for seeking and streaming.
+//!
+//! ## Architecture
+//!
+//! Each video player spawns a local HTTP server on a unique port that serves:
+//! - HTML page with native video element
+//! - Video data with HTTP range request support for seeking
+//!
+//! ## Supported Formats
+//!
+//! MP4, WebM, MOV, AVI, MKV
+
 use gpui::*;
 use gpui_component::webview::WebView;
 use std::io::{Read, Seek, SeekFrom};

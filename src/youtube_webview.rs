@@ -1,3 +1,20 @@
+//! WebView-based YouTube video player.
+//!
+//! This module embeds YouTube videos using their official iframe API,
+//! served through a local HTTP server to work around WebView security restrictions.
+//!
+//! ## Architecture
+//!
+//! Each YouTube player spawns a local HTTP server on a unique port that serves
+//! an HTML page containing the YouTube iframe embed. This approach allows the
+//! embedded player to function correctly within the native WebView.
+//!
+//! ## Features
+//!
+//! - YouTube iframe embed with full playback controls
+//! - Autoplay disabled by default
+//! - Modest branding (reduced YouTube UI)
+
 use gpui::*;
 use gpui_component::webview::WebView;
 use std::sync::Arc;

@@ -1,3 +1,22 @@
+//! PDF thumbnail generation using pdfium.
+//!
+//! This module renders the first page of a PDF document as a PNG thumbnail
+//! for display on the canvas. Thumbnails are cached in a temp directory
+//! with content-based naming to avoid regeneration.
+//!
+//! ## Security
+//!
+//! - Uses atomic writes via tempfile to prevent TOCTOU race conditions
+//! - Generates cryptographic hashes of canonical paths for cache keys
+//!
+//! ## Library Loading
+//!
+//! Pdfium is loaded dynamically from (in order):
+//! 1. `lib/libpdfium.dylib` in working directory
+//! 2. `lib/libpdfium.dylib` relative to executable
+//! 3. `Resources/lib/libpdfium.dylib` in macOS bundle
+//! 4. System library fallback
+
 use pdfium_render::prelude::*;
 use sha2::{Digest, Sha256};
 use std::io::Write;

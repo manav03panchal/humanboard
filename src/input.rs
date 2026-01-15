@@ -1,3 +1,22 @@
+//! Mouse and scroll input handling for the canvas.
+//!
+//! This module implements all mouse interaction logic for the Humanboard canvas,
+//! including item selection, dragging, resizing, and drawing tools.
+//!
+//! ## Input Handling
+//!
+//! - **Mouse Down**: Item selection, resize corner detection, drawing tool start
+//! - **Mouse Up**: Finalize drag/resize operations, create drawn items
+//! - **Mouse Move**: Item dragging, resizing, canvas panning, splitter dragging
+//! - **Scroll**: Canvas panning and pinch-to-zoom
+//!
+//! ## Selection Behavior
+//!
+//! - Click to select single item
+//! - Shift+click for multi-select toggle
+//! - Marquee selection for area selection
+//! - Double-click opens preview for PDF/Markdown/Code or edits TextBox
+
 use crate::app::{Humanboard, SplitDirection};
 use crate::constants::{DEFAULT_FONT_SIZE, HEADER_HEIGHT, SPLITTER_WIDTH};
 use crate::render::dock::DOCK_WIDTH;

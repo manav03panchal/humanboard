@@ -1,3 +1,16 @@
+//! Landing page UI components.
+//!
+//! This module renders the home screen shown when no board is open,
+//! displaying a grid of board cards and management controls.
+//!
+//! ## Components
+//!
+//! - **Header**: App title and "New Board" button
+//! - **Board Grid**: Cards for each board with edit/delete actions
+//! - **Trash Section**: Collapsible list of deleted boards (30-day retention)
+//! - **Empty State**: Shown when no boards exist
+//! - **Delete Dialog**: Confirmation modal for board deletion
+
 use crate::board_index::{BoardIndex, BoardMetadata};
 use gpui::prelude::FluentBuilder;
 use gpui::*;

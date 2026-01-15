@@ -1,3 +1,16 @@
+//! Markdown and code file rendering components.
+//!
+//! This module provides native GPUI rendering for markdown content and code files,
+//! including collapsed card views for the canvas and full markdown parsing with
+//! rich styling support.
+//!
+//! ## Features
+//!
+//! - **Collapsed Cards**: Compact file cards for canvas items (markdown, code)
+//! - **Rich Markdown**: Headings, lists, code blocks, tables, blockquotes
+//! - **Inline Styles**: Bold, italic, strikethrough, inline code
+//! - **Theme Support**: Light/dark mode aware color schemes
+
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{Icon, IconName};
