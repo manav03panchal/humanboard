@@ -112,6 +112,20 @@ pub fn render_header_bar(
                 .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
                     this.hide_command_palette(window, cx);
                 }))
+                // Direct key interception for arrow navigation (bypasses keybinding context issues)
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                    if this.command_palette.is_some() {
+                        match &event.keystroke.key {
+                            key if key == "up" => {
+                                this.select_prev_result(cx);
+                            }
+                            key if key == "down" => {
+                                this.select_next_result(cx);
+                            }
+                            _ => {}
+                        }
+                    }
+                }))
                 // Search trigger button / input
                 .child(
                     div()
@@ -771,6 +785,20 @@ pub fn render_command_palette(
                     }))
                     .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
                         this.hide_command_palette(window, cx);
+                    }))
+                    // Direct key interception for arrow navigation (bypasses keybinding context issues)
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        if this.command_palette.is_some() {
+                            match &event.keystroke.key {
+                                key if key == "up" => {
+                                    this.select_prev_result(cx);
+                                }
+                                key if key == "down" => {
+                                    this.select_next_result(cx);
+                                }
+                                _ => {}
+                            }
+                        }
                     }))
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .on_scroll_wheel(|_, _, _| {})
