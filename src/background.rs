@@ -80,14 +80,21 @@ impl BackgroundExecutor {
 
             let handle = thread::spawn(move || {
                 loop {
-                    // Check if we should stop
-                    if !*running.lock().unwrap() {
+                    // Check if we should stop - recover from poisoned lock to allow graceful shutdown
+                    let should_stop = running
+                        .lock()
+                        .map(|guard| !*guard)
+                        .unwrap_or(true); // Stop if lock is poisoned
+                    if should_stop {
                         break;
                     }
 
-                    // Try to get a task
+                    // Try to get a task - recover from poisoned lock
                     let task = {
-                        let rx = task_rx.lock().unwrap();
+                        let rx = match task_rx.lock() {
+                            Ok(guard) => guard,
+                            Err(poisoned) => poisoned.into_inner(),
+                        };
                         rx.recv_timeout(std::time::Duration::from_millis(100))
                     };
 

@@ -61,6 +61,9 @@ pub enum SettingsError {
 
     #[error("Invalid settings source: {0}")]
     InvalidSource(String),
+
+    #[error("Settings lock poisoned: {0}")]
+    LockPoisoned(String),
 }
 
 /// Errors that can occur with media operations

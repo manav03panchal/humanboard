@@ -526,7 +526,9 @@ pub fn global_settings() -> &'static std::sync::RwLock<SettingsStore> {
 /// Initialize the global settings store and load user settings.
 pub fn init_settings() -> Result<(), SettingsError> {
     let store = global_settings();
-    let mut guard = store.write().unwrap();
+    let mut guard = store
+        .write()
+        .map_err(|_| SettingsError::LockPoisoned("settings store write lock poisoned".into()))?;
     guard.load_user_settings()?;
     Ok(())
 }
@@ -534,7 +536,8 @@ pub fn init_settings() -> Result<(), SettingsError> {
 /// Get the current app settings (convenience function).
 pub fn app_settings() -> AppSettings {
     let store = global_settings();
-    let guard = store.read().unwrap();
+    // Use unwrap_or_else to recover from poisoned lock - settings reads should not fail
+    let guard = store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
     guard.app_settings().clone()
 }
 
@@ -544,7 +547,9 @@ where
     F: FnOnce(&mut SettingsContent),
 {
     let store = global_settings();
-    let mut guard = store.write().unwrap();
+    let mut guard = store
+        .write()
+        .map_err(|_| SettingsError::LockPoisoned("settings store write lock poisoned".into()))?;
     guard.update(source, updater)
 }
 
