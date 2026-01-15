@@ -636,7 +636,7 @@ fn parse_hex_color(hex: &str) -> Option<Hsla> {
     let min = r.min(g).min(b);
     let l = (max + min) / 2.0;
 
-    if max == min {
+    if (max - min).abs() < f32::EPSILON {
         return Some(hsla(0.0, 0.0, l, 1.0));
     }
 
@@ -647,9 +647,9 @@ fn parse_hex_color(hex: &str) -> Option<Hsla> {
         d / (max + min)
     };
 
-    let h = if max == r {
+    let h = if (max - r).abs() < f32::EPSILON {
         ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
-    } else if max == g {
+    } else if (max - g).abs() < f32::EPSILON {
         ((b - r) / d + 2.0) / 6.0
     } else {
         ((r - g) / d + 4.0) / 6.0
