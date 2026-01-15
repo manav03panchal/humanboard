@@ -63,6 +63,31 @@ pub enum FocusContext {
     Landing,
     /// Canvas - default context for keyboard shortcuts
     Canvas,
+    /// Canvas with active input (textbox editing) - subset of shortcuts active
+    CanvasInputActive,
+}
+
+/// Key context string constants for use in keybindings.
+///
+/// These constants ensure type-safe key context references across the codebase,
+/// preventing typos and enabling compile-time checking.
+impl FocusContext {
+    /// Key context for Modal dialogs
+    pub const KEY_MODAL: &'static str = "Modal";
+    /// Key context for Command palette
+    pub const KEY_COMMAND_PALETTE: &'static str = "CommandPalette";
+    /// Key context for Textbox editing
+    pub const KEY_TEXTBOX_EDITING: &'static str = "TextboxEditing";
+    /// Key context for Code editor
+    pub const KEY_CODE_EDITOR: &'static str = "CodeEditor";
+    /// Key context for Preview panel
+    pub const KEY_PREVIEW: &'static str = "Preview";
+    /// Key context for Landing page
+    pub const KEY_LANDING: &'static str = "Landing";
+    /// Key context for Canvas
+    pub const KEY_CANVAS: &'static str = "Canvas";
+    /// Key context for Canvas with active input
+    pub const KEY_CANVAS_INPUT_ACTIVE: &'static str = "CanvasInputActive";
 }
 
 impl FocusContext {
@@ -70,13 +95,14 @@ impl FocusContext {
     /// Used for binding keyboard shortcuts to specific contexts.
     pub fn key_context(&self) -> &'static str {
         match self {
-            FocusContext::Modal => "Modal",
-            FocusContext::CommandPalette => "CommandPalette",
-            FocusContext::TextboxEditing => "TextboxEditing",
-            FocusContext::CodeEditor => "CodeEditor",
-            FocusContext::Preview => "Preview",
-            FocusContext::Landing => "Landing",
-            FocusContext::Canvas => "Canvas",
+            FocusContext::Modal => Self::KEY_MODAL,
+            FocusContext::CommandPalette => Self::KEY_COMMAND_PALETTE,
+            FocusContext::TextboxEditing => Self::KEY_TEXTBOX_EDITING,
+            FocusContext::CodeEditor => Self::KEY_CODE_EDITOR,
+            FocusContext::Preview => Self::KEY_PREVIEW,
+            FocusContext::Landing => Self::KEY_LANDING,
+            FocusContext::Canvas => Self::KEY_CANVAS,
+            FocusContext::CanvasInputActive => Self::KEY_CANVAS_INPUT_ACTIVE,
         }
     }
 
@@ -84,13 +110,14 @@ impl FocusContext {
     /// Used to prevent lower-priority contexts from stealing focus.
     pub fn priority(&self) -> u8 {
         match self {
-            FocusContext::Modal => 7,
-            FocusContext::CommandPalette => 6,
-            FocusContext::TextboxEditing => 5,
-            FocusContext::CodeEditor => 4,
-            FocusContext::Preview => 3,
-            FocusContext::Landing => 2,
-            FocusContext::Canvas => 1,
+            FocusContext::Modal => 8,
+            FocusContext::CommandPalette => 7,
+            FocusContext::TextboxEditing => 6,
+            FocusContext::CodeEditor => 5,
+            FocusContext::Preview => 4,
+            FocusContext::Landing => 3,
+            FocusContext::Canvas => 2,
+            FocusContext::CanvasInputActive => 1, // Same level as Canvas but distinct
         }
     }
 
@@ -104,6 +131,7 @@ impl FocusContext {
             FocusContext::Preview,
             FocusContext::Landing,
             FocusContext::Canvas,
+            FocusContext::CanvasInputActive,
         ]
     }
 
@@ -117,6 +145,7 @@ impl FocusContext {
                 | FocusContext::CodeEditor
                 | FocusContext::Preview
                 | FocusContext::Landing
+                | FocusContext::CanvasInputActive
         )
     }
 }
@@ -242,7 +271,7 @@ impl FocusManager {
     /// Get the FocusHandle for a specific context.
     pub fn handle_for(&self, context: FocusContext) -> &FocusHandle {
         match context {
-            FocusContext::Canvas => &self.canvas,
+            FocusContext::Canvas | FocusContext::CanvasInputActive => &self.canvas,
             FocusContext::CommandPalette => &self.command_palette,
             FocusContext::TextboxEditing => &self.textbox_editing,
             FocusContext::CodeEditor => &self.code_editor,
