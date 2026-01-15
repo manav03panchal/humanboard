@@ -102,6 +102,10 @@ impl Humanboard {
             }
         }
         self.board = None;
+        // Clean up preview panel resources before dropping
+        if let Some(ref mut preview) = self.preview {
+            preview.cleanup(cx);
+        }
         self.preview = None;
         self.youtube_webviews.clear(); // Clear YouTube WebViews when leaving board
         self.audio_webviews.clear(); // Clear Audio WebViews when leaving board

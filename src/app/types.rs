@@ -211,6 +211,28 @@ impl PreviewTab {
         self.meta().is_pinned
     }
 
+    /// Clean up resources (webviews, editors) before dropping the tab.
+    /// This should be called before removing a tab to prevent memory leaks.
+    pub fn cleanup(&mut self, cx: &mut gpui::App) {
+        match self {
+            PreviewTab::Pdf { webview, .. } => {
+                // Hide and drop the webview to release resources
+                if let Some(wv) = webview.take() {
+                    wv.hide(cx);
+                    // Entity will be dropped when wv goes out of scope
+                }
+            }
+            PreviewTab::Markdown { editor, .. } => {
+                // Clear the editor entity
+                *editor = None;
+            }
+            PreviewTab::Code { editor, .. } => {
+                // Clear the editor entity
+                *editor = None;
+            }
+        }
+    }
+
     /// Convert preview tab to permanent
     pub fn make_permanent(&mut self) {
         self.meta_mut().is_preview = false;
@@ -288,6 +310,23 @@ impl PreviewPanel {
             pane_split_horizontal: false,
             focused_pane: FocusedPane::Left,
             pane_ratio: 0.5,
+        }
+    }
+
+    /// Clean up all resources before destroying the panel.
+    /// This should be called before dropping the PreviewPanel to prevent memory leaks.
+    pub fn cleanup(&mut self, cx: &mut gpui::App) {
+        // Clean up all tabs in the left pane
+        for tab in &mut self.tabs {
+            tab.cleanup(cx);
+        }
+        // Clean up all tabs in the right pane
+        for tab in &mut self.right_tabs {
+            tab.cleanup(cx);
+        }
+        // Clean up all closed tabs
+        for tab in &mut self.closed_tabs {
+            tab.cleanup(cx);
         }
     }
 }

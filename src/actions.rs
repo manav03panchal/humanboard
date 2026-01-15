@@ -179,12 +179,15 @@ impl Humanboard {
                             tabs_to_remove.push(i);
                         }
                     }
-                    // Remove in reverse order to preserve indices
+                    // Remove in reverse order to preserve indices, cleaning up each tab
                     for i in tabs_to_remove.into_iter().rev() {
+                        preview.tabs[i].cleanup(cx);
                         preview.tabs.remove(i);
                     }
                     // Adjust active tab if needed
                     if preview.tabs.is_empty() {
+                        // Clean up remaining resources and close preview panel
+                        preview.cleanup(cx);
                         self.preview = None;
                     } else if preview.active_tab >= preview.tabs.len() {
                         preview.active_tab = preview.tabs.len() - 1;

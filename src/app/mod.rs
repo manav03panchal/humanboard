@@ -1024,6 +1024,10 @@ impl Humanboard {
     }
 
     pub fn close_preview(&mut self, cx: &mut Context<Self>) {
+        // Clean up all webview resources before dropping the preview panel
+        if let Some(ref mut preview) = self.preview {
+            preview.cleanup(cx);
+        }
         self.preview = None;
         cx.notify();
     }
@@ -1041,6 +1045,8 @@ impl Humanboard {
                     let closed_tab = preview.right_tabs.remove(tab_index);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
+                        // Clean up resources before removing the oldest tab
+                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1067,6 +1073,8 @@ impl Humanboard {
                     let closed_tab = preview.tabs.remove(tab_index);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
+                        // Clean up resources before removing the oldest tab
+                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1078,7 +1086,8 @@ impl Humanboard {
                             preview.is_pane_split = false;
                             preview.focused_pane = FocusedPane::Left;
                         } else {
-                            // No tabs anywhere, close preview panel
+                            // No tabs anywhere, clean up and close preview panel
+                            preview.cleanup(cx);
                             self.preview = None;
                         }
                     } else {
