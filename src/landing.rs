@@ -25,10 +25,11 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
 
     h_flex()
         .w_full()
-        .h(px(40.0))
+        .h(px(52.0))
         .bg(bg)
         .border_b_1()
         .border_color(border)
@@ -39,14 +40,32 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
         .child(
             h_flex()
                 .gap_3()
+                .items_center()
+                .child(
+                    Icon::new(IconName::LayoutDashboard)
+                        .size(px(20.0))
+                        .text_color(primary),
+                )
                 .child(
                     div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(fg)
                         .child("Humanboard"),
                 )
-                .child(div().text_sm().text_color(muted_fg).child("Your boards")),
+                .child(
+                    div()
+                        .h(px(16.0))
+                        .w(px(1.0))
+                        .bg(border)
+                        .mx_1(),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(muted_fg)
+                        .child("Your Boards"),
+                ),
         )
         .child(
             Button::new("new-board")
@@ -104,7 +123,11 @@ pub fn render_board_card(
                         }),
                     )
                 })
-                .child(div().text_2xl().text_color(muted_fg).child("▦")),
+                .child(
+                    Icon::new(IconName::LayoutDashboard)
+                        .size(px(32.0))
+                        .text_color(muted_fg),
+                ),
         )
         .child(
             // Info area
@@ -309,39 +332,69 @@ pub fn render_trashed_board_card(
 pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
+    let border = cx.theme().border;
 
     v_flex()
         .flex_1()
         .items_center()
         .justify_center()
-        .gap_6()
-        .child(div().text_2xl().text_color(muted_fg).child("▦"))
+        .gap_8()
+        // Hero icon with subtle background
+        .child(
+            div()
+                .w(px(120.0))
+                .h(px(120.0))
+                .rounded(px(24.0))
+                .border_1()
+                .border_color(border)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    Icon::new(IconName::LayoutDashboard)
+                        .size(px(48.0))
+                        .text_color(primary),
+                ),
+        )
+        // Welcome text
         .child(
             v_flex()
                 .items_center()
-                .gap_2()
+                .gap_3()
                 .child(
                     div()
-                        .text_xl()
-                        .font_weight(FontWeight::MEDIUM)
+                        .text_2xl()
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(fg)
-                        .child("No boards yet"),
+                        .child("Welcome to Humanboard"),
                 )
                 .child(
                     div()
-                        .text_sm()
+                        .text_base()
                         .text_color(muted_fg)
-                        .child("Create your first board to get started"),
+                        .text_center()
+                        .max_w(px(400.0))
+                        .child("Create your first board to start organizing your ideas, images, and documents in a visual workspace."),
                 ),
         )
+        // CTA button
         .child(
             Button::new("create-first-board")
                 .primary()
                 .icon(Icon::new(IconName::Plus))
-                .label("Create Board")
+                .label("Create Your First Board")
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.create_new_board(window, cx);
                 })),
+        )
+        // Keyboard shortcut hint
+        .child(
+            div()
+                .text_xs()
+                .text_color(muted_fg)
+                .mt_4()
+                .child("Press ⌘N to create a new board"),
         )
 }
 
