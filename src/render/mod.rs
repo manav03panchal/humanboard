@@ -28,10 +28,10 @@ use crate::actions::{
     CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
     DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, MoveTabToOtherPane, NewBoard,
     NextPage, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab, Redo,
-    ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePaneSplit,
-    TogglePreviewSearch, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText, Undo, ZoomIn,
-    ZoomOut, ZoomReset,
+    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab,
+    Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette,
+    TogglePaneSplit, TogglePreviewSearch, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText,
+    Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::landing::render_landing_page;
@@ -345,6 +345,7 @@ impl Humanboard {
             )
             .on_action(cx.listener(|this, _: &SelectAll, _, cx| this.select_all(cx)))
             .on_action(cx.listener(|this, _: &DeselectAll, _, cx| this.deselect_all(cx)))
+            .on_action(cx.listener(|this, _: &Paste, window, cx| this.paste(window, cx)))
             .on_action(cx.listener(|this, _: &NudgeUp, _, cx| this.nudge_up(cx)))
             .on_action(cx.listener(|this, _: &NudgeDown, _, cx| this.nudge_down(cx)))
             .on_action(cx.listener(|this, _: &NudgeLeft, _, cx| this.nudge_left(cx)))
