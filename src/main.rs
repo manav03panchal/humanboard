@@ -6,12 +6,12 @@
 use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
-    CancelTextboxEdit, CloseTab, CmdPaletteDown, CmdPaletteSelect, CmdPaletteUp, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, ModalFocusTrap, MoveTabToOtherPane,
-    NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab, SaveCode, SelectAll,
-    ShowShortcuts, ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch, Undo, ZoomIn,
-    ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, CloseTab, CmdPaletteDown, CmdPaletteSelect,
+    CmdPaletteUp, DeleteSelected, DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome,
+    ModalFocusTrap, MoveTabToOtherPane, NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft,
+    NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo,
+    ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePaneSplit,
+    TogglePreviewSearch, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use humanboard::focus::FocusContext;
@@ -314,6 +314,7 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("up", CmdPaletteUp, Some(FocusContext::KEY_COMMAND_PALETTE)),
         KeyBinding::new("down", CmdPaletteDown, Some(FocusContext::KEY_COMMAND_PALETTE)),
         KeyBinding::new("enter", CmdPaletteSelect, Some(FocusContext::KEY_COMMAND_PALETTE)),
+        KeyBinding::new("escape", CloseCommandPalette, Some(FocusContext::KEY_COMMAND_PALETTE)),
     ]);
 
     // Modal context shortcuts (settings, dialogs)

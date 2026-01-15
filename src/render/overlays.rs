@@ -7,7 +7,7 @@
 //! - Command palette popup
 //! - Settings modal
 
-use crate::actions::{CmdPaletteDown, CmdPaletteUp, ModalFocusTrap, OpenSettings};
+use crate::actions::{CloseCommandPalette, CmdPaletteDown, CmdPaletteUp, ModalFocusTrap, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::focus::FocusContext;
 use crate::settings::Settings;
@@ -108,6 +108,9 @@ pub fn render_header_bar(
                 }))
                 .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                     this.select_next_result(cx);
+                }))
+                .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
+                    this.hide_command_palette(window, cx);
                 }))
                 // Search trigger button / input
                 .child(
@@ -765,6 +768,9 @@ pub fn render_command_palette(
                     }))
                     .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                         this.select_next_result(cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
+                        this.hide_command_palette(window, cx);
                     }))
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .on_scroll_wheel(|_, _, _| {})
