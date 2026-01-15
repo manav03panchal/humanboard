@@ -56,19 +56,16 @@ impl Humanboard {
             name.trim().to_string()
         };
 
-        let location = self.create_board_location.clone();
+        let location = std::mem::take(&mut self.create_board_location);
+        let location_name = location.display_name().to_owned();
 
         // Create the board with custom location
-        let metadata = self.board_index.create_board_at(name, location.clone());
+        let metadata = self.board_index.create_board_at(name, location);
 
         // Close modal
         self.show_create_board_modal = false;
         self.create_board_input = None;
-        self.create_board_location = StorageLocation::default();
         self.focus.release(FocusContext::Modal, window);
-
-        // Show success toast with location info
-        let location_name = location.display_name();
         self.toast_manager
             .push(crate::notifications::Toast::success(format!(
                 "Board created in {}",
@@ -86,9 +83,9 @@ impl Humanboard {
     }
 
     pub fn open_board(&mut self, id: String, cx: &mut Context<Self>) {
+        self.board_index.touch_board(&id);
         let board = Board::load(id.clone());
         self.board = Some(board);
-        self.board_index.touch_board(&id);
         self.view = AppView::Board(id);
         cx.notify();
     }
@@ -153,14 +150,14 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn confirm_delete_board(&mut self, id: String, cx: &mut Context<Self>) {
-        self.deleting_board_id = Some(id);
+    pub fn confirm_delete_board(&mut self, id: impl Into<String>, cx: &mut Context<Self>) {
+        self.deleting_board_id = Some(id.into());
         cx.notify();
     }
 
     /// Soft delete - moves to trash
-    pub fn delete_board(&mut self, id: String, cx: &mut Context<Self>) {
-        self.board_index.delete_board(&id);
+    pub fn delete_board(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.board_index.delete_board(id);
         self.deleting_board_id = None;
         self.toast_manager
             .push(crate::notifications::Toast::info("Board moved to trash"));
@@ -173,8 +170,8 @@ impl Humanboard {
     }
 
     /// Restore a board from trash
-    pub fn restore_board(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.board_index.restore_board(&id) {
+    pub fn restore_board(&mut self, id: &str, cx: &mut Context<Self>) {
+        if self.board_index.restore_board(id) {
             self.toast_manager
                 .push(crate::notifications::Toast::success("Board restored"));
         }
@@ -182,8 +179,8 @@ impl Humanboard {
     }
 
     /// Permanently delete a board (no recovery)
-    pub fn permanently_delete_board(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.board_index.permanently_delete_board(&id) {
+    pub fn permanently_delete_board(&mut self, id: &str, cx: &mut Context<Self>) {
+        if self.board_index.permanently_delete_board(id) {
             self.toast_manager.push(crate::notifications::Toast::info(
                 "Board permanently deleted",
             ));

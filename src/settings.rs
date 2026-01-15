@@ -618,7 +618,7 @@ impl Settings {
             // Set theme mode based on the config
             let mode = config.mode;
 
-            // Update the appropriate theme slot (light or dark)
+            // Update the appropriate theme slot (light or dark) and apply
             if mode.is_dark() {
                 Theme::global_mut(cx).dark_theme = config.clone();
             } else {

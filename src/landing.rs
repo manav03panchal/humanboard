@@ -285,7 +285,7 @@ pub fn render_trashed_board_card(
                             .icon(Icon::new(IconName::ArrowLeft).size(px(12.0)))
                             .label("Restore")
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.restore_board(board_id_for_restore.clone(), cx);
+                                this.restore_board(&board_id_for_restore, cx);
                             })),
                         )
                         .child(
@@ -298,7 +298,7 @@ pub fn render_trashed_board_card(
                             .icon(Icon::new(IconName::Close).size(px(12.0)))
                             .label("Delete")
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.permanently_delete_board(board_id_for_delete.clone(), cx);
+                                this.permanently_delete_board(&board_id_for_delete, cx);
                             })),
                         ),
                 ),
@@ -542,7 +542,7 @@ pub fn render_delete_dialog(
                                 .danger()
                                 .label("Delete")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.delete_board(board_id_confirm.clone(), cx);
+                                    this.delete_board(&board_id_confirm, cx);
                                 })),
                         ),
                 ),

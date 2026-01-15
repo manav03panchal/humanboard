@@ -674,10 +674,8 @@ impl Humanboard {
                 {
                     if let Some(ed) = editor {
                         let new_content = ed.read(cx).text().to_string();
-                        *content = new_content.clone();
                         // Save to file
-                        let path_clone = path.clone();
-                        let _ = std::fs::write(&path_clone, &new_content);
+                        let _ = std::fs::write(path.as_path(), &new_content);
                         // Also update board item if exists
                         if let Some(ref mut board) = self.board {
                             for item in board.items.iter_mut() {
@@ -687,12 +685,13 @@ impl Humanboard {
                                     ..
                                 } = &mut item.content
                                 {
-                                    if *item_path == path_clone {
+                                    if item_path == path {
                                         *item_content = new_content.clone();
                                     }
                                 }
                             }
                         }
+                        *content = new_content;
                         *editing = false;
                     }
                 }
@@ -714,12 +713,11 @@ impl Humanboard {
                     } => {
                         if let Some(ed) = editor {
                             let new_content = ed.read(cx).text().to_string();
-                            *content = new_content.clone();
                             // Save to file
-                            let path_clone = path.clone();
-                            if let Err(e) = std::fs::write(&path_clone, &new_content) {
+                            if let Err(e) = std::fs::write(path.as_path(), &new_content) {
                                 error!("Failed to save code file: {}", e);
                             }
+                            *content = new_content;
                             *dirty = false;
                             // Keep editor for viewing
                         }
@@ -735,10 +733,8 @@ impl Humanboard {
                         if *editing {
                             if let Some(ed) = editor {
                                 let new_content = ed.read(cx).text().to_string();
-                                *content = new_content.clone();
                                 // Save to file
-                                let path_clone = path.clone();
-                                let _ = std::fs::write(&path_clone, &new_content);
+                                let _ = std::fs::write(path.as_path(), &new_content);
                                 // Also update board item if exists
                                 if let Some(ref mut board) = self.board {
                                     for item in board.items.iter_mut() {
@@ -748,12 +744,13 @@ impl Humanboard {
                                             ..
                                         } = &mut item.content
                                         {
-                                            if *item_path == path_clone {
+                                            if item_path == path {
                                                 *item_content = new_content.clone();
                                             }
                                         }
                                     }
                                 }
+                                *content = new_content;
                                 *editing = false; // Exit edit mode to show preview
                             }
                         }
