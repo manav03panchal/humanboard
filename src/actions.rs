@@ -81,6 +81,8 @@ actions!(
         // === Focus Management ===
         FocusCanvas,  // Return focus to canvas
         FocusPreview, // Focus preview panel
+        // === Modal Focus Trap ===
+        ModalFocusTrap, // Trap Tab/Shift+Tab within modal (accessibility)
     ]
 );
 

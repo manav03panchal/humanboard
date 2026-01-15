@@ -7,7 +7,7 @@
 //! - Command palette popup
 //! - Settings modal
 
-use crate::actions::{CmdPaletteDown, CmdPaletteUp, OpenSettings};
+use crate::actions::{CmdPaletteDown, CmdPaletteUp, ModalFocusTrap, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::settings::Settings;
 
@@ -1101,6 +1101,10 @@ pub fn render_settings_modal(
                     .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                         this.toggle_settings(window, cx);
                     }))
+                    // Focus trap: consume Tab/Shift+Tab to prevent focus escaping modal (accessibility)
+                    .on_action(cx.listener(|_, _: &ModalFocusTrap, _, _| {
+                        // No-op: consuming the event prevents focus from leaving the modal
+                    }))
                     // Left sidebar
                     .child(
                         v_flex()
@@ -1538,6 +1542,10 @@ pub fn render_create_board_modal(
                     .rounded(px(12.0))
                     .overflow_hidden()
                     .shadow_lg()
+                    // Focus trap: consume Tab/Shift+Tab to prevent focus escaping modal (accessibility)
+                    .on_action(cx.listener(|_, _: &ModalFocusTrap, _, _| {
+                        // No-op: consuming the event prevents focus from leaving the modal
+                    }))
                     // Header
                     .child(
                         h_flex()
