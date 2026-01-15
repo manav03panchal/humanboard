@@ -304,8 +304,9 @@ impl Board {
             let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() % 100000;
+                .unwrap_or_default()
+                .as_millis()
+                % 100000;
 
             let new_name = if ext.is_empty() {
                 format!("{}_{}", stem, timestamp)

@@ -798,10 +798,13 @@ pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Co
                 let is_ordered = list_stack.last().map(|o| o.is_some()).unwrap_or(false);
 
                 let bullet = if is_ordered {
-                    let num = current_list_num.last_mut().unwrap();
-                    let s = format!("{}.", num);
-                    *num += 1;
-                    s
+                    if let Some(num) = current_list_num.last_mut() {
+                        let s = format!("{}.", num);
+                        *num += 1;
+                        s
+                    } else {
+                        "1.".to_string()
+                    }
                 } else {
                     "•".to_string()
                 };

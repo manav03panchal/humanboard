@@ -122,11 +122,13 @@ impl Render for Humanboard {
                     cx,
                 ))
             })
-            .when(
-                self.show_create_board_modal && self.create_board_input.is_some(),
-                |d| {
+            .when_some(
+                self.create_board_input
+                    .as_ref()
+                    .filter(|_| self.show_create_board_modal),
+                |d, input| {
                     d.child(render_create_board_modal(
-                        self.create_board_input.as_ref().unwrap(),
+                        input,
                         &self.create_board_location,
                         &self.focus.modal,
                         cx,
@@ -251,11 +253,12 @@ impl Humanboard {
         let frame_count = self.frame_count;
         let selected_items = self.selected_items.clone();
         let selected_item_name = if self.selected_items.len() == 1 {
-            let id = *self.selected_items.iter().next().unwrap();
-            self.board
-                .as_ref()
-                .and_then(|b| b.items.iter().find(|i| i.id == id))
-                .map(|i| i.content.display_name())
+            self.selected_items.iter().next().and_then(|&id| {
+                self.board
+                    .as_ref()
+                    .and_then(|b| b.items.iter().find(|i| i.id == id))
+                    .map(|i| i.content.display_name())
+            })
         } else if self.selected_items.len() > 1 {
             Some(format!("{} items selected", self.selected_items.len()))
         } else {
@@ -282,9 +285,10 @@ impl Humanboard {
         };
 
         // Extract preview info
-        let preview_ref = self.preview.as_ref();
-        let preview_info =
-            preview_ref.map(|p| (p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
+        let preview_info = self
+            .preview
+            .as_ref()
+            .map(|p| (p, p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
 
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
@@ -461,7 +465,7 @@ impl Humanboard {
 
         let selected_tool = self.selected_tool;
         let content = match preview_info {
-            Some((split, size, tabs, active_tab, is_pane_split)) => {
+            Some((preview_ref, split, size, tabs, active_tab, is_pane_split)) => {
                 let canvas_size = 1.0 - size;
                 let preview_size = size;
 
@@ -523,7 +527,7 @@ impl Humanboard {
                                     if is_pane_split {
                                         // Render split panes
                                         container.child(render_split_panes(
-                                            preview_ref.unwrap(),
+                                            preview_ref,
                                             &self.preview_tab_scroll,
                                             &self.preview_right_tab_scroll,
                                             self.dragging_tab,
@@ -644,7 +648,7 @@ impl Humanboard {
                                     if is_pane_split {
                                         // Render split panes
                                         container.child(render_split_panes(
-                                            preview_ref.unwrap(),
+                                            preview_ref,
                                             &self.preview_tab_scroll,
                                             &self.preview_right_tab_scroll,
                                             self.dragging_tab,

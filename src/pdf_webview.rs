@@ -48,32 +48,27 @@ impl PdfWebView {
         let file_url = path_to_file_url(&path);
 
         // Create WebView entity
-        let webview_entity = cx.new(|cx| {
-            let builder = WebViewBuilder::new();
+        let builder = WebViewBuilder::new();
 
-            #[cfg(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            ))]
-            let webview = {
-                builder
-                    .build_as_child(window)
-                    .map_err(|e| format!("Failed to create WebView: {:?}", e))
-            };
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = builder
+            .build_as_child(window)
+            .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
 
-            #[cfg(not(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            )))]
-            let webview = Err("WebView not supported on this platform".to_string());
+        #[cfg(not(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        return Err("WebView not supported on this platform".to_string());
 
-            let webview = webview.expect("Failed to create webview");
-            WebView::new(webview, window, cx)
-        });
+        let webview_entity = cx.new(|cx| WebView::new(webview, window, cx));
 
         // Load the PDF
         webview_entity.update(cx, |view, _| {

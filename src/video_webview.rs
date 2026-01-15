@@ -12,6 +12,11 @@ use wry::WebViewBuilder;
 // Global port counter for unique server ports
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(19950);
 
+/// Helper to create HTTP headers, returning None if the bytes are invalid
+fn create_header(name: &[u8], value: &[u8]) -> Option<Header> {
+    Header::from_bytes(name, value).ok()
+}
+
 /// WebView-based video player with local HTTP server supporting range requests
 pub struct VideoWebView {
     pub webview_entity: Entity<WebView>,
@@ -69,10 +74,12 @@ impl VideoWebView {
                             // Handle range requests for video streaming
                             Self::serve_video_file(&video_path_clone, request);
                         } else {
-                            let response = Response::from_string(&html).with_header(
-                                Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..])
-                                    .unwrap(),
-                            );
+                            let mut response = Response::from_string(&html);
+                            if let Some(header) =
+                                create_header(&b"Content-Type"[..], &b"text/html"[..])
+                            {
+                                response = response.with_header(header);
+                            }
                             let _ = request.respond(response);
                         }
                     }
@@ -86,29 +93,26 @@ impl VideoWebView {
 
         let url = format!("http://127.0.0.1:{}/", port);
 
-        let webview_entity = cx.new(|cx| {
-            #[cfg(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            ))]
-            let webview = WebViewBuilder::new()
-                .with_url(&url)
-                .build_as_child(window)
-                .map_err(|e| format!("Failed to create WebView: {:?}", e));
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = WebViewBuilder::new()
+            .with_url(&url)
+            .build_as_child(window)
+            .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
 
-            #[cfg(not(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            )))]
-            let webview = Err("WebView not supported on this platform".to_string());
+        #[cfg(not(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        return Err("WebView not supported on this platform".to_string());
 
-            let webview = webview.expect("Failed to create webview");
-            WebView::new(webview, window, cx)
-        });
+        let webview_entity = cx.new(|cx| WebView::new(webview, window, cx));
 
         Ok(Self {
             webview_entity,
@@ -188,25 +192,22 @@ impl VideoWebView {
 
                     let content_range = format!("bytes {}-{}/{}", start, end, file_size);
 
-                    let response = Response::from_data(buffer)
-                        .with_status_code(StatusCode(206))
-                        .with_header(
-                            Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
-                        )
-                        .with_header(
-                            Header::from_bytes(&b"Content-Range"[..], content_range.as_bytes())
-                                .unwrap(),
-                        )
-                        .with_header(
-                            Header::from_bytes(&b"Accept-Ranges"[..], &b"bytes"[..]).unwrap(),
-                        )
-                        .with_header(
-                            Header::from_bytes(
-                                &b"Content-Length"[..],
-                                length.to_string().as_bytes(),
-                            )
-                            .unwrap(),
-                        );
+                    let mut response = Response::from_data(buffer).with_status_code(StatusCode(206));
+                    if let Some(h) = create_header(&b"Content-Type"[..], mime.as_bytes()) {
+                        response = response.with_header(h);
+                    }
+                    if let Some(h) = create_header(&b"Content-Range"[..], content_range.as_bytes())
+                    {
+                        response = response.with_header(h);
+                    }
+                    if let Some(h) = create_header(&b"Accept-Ranges"[..], &b"bytes"[..]) {
+                        response = response.with_header(h);
+                    }
+                    if let Some(h) =
+                        create_header(&b"Content-Length"[..], length.to_string().as_bytes())
+                    {
+                        response = response.with_header(h);
+                    }
 
                     let _ = request.respond(response);
                     return;
@@ -221,13 +222,16 @@ impl VideoWebView {
             return;
         }
 
-        let response = Response::from_data(buffer)
-            .with_header(Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap())
-            .with_header(Header::from_bytes(&b"Accept-Ranges"[..], &b"bytes"[..]).unwrap())
-            .with_header(
-                Header::from_bytes(&b"Content-Length"[..], file_size.to_string().as_bytes())
-                    .unwrap(),
-            );
+        let mut response = Response::from_data(buffer);
+        if let Some(h) = create_header(&b"Content-Type"[..], mime.as_bytes()) {
+            response = response.with_header(h);
+        }
+        if let Some(h) = create_header(&b"Accept-Ranges"[..], &b"bytes"[..]) {
+            response = response.with_header(h);
+        }
+        if let Some(h) = create_header(&b"Content-Length"[..], file_size.to_string().as_bytes()) {
+            response = response.with_header(h);
+        }
 
         let _ = request.respond(response);
     }

@@ -10,6 +10,11 @@ use wry::WebViewBuilder;
 // Global port counter for unique server ports
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(19800);
 
+/// Helper to create HTTP headers, returning None if the bytes are invalid
+fn create_header(name: &[u8], value: &[u8]) -> Option<tiny_http::Header> {
+    tiny_http::Header::from_bytes(name, value).ok()
+}
+
 /// WebView-based YouTube player with local HTTP server
 pub struct YouTubeWebView {
     webview_entity: Entity<WebView>,
@@ -77,10 +82,12 @@ impl YouTubeWebView {
                 // Use recv_timeout to periodically check shutdown flag
                 match server.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(Some(request)) => {
-                        let response = Response::from_string(&html).with_header(
-                            tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..])
-                                .unwrap(),
-                        );
+                        let mut response = Response::from_string(&html);
+                        if let Some(header) =
+                            create_header(&b"Content-Type"[..], &b"text/html"[..])
+                        {
+                            response = response.with_header(header);
+                        }
                         let _ = request.respond(response);
                     }
                     Ok(None) => {
@@ -101,31 +108,26 @@ impl YouTubeWebView {
         let url = format!("http://127.0.0.1:{}/", port);
 
         // Create WebView entity pointing to local server
-        let webview_entity = cx.new(|cx| {
-            #[cfg(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            ))]
-            let webview = {
-                WebViewBuilder::new()
-                    .with_url(&url)
-                    .build_as_child(window)
-                    .map_err(|e| format!("Failed to create WebView: {:?}", e))
-            };
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = WebViewBuilder::new()
+            .with_url(&url)
+            .build_as_child(window)
+            .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
 
-            #[cfg(not(any(
-                target_os = "macos",
-                target_os = "windows",
-                target_os = "ios",
-                target_os = "android"
-            )))]
-            let webview = Err("WebView not supported on this platform".to_string());
+        #[cfg(not(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        return Err("WebView not supported on this platform".to_string());
 
-            let webview = webview.expect("Failed to create webview");
-            WebView::new(webview, window, cx)
-        });
+        let webview_entity = cx.new(|cx| WebView::new(webview, window, cx));
 
         Ok(Self {
             webview_entity,

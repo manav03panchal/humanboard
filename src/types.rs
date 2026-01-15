@@ -323,19 +323,36 @@ impl ItemContent {
                     }
                 }
                 ext if language_from_extension(ext).is_some() => {
-                    let language = language_from_extension(ext).unwrap().to_string();
+                    // Safe to use unwrap_or here since we already checked is_some()
+                    let language = language_from_extension(ext)
+                        .unwrap_or("text")
+                        .to_string();
                     ItemContent::Code {
                         path: path.clone(),
                         language,
                     }
                 }
                 "txt" => {
-                    ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy()))
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Untitled".to_string());
+                    ItemContent::Text(name)
                 }
-                _ => ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy())),
+                _ => {
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Untitled".to_string());
+                    ItemContent::Text(name)
+                }
             }
         } else {
-            ItemContent::Text(format!("{}", path.file_name().unwrap().to_string_lossy()))
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Untitled".to_string());
+            ItemContent::Text(name)
         }
     }
 }
