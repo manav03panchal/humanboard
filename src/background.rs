@@ -43,9 +43,6 @@ pub struct BackgroundExecutor {
     task_tx: Sender<BackgroundTask>,
     /// Receiver for completed task results
     result_rx: Receiver<PendingResult>,
-    /// Sender for completed results (kept alive so workers can send)
-    #[allow(dead_code)]
-    result_tx: Sender<PendingResult>,
     /// Worker threads
     workers: Vec<JoinHandle<()>>,
     /// Whether the executor is running
@@ -148,7 +145,6 @@ impl BackgroundExecutor {
         Self {
             task_tx,
             result_rx,
-            result_tx,
             workers,
             running,
             pending_count,

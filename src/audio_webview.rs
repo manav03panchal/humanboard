@@ -39,8 +39,6 @@ fn create_header(name: &[u8], value: &[u8]) -> Option<Header> {
 pub struct AudioWebView {
     pub webview_entity: Entity<WebView>,
     pub audio_path: PathBuf,
-    #[allow(dead_code)]
-    port: u16,
     shutdown_flag: Arc<AtomicBool>,
     _server_thread: Option<JoinHandle<()>>,
 }
@@ -336,7 +334,6 @@ impl AudioWebView {
         Ok(Self {
             webview_entity,
             audio_path,
-            port,
             shutdown_flag,
             _server_thread: Some(server_thread),
         })

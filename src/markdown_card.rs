@@ -244,51 +244,6 @@ pub fn render_collapsed_markdown(
         )
 }
 
-/// Render a collapsed markdown card as a simple button with filename
-/// Takes theme colors as parameters for proper theming support
-#[allow(dead_code)]
-pub fn render_collapsed_card(
-    card: &MarkdownCard,
-    _bounds: Bounds<Pixels>,
-    zoom: f32,
-    bg: Hsla,
-    border: Hsla,
-    hover_bg: Hsla,
-    hover_border: Hsla,
-    icon_color: Hsla,
-    text_color: Hsla,
-) -> Div {
-    let title = card.extract_title();
-
-    div()
-        .size_full()
-        .bg(bg)
-        .rounded(px(6.0 * zoom))
-        .border(px(1.0 * zoom))
-        .border_color(border)
-        .cursor(CursorStyle::PointingHand)
-        .hover(move |s| s.bg(hover_bg).border_color(hover_border))
-        .flex()
-        .items_center()
-        .gap(px(8.0 * zoom))
-        .px(px(12.0 * zoom))
-        .child(
-            Icon::new(IconName::File)
-                .size(px(16.0 * zoom))
-                .text_color(icon_color),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_size(px(12.0 * zoom))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(text_color)
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .child(title),
-        )
-}
-
 /// Text segment with styling info
 #[derive(Clone)]
 struct TextSegment {

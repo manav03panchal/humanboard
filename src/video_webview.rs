@@ -36,8 +36,6 @@ fn create_header(name: &[u8], value: &[u8]) -> Option<Header> {
 pub struct VideoWebView {
     pub webview_entity: Entity<WebView>,
     pub video_path: PathBuf,
-    #[allow(dead_code)]
-    port: u16,
     shutdown_flag: Arc<AtomicBool>,
     _server_thread: Option<JoinHandle<()>>,
 }
@@ -132,7 +130,6 @@ impl VideoWebView {
         Ok(Self {
             webview_entity,
             video_path,
-            port,
             shutdown_flag,
             _server_thread: Some(server_thread),
         })
