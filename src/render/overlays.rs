@@ -1447,7 +1447,7 @@ pub fn render_settings_modal(
                     ),
             ),
     )
-    .with_priority(1500)
+    .with_priority(1500) // Settings modal z-index
 }
 
 /// Global marker for which settings dropdown is open
@@ -1751,5 +1751,5 @@ pub fn render_create_board_modal(
                     ),
             ),
     )
-    .with_priority(1500)
+    .with_priority(1600) // Create Board modal z-index (above Settings modal at 1500)
 }
