@@ -86,6 +86,10 @@ pub struct SettingsContent {
     /// Pan sensitivity multiplier
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pan_sensitivity: Option<f32>,
+
+    /// Whether onboarding has been completed
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onboarding_completed: Option<bool>,
 }
 
 impl SettingsContent {
@@ -124,6 +128,9 @@ impl SettingsContent {
         }
         if other.pan_sensitivity.is_some() {
             self.pan_sensitivity = other.pan_sensitivity;
+        }
+        if other.onboarding_completed.is_some() {
+            self.onboarding_completed = other.onboarding_completed;
         }
     }
 }
@@ -309,6 +316,7 @@ impl SettingsStore {
             max_undo_history: Some(defaults.max_undo_history),
             zoom_sensitivity: Some(defaults.zoom_sensitivity),
             pan_sensitivity: Some(defaults.pan_sensitivity),
+            onboarding_completed: Some(false),
         }
     }
 
@@ -551,6 +559,23 @@ where
         .write()
         .map_err(|_| SettingsError::LockPoisoned("settings store write lock poisoned".into()))?;
     guard.update(source, updater)
+}
+
+/// Check if onboarding has been completed.
+pub fn is_onboarding_completed() -> bool {
+    let store = global_settings();
+    let guard = store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard
+        .merged_content()
+        .onboarding_completed
+        .unwrap_or(false)
+}
+
+/// Mark onboarding as completed.
+pub fn mark_onboarding_completed() -> Result<(), SettingsError> {
+    update_setting(SettingsSource::User, |content| {
+        content.onboarding_completed = Some(true);
+    })
 }
 
 // ============================================================================

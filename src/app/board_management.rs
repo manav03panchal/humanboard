@@ -214,4 +214,18 @@ impl Humanboard {
         self.show_trash = !self.show_trash;
         cx.notify();
     }
+
+    // ==================== Onboarding Methods ====================
+
+    /// Complete onboarding and transition to landing page
+    pub fn complete_onboarding(&mut self, cx: &mut Context<Self>) {
+        // Mark onboarding as completed in settings
+        if let Err(e) = crate::settings::mark_onboarding_completed() {
+            tracing::error!("Failed to mark onboarding completed: {}", e);
+        }
+
+        // Transition to landing page
+        self.view = AppView::Landing;
+        cx.notify();
+    }
 }

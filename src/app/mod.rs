@@ -152,8 +152,15 @@ impl Humanboard {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let board_index = BoardIndex::load();
 
+        // Check if onboarding has been completed
+        let initial_view = if crate::settings::is_onboarding_completed() {
+            AppView::Landing
+        } else {
+            AppView::Onboarding
+        };
+
         Self {
-            view: AppView::Home,
+            view: initial_view,
             board_index,
             editing_board_id: None,
             edit_input: None,

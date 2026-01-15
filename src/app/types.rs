@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 /// The current view state of the application
 #[derive(Clone, Debug)]
 pub enum AppView {
+    /// Onboarding flow for new users
+    Onboarding,
     /// Home screen with countdown timer
     Home,
     /// Landing page showing all boards

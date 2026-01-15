@@ -37,6 +37,7 @@ use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::home::render_home_screen;
 use crate::landing::render_landing_page;
 use crate::notifications::render_toast_container;
+use crate::onboarding::render_onboarding_page;
 use gpui::DefiniteLength::Fraction;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -69,6 +70,7 @@ impl Render for Humanboard {
 
         // Route based on current view
         let content = match &self.view {
+            AppView::Onboarding => self.render_onboarding_view(cx),
             AppView::Home => self.render_home_view(window, cx),
             AppView::Landing => self.render_landing_view(cx),
             AppView::Board(_) => self.render_board_view(window, cx),
@@ -213,6 +215,11 @@ impl Humanboard {
                 self.show_trash,
                 cx,
             ))
+    }
+
+    /// Render the onboarding welcome view
+    fn render_onboarding_view(&mut self, cx: &mut Context<Self>) -> Div {
+        render_onboarding_page(cx)
     }
 
     /// Render the board/canvas view
