@@ -39,6 +39,9 @@ once_cell = "1.19"
 # File watching for settings hot-reload
 notify = "6.1"
 
+# Secure temp file handling
+tempfile = "3.10"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 core-text = "20.1"
 

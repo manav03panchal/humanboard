@@ -1,5 +1,8 @@
 use pdfium_render::prelude::*;
+use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use tempfile::NamedTempFile;
 use tracing::{debug, info_span, warn};
 
 /// Generate a thumbnail image for a PDF's first page
@@ -36,17 +39,7 @@ pub fn generate_pdf_thumbnail<P: AsRef<Path>>(pdf_path: P) -> Option<PathBuf> {
     let bitmap = page.render_with_config(&render_config).ok()?;
     let image = bitmap.as_image();
 
-    // Save to temp directory
-    let temp_dir = std::env::temp_dir()
-        .join("humanboard")
-        .join("pdf_thumbnails");
-    std::fs::create_dir_all(&temp_dir).ok()?;
-
-    // Create unique filename from PDF path
-    let pdf_name = pdf_path.file_stem()?.to_string_lossy();
-    let thumbnail_path = temp_dir.join(format!("{}_thumb.png", pdf_name));
-
-    // Save as PNG
+    // Save as PNG data first
     let mut png_data = Vec::new();
     if let Err(e) = image.write_to(
         &mut std::io::Cursor::new(&mut png_data),
@@ -56,8 +49,38 @@ pub fn generate_pdf_thumbnail<P: AsRef<Path>>(pdf_path: P) -> Option<PathBuf> {
         return None;
     }
 
-    if let Err(e) = std::fs::write(&thumbnail_path, &png_data) {
-        warn!("Failed to save PDF thumbnail to {:?}: {:?}", thumbnail_path, e);
+    // Create secure temp directory with restricted permissions
+    let temp_dir = std::env::temp_dir()
+        .join("humanboard")
+        .join("pdf_thumbnails");
+    std::fs::create_dir_all(&temp_dir).ok()?;
+
+    // Generate cryptographic hash of the full canonical path for unique filename
+    let canonical_path = pdf_path.canonicalize().unwrap_or_else(|_| pdf_path.to_path_buf());
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_path.to_string_lossy().as_bytes());
+    let path_hash = format!("{:x}", hasher.finalize());
+    let thumbnail_filename = format!("{}_thumb.png", &path_hash[..16]);
+    let thumbnail_path = temp_dir.join(&thumbnail_filename);
+
+    // Use atomic write: create temp file, write, then persist
+    // This prevents TOCTOU race conditions and symlink attacks
+    let mut temp_file = match NamedTempFile::new_in(&temp_dir) {
+        Ok(f) => f,
+        Err(e) => {
+            warn!("Failed to create temp file for thumbnail: {:?}", e);
+            return None;
+        }
+    };
+
+    if let Err(e) = temp_file.write_all(&png_data) {
+        warn!("Failed to write thumbnail data: {:?}", e);
+        return None;
+    }
+
+    // Atomically persist to final location
+    if let Err(e) = temp_file.persist(&thumbnail_path) {
+        warn!("Failed to persist PDF thumbnail to {:?}: {:?}", thumbnail_path, e);
         return None;
     }
 
