@@ -11,7 +11,11 @@ use std::time::{Duration, Instant};
 /// The current view state of the application
 #[derive(Clone, Debug)]
 pub enum AppView {
+    /// Home screen with countdown timer
+    Home,
+    /// Landing page showing all boards
     Landing,
+    /// Board canvas view
     Board(String), // Board ID
 }
 
@@ -292,4 +296,64 @@ pub struct PanAnimation {
     pub target_offset: Point<Pixels>,
     pub start_time: Instant,
     pub duration: Duration,
+}
+
+/// State for the countdown timer on the home screen
+#[derive(Clone, Debug)]
+pub struct CountdownState {
+    /// Target time to count down to
+    pub target: std::time::SystemTime,
+    /// Label/title for the countdown
+    pub label: String,
+    /// Whether the countdown is active
+    pub active: bool,
+}
+
+impl CountdownState {
+    /// Create a new countdown to a target time
+    pub fn new(target: std::time::SystemTime, label: impl Into<String>) -> Self {
+        Self {
+            target,
+            label: label.into(),
+            active: true,
+        }
+    }
+
+    /// Create a countdown to midnight tonight
+    pub fn until_midnight() -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // Get current time
+        let now = SystemTime::now();
+        let duration_since_epoch = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+        let secs = duration_since_epoch.as_secs();
+
+        // Calculate seconds until midnight (next day start)
+        let secs_per_day = 24 * 60 * 60;
+        let secs_today = secs % secs_per_day;
+        let secs_until_midnight = secs_per_day - secs_today;
+
+        let target = now + Duration::from_secs(secs_until_midnight);
+
+        Self::new(target, "Until Midnight")
+    }
+
+    /// Get remaining time as (hours, minutes, seconds)
+    pub fn remaining(&self) -> Option<(u64, u64, u64)> {
+        let now = std::time::SystemTime::now();
+        if let Ok(remaining) = self.target.duration_since(now) {
+            let total_secs = remaining.as_secs();
+            let hours = total_secs / 3600;
+            let minutes = (total_secs % 3600) / 60;
+            let seconds = total_secs % 60;
+            Some((hours, minutes, seconds))
+        } else {
+            None // Countdown finished
+        }
+    }
+
+    /// Check if countdown has finished
+    pub fn is_finished(&self) -> bool {
+        self.remaining().is_none()
+    }
 }

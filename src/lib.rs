@@ -29,6 +29,7 @@ pub mod command_registry;
 pub mod error;
 pub mod focus;
 pub mod hit_testing;
+pub mod home;
 pub mod input;
 pub mod landing;
 pub mod loading;
