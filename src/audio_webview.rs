@@ -250,7 +250,8 @@ impl AudioWebView {
                 album_art = if let Some(ref art_data) = album_art_base64 {
                     // Format is "mime_type|base64_data"
                     let parts: Vec<&str> = art_data.splitn(2, '|').collect();
-                    if parts.len() == 2 {
+                    // Validate MIME type and base64 data to prevent XSS (CWE-79)
+                    if parts.len() == 2 && is_valid_image_mime(parts[0]) && is_valid_base64(parts[1]) {
                         format!(r#"<img src="data:{};base64,{}" alt="">"#, parts[0], parts[1])
                     } else {
                         r#"<svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>"#.to_string()
@@ -444,6 +445,20 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+/// Validate that a MIME type is a safe image type to prevent XSS (CWE-79)
+fn is_valid_image_mime(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/bmp" | "image/svg+xml"
+    )
+}
+
+/// Validate that a string contains only valid base64 characters to prevent XSS (CWE-79)
+fn is_valid_base64(s: &str) -> bool {
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
 }
 
 /// Extract title, artist, and album art from audio file metadata
