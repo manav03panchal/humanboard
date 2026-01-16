@@ -51,7 +51,8 @@ impl Humanboard {
 
         // Observe keystrokes at window level to intercept arrow keys before Input handles them
         // This is necessary because Input's internal MoveUp/MoveDown handlers capture arrow keys
-        cx.observe_keystrokes(|this, event, _window, cx| {
+        // Store the subscription so it gets dropped when palette closes
+        let keystroke_sub = cx.observe_keystrokes(|this, event, _window, cx| {
             // Only handle when command palette is open
             if this.command_palette.is_some() {
                 match event.keystroke.key.as_str() {
@@ -63,6 +64,7 @@ impl Humanboard {
                     }
                     "escape" => {
                         this.command_palette = None;
+                        this.command_palette_keystroke_sub = None;
                         this.search_results.clear();
                         this.selected_result = 0;
                         this.cmd_palette_mode = CmdPaletteMode::Items;
@@ -72,8 +74,8 @@ impl Humanboard {
                     _ => {}
                 }
             }
-        })
-        .detach();
+        });
+        self.command_palette_keystroke_sub = Some(keystroke_sub);
 
         self.command_palette = Some(input);
 
@@ -92,6 +94,7 @@ impl Humanboard {
     /// Used when window is not available (e.g., from Blur callback)
     pub fn clear_command_palette_state(&mut self, cx: &mut Context<Self>) {
         self.command_palette = None;
+        self.command_palette_keystroke_sub = None; // Drop the subscription to stop handling keystrokes
         self.search_results.clear();
         self.selected_result = 0;
         self.cmd_palette_mode = CmdPaletteMode::Items;
@@ -252,6 +255,7 @@ impl Humanboard {
                 self.pending_command = Some(format!("__theme:{}", theme_name));
             }
             self.command_palette = None;
+            self.command_palette_keystroke_sub = None;
             self.search_results.clear();
             self.selected_result = 0;
             self.cmd_palette_mode = CmdPaletteMode::Items;
@@ -299,6 +303,7 @@ impl Humanboard {
         }
 
         self.command_palette = None;
+        self.command_palette_keystroke_sub = None;
         self.search_results.clear();
         self.selected_result = 0;
         cx.notify();
