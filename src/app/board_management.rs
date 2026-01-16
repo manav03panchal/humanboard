@@ -13,6 +13,7 @@ impl Humanboard {
     /// Show the create board modal with input field
     pub fn show_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus.focus(FocusContext::Modal, window);
+        self.reset_modal_focus(); // Reset focus index for Tab cycling
 
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("Enter board name..."));
 

@@ -93,7 +93,9 @@ actions!(
         FocusCanvas,  // Return focus to canvas
         FocusPreview, // Focus preview panel
         // === Modal Focus Trap ===
-        ModalFocusTrap, // Trap Tab/Shift+Tab within modal (accessibility)
+        ModalFocusTrap,  // Trap Tab/Shift+Tab within modal (accessibility)
+        ModalFocusNext,  // Move focus to next element in modal (Tab)
+        ModalFocusPrev,  // Move focus to previous element in modal (Shift+Tab)
     ]
 );
 

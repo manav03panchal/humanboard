@@ -1,6 +1,6 @@
 //! Create board modal component.
 
-use crate::actions::ModalFocusTrap;
+use crate::actions::{ModalFocusNext, ModalFocusPrev};
 use crate::app::Humanboard;
 use crate::focus::FocusContext;
 use gpui::prelude::FluentBuilder;
@@ -82,7 +82,12 @@ pub fn render_create_board_modal(
                     .rounded(px(12.0))
                     .overflow_hidden()
                     .shadow_lg()
-                    .on_action(cx.listener(|_, _: &ModalFocusTrap, _, _| {}))
+                    .on_action(cx.listener(|this, _: &ModalFocusNext, window, cx| {
+                        this.modal_focus_next(window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &ModalFocusPrev, window, cx| {
+                        this.modal_focus_prev(window, cx);
+                    }))
                     // Header
                     .child(
                         h_flex()

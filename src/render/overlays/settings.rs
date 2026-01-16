@@ -1,6 +1,6 @@
 //! Settings modal component.
 
-use crate::actions::{ModalFocusTrap, OpenSettings};
+use crate::actions::{ModalFocusNext, ModalFocusPrev, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::focus::FocusContext;
 use crate::settings::Settings;
@@ -99,7 +99,12 @@ pub fn render_settings_modal(
                     .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                         this.toggle_settings(window, cx);
                     }))
-                    .on_action(cx.listener(|_, _: &ModalFocusTrap, _, _| {}))
+                    .on_action(cx.listener(|this, _: &ModalFocusNext, window, cx| {
+                        this.modal_focus_next(window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &ModalFocusPrev, window, cx| {
+                        this.modal_focus_prev(window, cx);
+                    }))
                     // Left sidebar
                     .child(render_settings_sidebar(active_tab, title_bar, border, fg, muted_fg, list_active, list_hover, cx))
                     // Right content area
