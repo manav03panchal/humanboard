@@ -288,7 +288,9 @@ impl AudioWebView {
                 match server.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(Some(request)) => {
                         let url = request.url();
+                        tracing::info!("[AUDIO] Request: {}", url);
                         if url.starts_with("/audio") {
+                            tracing::info!("[AUDIO] Serving file: {:?}", audio_path_clone);
                             Self::serve_audio_file(&audio_path_clone, request);
                         } else {
                             let mut response = Response::from_string(&html);
@@ -306,9 +308,10 @@ impl AudioWebView {
             }
         });
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(150));
 
         let url = format!("http://127.0.0.1:{}/", port);
+        tracing::info!("[AUDIO] WebView URL: {}", url);
 
         #[cfg(any(
             target_os = "macos",
