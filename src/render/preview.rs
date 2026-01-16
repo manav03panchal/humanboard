@@ -532,7 +532,10 @@ fn render_pane(
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
+                .w_full()
                 .overflow_hidden()
+                .flex()
+                .flex_col()
                 .when_some(tabs.get(active_tab), |d, tab| {
                     d.child(render_tab_content(tab, true, active_tab, cx))
                 }),
@@ -799,7 +802,7 @@ pub fn render_tab_content(
         PreviewTab::Pdf { .. } => {
             // PDF webviews are positioned explicitly via set_bounds in ensure_pdf_webview
             // We just need an empty container - the webview renders as a native overlay
-            div().size_full()
+            div().flex_1().w_full().min_h_0()
         }
         PreviewTab::Markdown {
             content,
@@ -810,7 +813,9 @@ pub fn render_tab_content(
             let is_editing = *editing;
 
             v_flex()
-                .size_full()
+                .flex_1()
+                .w_full()
+                .min_h_0()
                 .bg(bg)
                 .child(
                     // Content area
@@ -828,7 +833,7 @@ pub fn render_tab_content(
                         .when(is_editing, |d| {
                             // Edit mode - code editor with markdown syntax highlighting
                             if let Some(ed) = editor {
-                                d.child(Input::new(ed).h_full().appearance(false))
+                                d.child(Input::new(ed).size_full().appearance(false))
                             } else {
                                 d.child(div().p_4().child(render_loading_spinner(
                                     "Loading editor...",
@@ -900,7 +905,9 @@ pub fn render_tab_content(
             let line_count = content.lines().count();
 
             v_flex()
-                .size_full()
+                .flex_1()
+                .w_full()
+                .min_h_0()
                 .bg(bg)
                 .child({
                     // Content area - always editable
@@ -925,7 +932,7 @@ pub fn render_tab_content(
                             }
                         }))
                         .child(if let Some(ed) = editor {
-                            Input::new(ed).h_full().appearance(false).into_any_element()
+                            Input::new(ed).size_full().appearance(false).into_any_element()
                         } else {
                             div()
                                 .p_4()
