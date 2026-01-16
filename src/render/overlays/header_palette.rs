@@ -25,7 +25,7 @@ pub fn render_header_center(
     let border = cx.theme().border;
     let muted = cx.theme().muted;
     let muted_fg = cx.theme().muted_foreground;
-    let input_bg = cx.theme().input;
+    let input_bg = cx.theme().secondary;
     let popover_bg = cx.theme().popover;
     let primary = cx.theme().primary;
 

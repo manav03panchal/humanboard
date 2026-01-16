@@ -39,7 +39,7 @@ pub fn render_settings_modal(
     let title_bar = cx.theme().title_bar;
     let list_active = cx.theme().list_active;
     let list_hover = cx.theme().list_hover;
-    let input_bg = cx.theme().input;
+    let input_bg = cx.theme().secondary;
 
     deferred(
         div()
