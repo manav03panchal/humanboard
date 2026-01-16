@@ -321,6 +321,7 @@ impl AudioWebView {
         ))]
         let webview = WebViewBuilder::new()
             .with_url(&url)
+            .with_autoplay(true)
             .build_as_child(window)
             .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
 
