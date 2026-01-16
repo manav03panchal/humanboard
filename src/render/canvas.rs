@@ -234,8 +234,8 @@ fn render_item_content(
                     .child(
                         div()
                             .flex_1()
-                            .w_full()
-                            .overflow_hidden()
+                            .size_full()
+                            .min_h_0()
                             .child(webview.webview_entity.clone()),
                     )
             } else {
@@ -285,8 +285,8 @@ fn render_item_content(
                     .child(
                         div()
                             .flex_1()
-                            .w_full()
-                            .overflow_hidden()
+                            .size_full()
+                            .min_h_0()
                             .child(webview.webview_entity.clone()),
                     )
             } else {
@@ -376,8 +376,8 @@ fn render_item_content(
                     .child(
                         div()
                             .flex_1()
-                            .w_full()
-                            .overflow_hidden()
+                            .size_full()
+                            .min_h_0()
                             .rounded_b(corner_radius)
                             .child(webview.webview().clone()),
                     )
