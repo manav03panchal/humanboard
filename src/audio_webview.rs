@@ -211,7 +211,7 @@ impl AudioWebView {
         </div>
     </div>
     <audio id="audio" preload="metadata">
-        <source src="/audio" type="audio/mpeg">
+        <source src="http://127.0.0.1:{port}/audio" type="audio/mpeg">
     </audio>
     <script>
         const audio = document.getElementById('audio');
@@ -275,6 +275,7 @@ impl AudioWebView {
     </script>
 </body>
 </html>"##,
+                port = port,
                 title = html_escape(&display_title),
                 artist = html_escape(&display_artist),
                 album_art = if let Some(ref art_data) = album_art_base64 {
