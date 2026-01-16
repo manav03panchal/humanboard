@@ -259,36 +259,12 @@ fn render_item_content(
         ItemContent::Audio(_path) => {
             // Render Audio WebView if available
             if let Some(webview) = audio_webviews.get(&item.id) {
-                v_flex()
+                div()
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(24.0 * zoom))
-                            .bg(title_bar)
-                            .border_b_1()
-                            .border_color(border)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child("≡"),
-                            ),
-                    )
-                    // WebView takes remaining space
-                    .child(
-                        div()
-                            .flex_1()
-                            .w_full()
-                            .overflow_hidden()
-                            .child(webview.webview_entity.clone()),
-                    )
+                    .bg(muted_bg)
+                    .child(webview.webview_entity.clone())
             } else {
                 // Placeholder while loading
                 div()
