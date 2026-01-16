@@ -15,6 +15,7 @@ pub fn render_command_palette(
     input: &Entity<InputState>,
     search_results: &[(u64, String)],
     selected_result: usize,
+    opacity: f32,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let current_text = input.read(cx).text().to_string();
@@ -36,7 +37,7 @@ pub fn render_command_palette(
         v_flex()
             .absolute()
             .inset_0()
-            .bg(hsla(0.0, 0.0, 0.0, 0.6))
+            .bg(hsla(0.0, 0.0, 0.0, 0.6 * opacity))
             .items_center()
             .pt(px(120.0))
             .on_mouse_down(
@@ -49,9 +50,9 @@ pub fn render_command_palette(
                     .w(px(500.0))
                     .max_h(px(400.0))
                     .flex_shrink_0()
-                    .bg(bg)
+                    .bg(bg.opacity(opacity))
                     .border_1()
-                    .border_color(border)
+                    .border_color(border.opacity(opacity))
                     .rounded(px(12.0))
                     .shadow_lg()
                     .overflow_hidden()

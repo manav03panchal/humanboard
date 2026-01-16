@@ -1,6 +1,7 @@
 //! Application lifecycle - initialization and cleanup methods.
 
 use super::{AppView, CmdPaletteMode, CountdownState, Humanboard, SettingsTab, StorageLocation};
+use crate::animations::ModalAnimationState;
 use crate::background::BackgroundExecutor;
 use crate::board_index::BoardIndex;
 use crate::focus::FocusManager;
@@ -92,6 +93,7 @@ impl Humanboard {
             preview_right_tab_scroll: ScrollHandle::new(),
             cmd_palette_scroll: ScrollHandle::new(),
             pan_animation: None,
+            modal_animations: ModalAnimationState::default(),
             selected_tool: ToolType::default(),
             drawing_start: None,
             drawing_current: None,

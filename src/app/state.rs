@@ -1,6 +1,7 @@
 //! Application state - the Humanboard struct definition.
 
 use super::{CmdPaletteMode, CountdownState, PreviewPanel, SettingsTab, StorageLocation};
+use crate::animations::ModalAnimationState;
 use crate::audio_webview::AudioWebView;
 use crate::background::BackgroundExecutor;
 use crate::board::Board;
@@ -121,6 +122,9 @@ pub struct Humanboard {
 
     // Pan animation state
     pub pan_animation: Option<PanAnimation>,
+
+    // Modal animation state
+    pub modal_animations: ModalAnimationState,
 
     // Tool dock state
     pub selected_tool: ToolType,

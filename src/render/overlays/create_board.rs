@@ -14,6 +14,7 @@ pub fn render_create_board_modal(
     input: &Entity<gpui_component::input::InputState>,
     current_location: &crate::app::StorageLocation,
     modal_focus: &FocusHandle,
+    opacity: f32,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let bg = cx.theme().background;
@@ -35,7 +36,7 @@ pub fn render_create_board_modal(
             .top_0()
             .left_0()
             .size_full()
-            .bg(hsla(0.0, 0.0, 0.0, 0.6))
+            .bg(hsla(0.0, 0.0, 0.0, 0.6 * opacity))
             .flex()
             .items_center()
             .justify_center()
@@ -76,9 +77,9 @@ pub fn render_create_board_modal(
                         }),
                     )
                     .w(px(420.0))
-                    .bg(bg)
+                    .bg(bg.opacity(opacity))
                     .border_1()
-                    .border_color(border)
+                    .border_color(border.opacity(opacity))
                     .rounded(px(12.0))
                     .overflow_hidden()
                     .shadow_lg()

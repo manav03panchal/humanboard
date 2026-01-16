@@ -24,6 +24,7 @@ pub fn render_settings_modal(
     _theme_scroll: &ScrollHandle,
     active_tab: SettingsTab,
     modal_focus: &FocusHandle,
+    opacity: f32,
     cx: &mut Context<Humanboard>,
 ) -> impl IntoElement {
     let themes = Settings::available_themes(cx);
@@ -47,7 +48,7 @@ pub fn render_settings_modal(
             .top_0()
             .left_0()
             .size_full()
-            .bg(hsla(0.0, 0.0, 0.0, 0.6))
+            .bg(hsla(0.0, 0.0, 0.0, 0.6 * opacity))
             .flex()
             .items_center()
             .justify_center()
@@ -89,9 +90,9 @@ pub fn render_settings_modal(
                     )
                     .w(px(680.0))
                     .h(px(480.0))
-                    .bg(bg)
+                    .bg(bg.opacity(opacity))
                     .border_1()
-                    .border_color(border)
+                    .border_color(border.opacity(opacity))
                     .rounded(px(10.0))
                     .overflow_hidden()
                     .shadow_lg()

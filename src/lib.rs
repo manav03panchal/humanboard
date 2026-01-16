@@ -18,6 +18,7 @@
 pub use anyhow::{Context, Result};
 
 pub mod actions;
+pub mod animations;
 pub mod app;
 pub mod background;
 pub mod constants;

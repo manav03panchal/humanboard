@@ -66,6 +66,29 @@ impl Render for Humanboard {
             window.request_animation_frame();
         }
 
+        // Update modal animations and request next frame if still animating
+        if self.modal_animations.update() {
+            window.request_animation_frame();
+        }
+
+        // Check if settings close animation is complete
+        if self.modal_animations.settings_close_complete() {
+            self.show_settings = false;
+            self.modal_animations.settings = None;
+        }
+
+        // Check if create board close animation is complete
+        if self.modal_animations.create_board_close_complete() {
+            self.finish_close_create_board();
+            self.modal_animations.create_board = None;
+        }
+
+        // Check if command palette close animation is complete
+        if self.modal_animations.command_palette_close_complete() {
+            self.finish_close_command_palette();
+            self.modal_animations.command_palette = None;
+        }
+
         // Restore focus to canvas if needed (e.g., after closing command palette via blur)
         self.focus.restore_focus_if_needed(window);
 
@@ -125,6 +148,7 @@ impl Render for Humanboard {
                     &self.settings_theme_scroll,
                     self.settings_tab,
                     &self.focus.modal,
+                    self.modal_animations.settings_opacity(),
                     cx,
                 ))
             })
@@ -137,6 +161,7 @@ impl Render for Humanboard {
                         input,
                         &self.create_board_location,
                         &self.focus.modal,
+                        self.modal_animations.create_board_opacity(),
                         cx,
                     ))
                 },

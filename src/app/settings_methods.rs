@@ -6,8 +6,16 @@ use gpui::*;
 
 impl Humanboard {
     pub fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_settings = !self.show_settings;
         if self.show_settings {
+            // Start fade-out animation
+            self.modal_animations.close_settings();
+            // Force focus back to canvas when closing settings
+            self.focus.force_canvas_focus(window);
+        } else {
+            // Open settings with fade-in animation
+            self.show_settings = true;
+            self.modal_animations.open_settings();
+
             // Set focus context to Modal
             self.focus.focus(FocusContext::Modal, window);
             self.reset_modal_focus(); // Reset focus index for Tab cycling
@@ -25,9 +33,6 @@ impl Humanboard {
                 .iter()
                 .position(|f| *f == self.settings.font)
                 .unwrap_or(0);
-        } else {
-            // Force focus back to canvas when closing settings
-            self.focus.force_canvas_focus(window);
         }
         cx.notify();
     }
