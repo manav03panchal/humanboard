@@ -76,12 +76,16 @@ fn test_toast_removal() {
 fn test_history_state_management() {
     let mut board = Board::new_for_test();
 
-    assert_eq!(board.history_len(), 1);
+    // Empty board starts with no history
+    assert_eq!(board.history_len(), 0);
     assert_eq!(board.current_history_index(), 0);
 
+    // Adding an item creates one history entry (the operation)
     board.add_item(point(px(0.0), px(0.0)), ItemContent::Text("A".to_string()));
-    assert_eq!(board.history_len(), 2);
+    assert_eq!(board.history_len(), 1);
+    assert_eq!(board.current_history_index(), 1);
 
+    // Undo removes the item and moves index back
     board.undo();
     assert_eq!(board.current_history_index(), 0);
 }

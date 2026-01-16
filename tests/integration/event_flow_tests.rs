@@ -78,6 +78,7 @@ fn test_action_sequence() {
 
     // Add
     board.add_item(point(px(0.0), px(0.0)), ItemContent::Text("A".to_string()));
+    board.push_history(); // Save baseline
 
     // Edit
     board.items[0].content = ItemContent::Text("A Modified".to_string());

@@ -814,10 +814,18 @@ impl Board {
                 self.mark_dirty();
                 true
             }
-            Some(HistoryEntry::Snapshot(state)) => {
-                // Restore from snapshot
-                self.restore_from_snapshot(&state);
-                true
+            Some(HistoryEntry::Snapshot(_)) => {
+                // For snapshots, restore the PREVIOUS state (the one before this change)
+                // history[n] contains state AFTER change n, so we need history[n-1]
+                if self.history_index > 0 {
+                    if let Some(HistoryEntry::Snapshot(prev_state)) = self.history.get(self.history_index - 1).cloned() {
+                        self.restore_from_snapshot(&prev_state);
+                        return true;
+                    }
+                }
+                // Can't undo if there's no previous snapshot
+                self.history_index += 1; // Restore index since we can't actually undo
+                false
             }
             None => false,
         }

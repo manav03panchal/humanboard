@@ -83,6 +83,7 @@ fn test_item_modification_workflow() {
     let mut board = Board::new_for_test();
 
     board.add_item(point(px(100.0), px(100.0)), ItemContent::Text("Original".to_string()));
+    board.push_history(); // Save baseline
 
     board.items[0].content = ItemContent::Text("Modified".to_string());
     board.items[0].position = (200.0, 200.0);

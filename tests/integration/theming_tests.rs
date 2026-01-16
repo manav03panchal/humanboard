@@ -68,12 +68,12 @@ fn test_toast_opacity_fade() {
 
     // Fresh toast should have full opacity
     let fresh = Toast::info("Fresh");
-    assert_eq!(fresh.opacity(), 1.0);
+    assert_eq!(fresh.opacity(false), 1.0);
 
     // Expired toast should have zero opacity
     let expired = Toast::info("Old").with_duration(Duration::from_millis(1));
     std::thread::sleep(Duration::from_millis(10));
-    assert!(expired.opacity() < 0.1);
+    assert!(expired.opacity(false) < 0.1);
 }
 
 #[test]
