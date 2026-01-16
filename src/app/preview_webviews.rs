@@ -8,12 +8,15 @@ use gpui::*;
 use tracing::error;
 
 impl Humanboard {
-    pub fn ensure_youtube_webviews(&mut self, window: &mut Window, cx: &mut App) {
+    /// Ensure YouTube webviews are created for YouTube items.
+    /// Returns a list of error messages for any webviews that failed to create.
+    pub fn ensure_youtube_webviews(&mut self, window: &mut Window, cx: &mut App) -> Vec<String> {
         use crate::types::ItemContent;
+        let mut errors = Vec::new();
 
         let Some(ref board) = self.board else {
             self.youtube_webviews.clear();
-            return;
+            return errors;
         };
 
         // Collect YouTube item IDs and video IDs
@@ -37,6 +40,7 @@ impl Humanboard {
                         self.youtube_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
+                        errors.push(format!("Failed to load YouTube video: {}", e));
                         error!(
                             "Failed to create YouTube WebView for video {}: {}",
                             video_id, e
@@ -60,14 +64,18 @@ impl Humanboard {
                 webview.hide(cx);
             }
         }
+        errors
     }
 
-    pub fn ensure_audio_webviews(&mut self, window: &mut Window, cx: &mut App) {
+    /// Ensure Audio webviews are created for Audio items.
+    /// Returns a list of error messages for any webviews that failed to create.
+    pub fn ensure_audio_webviews(&mut self, window: &mut Window, cx: &mut App) -> Vec<String> {
         use crate::types::ItemContent;
+        let mut errors = Vec::new();
 
         let Some(ref board) = self.board else {
             self.audio_webviews.clear();
-            return;
+            return errors;
         };
 
         // Collect Audio item IDs and paths
@@ -91,6 +99,10 @@ impl Humanboard {
                         self.audio_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
+                        let filename = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("audio file");
+                        errors.push(format!("Failed to load '{}': {}", filename, e));
                         error!("Failed to create Audio WebView for {:?}: {}", path, e);
                     }
                 }
@@ -111,14 +123,18 @@ impl Humanboard {
                 webview.hide(cx);
             }
         }
+        errors
     }
 
-    pub fn ensure_video_webviews(&mut self, window: &mut Window, cx: &mut App) {
+    /// Ensure Video webviews are created for Video items.
+    /// Returns a list of error messages for any webviews that failed to create.
+    pub fn ensure_video_webviews(&mut self, window: &mut Window, cx: &mut App) -> Vec<String> {
         use crate::types::ItemContent;
+        let mut errors = Vec::new();
 
         let Some(ref board) = self.board else {
             self.video_webviews.clear();
-            return;
+            return errors;
         };
 
         // Collect Video item IDs and paths
@@ -142,6 +158,10 @@ impl Humanboard {
                         self.video_webviews.insert(*item_id, webview);
                     }
                     Err(e) => {
+                        let filename = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("video file");
+                        errors.push(format!("Failed to load '{}': {}", filename, e));
                         error!("Failed to create Video WebView for {:?}: {}", path, e);
                     }
                 }
@@ -162,6 +182,7 @@ impl Humanboard {
                 webview.hide(cx);
             }
         }
+        errors
     }
 
     /// Update webview visibility based on canvas viewport

@@ -234,9 +234,14 @@ impl Board {
     /// Handle file drop - batched operation (single history push + save)
     /// For iCloud boards, files are copied to the board's files/ directory
     /// so they sync across devices.
-    pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) {
+    ///
+    /// Returns a list of error messages for any files that failed to copy.
+    /// The caller should display these to the user via toast notifications.
+    pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) -> Vec<String> {
+        let mut errors = Vec::new();
+
         if paths.is_empty() {
-            return;
+            return errors;
         }
 
         // Stagger offset for multiple files so they don't overlap
@@ -246,10 +251,17 @@ impl Board {
         for (i, path) in paths.iter().enumerate() {
             // For iCloud boards, copy the file to the board's files directory
             let actual_path = if self.should_copy_files() {
-                self.copy_file_to_board(path).unwrap_or_else(|e| {
-                    warn!("Failed to copy file to board storage: {}", e);
-                    path.clone()
-                })
+                match self.copy_file_to_board(path) {
+                    Ok(copied_path) => copied_path,
+                    Err(e) => {
+                        let filename = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("file");
+                        errors.push(format!("Failed to copy '{}': {}", filename, e));
+                        warn!("Failed to copy file to board storage: {}", e);
+                        path.clone()
+                    }
+                }
             } else {
                 path.clone()
             };
@@ -266,6 +278,8 @@ impl Board {
         // Single history push and save for the entire batch
         self.push_history();
         self.mark_dirty();
+
+        errors
     }
 
     /// Check if files should be copied to the board's storage

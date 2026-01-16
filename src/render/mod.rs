@@ -229,7 +229,11 @@ impl Humanboard {
         if let Some(rx) = &self.file_drop_rx {
             if let Ok((pos, paths)) = rx.try_recv() {
                 if let Some(ref mut board) = self.board {
-                    board.handle_file_drop(pos, paths);
+                    let errors = board.handle_file_drop(pos, paths);
+                    // Show toast notifications for any file copy errors
+                    for error in errors {
+                        self.toast_manager.push(crate::notifications::Toast::error(error));
+                    }
                 }
                 self.file_drop_rx = None;
                 cx.notify();
@@ -238,18 +242,30 @@ impl Humanboard {
 
         // Ensure WebViews and editors are created if preview is active
         if self.preview.is_some() {
-            self.ensure_pdf_webview(window, cx);
+            let pdf_errors = self.ensure_pdf_webview(window, cx);
+            for error in pdf_errors {
+                self.toast_manager.push(crate::notifications::Toast::error(error));
+            }
             self.ensure_code_editors(window, cx);
         }
 
         // Ensure YouTube WebViews are created for any YouTube items
-        self.ensure_youtube_webviews(window, cx);
+        let youtube_errors = self.ensure_youtube_webviews(window, cx);
+        for error in youtube_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error));
+        }
 
         // Ensure Audio WebViews are created for any Audio items
-        self.ensure_audio_webviews(window, cx);
+        let audio_errors = self.ensure_audio_webviews(window, cx);
+        for error in audio_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error));
+        }
 
         // Ensure Video WebViews are created for any Video items
-        self.ensure_video_webviews(window, cx);
+        let video_errors = self.ensure_video_webviews(window, cx);
+        for error in video_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error));
+        }
 
         // Update webview visibility based on canvas viewport
         // This hides webviews that are scrolled out of view to prevent z-index issues

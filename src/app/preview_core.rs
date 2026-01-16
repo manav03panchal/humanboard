@@ -135,7 +135,10 @@ impl Humanboard {
         cx.notify();
     }
 
-    pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) {
+    /// Ensure PDF webviews are created for PDF tabs.
+    /// Returns a list of error messages for any webviews that failed to create.
+    pub fn ensure_pdf_webview(&mut self, window: &mut Window, cx: &mut App) -> Vec<String> {
+        let mut errors = Vec::new();
         if let Some(ref mut preview) = self.preview {
             let active_tab = preview.active_tab;
             let right_active_tab = preview.right_active_tab;
@@ -249,6 +252,10 @@ impl Humanboard {
                                 *webview = Some(wv);
                             }
                             Err(e) => {
+                                let filename = path.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("PDF");
+                                errors.push(format!("Failed to open '{}': {}", filename, e));
                                 error!("Failed to create PDF WebView: {}", e);
                             }
                         }
@@ -278,6 +285,10 @@ impl Humanboard {
                                     *webview = Some(wv);
                                 }
                                 Err(e) => {
+                                    let filename = path.file_name()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or("PDF");
+                                    errors.push(format!("Failed to open '{}': {}", filename, e));
                                     error!("Failed to create PDF WebView for right pane: {}", e);
                                 }
                             }
@@ -301,6 +312,7 @@ impl Humanboard {
                 }
             }
         }
+        errors
     }
 
     /// Ensure code editors are created for code tabs (for syntax-highlighted viewing)
