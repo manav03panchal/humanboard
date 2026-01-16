@@ -88,7 +88,6 @@ pub struct Humanboard {
     // UI overlays
     pub show_shortcuts: bool,
     pub command_palette: Option<Entity<InputState>>, // Command palette input
-    pub command_palette_keystroke_sub: Option<gpui::Subscription>, // Keystroke observer for arrow keys
     pub pending_command: Option<String>, // Command to execute (deferred until we have window access)
     pub search_results: Vec<(u64, String)>, // Search results: (item_id, display_name)
     pub selected_result: usize,          // Currently selected search result index
@@ -205,7 +204,6 @@ impl Humanboard {
             file_drop_rx: None,
             show_shortcuts: false,
             command_palette: None,
-            command_palette_keystroke_sub: None,
             pending_command: None,
             search_results: Vec::new(),
             selected_result: 0,
