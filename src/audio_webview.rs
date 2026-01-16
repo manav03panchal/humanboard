@@ -246,9 +246,12 @@ impl AudioWebView {
 
         playBtn.onclick = () => {{
             if (audio.paused) {{
-                audio.play();
-                playIcon.classList.add('hidden');
-                pauseIcon.classList.remove('hidden');
+                audio.play().then(() => {{
+                    playIcon.classList.add('hidden');
+                    pauseIcon.classList.remove('hidden');
+                }}).catch(e => {{
+                    console.log('Play interrupted:', e.name);
+                }});
             }} else {{
                 audio.pause();
                 playIcon.classList.remove('hidden');
