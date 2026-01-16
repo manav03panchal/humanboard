@@ -6,12 +6,12 @@
 use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
-    CancelTextboxEdit, CloseCommandPalette, CloseTab, CmdPaletteDown, CmdPaletteSelect,
-    CmdPaletteUp, DeleteSelected, DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome,
-    ModalFocusTrap, MoveTabToOtherPane, NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft,
-    NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo,
-    ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePaneSplit,
-    TogglePreviewSearch, Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, CloseTab, CmdPaletteDown, CmdPaletteUp, DeleteSelected,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, ModalFocusTrap, MoveTabToOtherPane,
+    NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
+    OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab, SaveCode, SelectAll,
+    ShowShortcuts, ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch, Undo, ZoomIn,
+    ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use humanboard::focus::FocusContext;
@@ -309,12 +309,13 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-k", ToggleCommandPalette, Some(FocusContext::KEY_LANDING)),
     ]);
 
-    // Command palette navigation (higher priority than Input context)
+    // Command palette navigation - use global bindings because when Input has focus,
+    // the CommandPalette key context is NOT in the focus path (Input's own focus takes over)
+    // The action handlers check if the palette is open before acting
     cx.bind_keys([
-        KeyBinding::new("up", CmdPaletteUp, Some(FocusContext::KEY_COMMAND_PALETTE)),
-        KeyBinding::new("down", CmdPaletteDown, Some(FocusContext::KEY_COMMAND_PALETTE)),
-        KeyBinding::new("enter", CmdPaletteSelect, Some(FocusContext::KEY_COMMAND_PALETTE)),
-        KeyBinding::new("escape", CloseCommandPalette, Some(FocusContext::KEY_COMMAND_PALETTE)),
+        KeyBinding::new("up", CmdPaletteUp, None),      // Global - handler checks if palette open
+        KeyBinding::new("down", CmdPaletteDown, None),  // Global - handler checks if palette open
+        KeyBinding::new("escape", CloseCommandPalette, None), // Global - handler checks if palette open
     ]);
 
     // Modal context shortcuts (settings, dialogs)

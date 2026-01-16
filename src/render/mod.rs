@@ -25,13 +25,13 @@ pub use preview::{
 };
 
 use crate::actions::{
-    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CommandPalette, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, MoveTabToOtherPane, NewBoard,
-    NextPage, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset, PrevPage, PrevSearchMatch, PrevTab,
-    Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette,
-    TogglePaneSplit, TogglePreviewSearch, ToggleSplit, ToolArrow, ToolSelect, ToolShape, ToolText,
-    Undo, ZoomIn, ZoomOut, ZoomReset,
+    CancelTextboxEdit, CloseCommandPalette, ClosePreview, CloseTab, CmdPaletteDown, CmdPaletteUp,
+    CommandPalette, DeleteSelected, DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome,
+    MoveTabToOtherPane, NewBoard, NextPage, NextSearchMatch, NextTab, NudgeDown, NudgeLeft,
+    NudgeRight, NudgeUp, OpenFile, OpenSettings, Paste, PdfZoomIn, PdfZoomOut, PdfZoomReset,
+    PrevPage, PrevSearchMatch, PrevTab, Redo, ReopenClosedTab, SaveCode, SelectAll, ShowShortcuts,
+    ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch, ToggleSplit, ToolArrow, ToolSelect,
+    ToolShape, ToolText, Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::app::{AppView, Humanboard, SplitDirection};
 use crate::focus::FocusContext;
@@ -405,7 +405,23 @@ impl Humanboard {
                 this.toggle_command_palette(window, cx)
             }))
             .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
-                this.close_command_palette(window, cx)
+                if this.command_palette.is_some() {
+                    println!("[DEBUG ROOT] CloseCommandPalette - closing palette");
+                    this.close_command_palette(window, cx)
+                }
+            }))
+            // Command palette arrow navigation - handlers at root level to catch global keybindings
+            .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
+                if this.command_palette.is_some() {
+                    println!("[DEBUG ROOT] CmdPaletteUp - navigating prev");
+                    this.select_prev_result(cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
+                if this.command_palette.is_some() {
+                    println!("[DEBUG ROOT] CmdPaletteDown - navigating next");
+                    this.select_next_result(cx);
+                }
             }))
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.toggle_settings(window, cx)),

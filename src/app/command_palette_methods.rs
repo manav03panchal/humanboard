@@ -9,8 +9,11 @@ use std::time::{Duration, Instant};
 
 impl Humanboard {
     pub fn show_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        println!("[DEBUG] show_command_palette called");
+
         // Set focus context to CommandPalette
         self.focus.focus(FocusContext::CommandPalette, window);
+        println!("[DEBUG] Focus set to CommandPalette");
 
         let input = cx
             .new(|cx| InputState::new(window, cx).placeholder("Type to search or use commands..."));
@@ -19,6 +22,7 @@ impl Humanboard {
         input.update(cx, |state, cx| {
             state.focus(window, cx);
         });
+        println!("[DEBUG] Input focused");
 
         // Subscribe to input events
         cx.subscribe(
@@ -26,6 +30,7 @@ impl Humanboard {
             |this, input, event: &gpui_component::input::InputEvent, cx| {
                 match event {
                     gpui_component::input::InputEvent::PressEnter { .. } => {
+                        println!("[DEBUG] PressEnter event from Input");
                         // Execute the command when Enter is pressed
                         if this.command_palette.is_some() {
                             this.execute_command_from_subscription(cx);
@@ -37,13 +42,16 @@ impl Humanboard {
                         this.update_search_results(&text, cx);
                     }
                     gpui_component::input::InputEvent::Blur => {
+                        println!("[DEBUG] Blur event from Input");
                         // Don't close on blur - this causes race conditions with Enter key
                         // The palette is closed by:
                         // - Clicking the backdrop (has its own handler)
                         // - Pressing Escape (CloseCommandPalette action)
                         // - Executing a command that should close it
                     }
-                    _ => {}
+                    _ => {
+                        println!("[DEBUG] Other input event from Input");
+                    }
                 }
             },
         )
@@ -196,20 +204,24 @@ impl Humanboard {
 
     /// Navigate search results
     pub fn select_next_result(&mut self, cx: &mut Context<Self>) {
+        println!("[DEBUG] select_next_result called, results={}", self.search_results.len());
         if !self.search_results.is_empty() {
             self.selected_result = (self.selected_result + 1) % self.search_results.len();
+            println!("[DEBUG] Selected result now: {}", self.selected_result);
             self.cmd_palette_scroll.scroll_to_item(self.selected_result);
             cx.notify();
         }
     }
 
     pub fn select_prev_result(&mut self, cx: &mut Context<Self>) {
+        println!("[DEBUG] select_prev_result called, results={}", self.search_results.len());
         if !self.search_results.is_empty() {
             self.selected_result = if self.selected_result == 0 {
                 self.search_results.len() - 1
             } else {
                 self.selected_result - 1
             };
+            println!("[DEBUG] Selected result now: {}", self.selected_result);
             self.cmd_palette_scroll.scroll_to_item(self.selected_result);
             cx.notify();
         }

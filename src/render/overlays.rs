@@ -98,28 +98,40 @@ pub fn render_header_bar(
                 // Intercept Input's MoveUp/MoveDown actions to navigate results
                 // Note: Enter is handled by Input's PressEnter subscription - don't duplicate!
                 .on_action(cx.listener(|this, _: &MoveUp, _, cx| {
+                    println!("[DEBUG] MoveUp action received!");
                     this.select_prev_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &MoveDown, _, cx| {
+                    println!("[DEBUG] MoveDown action received!");
                     this.select_next_result(cx);
                 }))
                 .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
-                    this.select_prev_result(cx);
+                    if this.command_palette.is_some() {
+                        println!("[DEBUG] CmdPaletteUp action - palette is open, navigating");
+                        this.select_prev_result(cx);
+                    }
                 }))
                 .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
-                    this.select_next_result(cx);
+                    if this.command_palette.is_some() {
+                        println!("[DEBUG] CmdPaletteDown action - palette is open, navigating");
+                        this.select_next_result(cx);
+                    }
                 }))
                 .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
+                    println!("[DEBUG] CloseCommandPalette action received!");
                     this.hide_command_palette(window, cx);
                 }))
                 // Direct key interception for arrow navigation (bypasses keybinding context issues)
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                    println!("[DEBUG] on_key_down on palette container: key={}", event.keystroke.key);
                     if this.command_palette.is_some() {
                         match &event.keystroke.key {
                             key if key == "up" => {
+                                println!("[DEBUG] Handling UP key");
                                 this.select_prev_result(cx);
                             }
                             key if key == "down" => {
+                                println!("[DEBUG] Handling DOWN key");
                                 this.select_next_result(cx);
                             }
                             _ => {}
