@@ -19,8 +19,9 @@
 //! });
 //! ```
 
+use parking_lot::Mutex;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use tracing::{debug, error, info_span, warn};
 
@@ -77,21 +78,14 @@ impl BackgroundExecutor {
 
             let handle = thread::spawn(move || {
                 loop {
-                    // Check if we should stop - recover from poisoned lock to allow graceful shutdown
-                    let should_stop = running
-                        .lock()
-                        .map(|guard| !*guard)
-                        .unwrap_or(true); // Stop if lock is poisoned
-                    if should_stop {
+                    // Check if we should stop
+                    if !*running.lock() {
                         break;
                     }
 
-                    // Try to get a task - recover from poisoned lock
+                    // Try to get a task
                     let task = {
-                        let rx = match task_rx.lock() {
-                            Ok(guard) => guard,
-                            Err(poisoned) => poisoned.into_inner(),
-                        };
+                        let rx = task_rx.lock();
                         rx.recv_timeout(std::time::Duration::from_millis(100))
                     };
 
@@ -123,9 +117,8 @@ impl BackgroundExecutor {
                             }
 
                             // Decrement pending count
-                            if let Ok(mut count) = pending_count.lock() {
-                                *count = count.saturating_sub(1);
-                            }
+                            let mut count = pending_count.lock();
+                            *count = count.saturating_sub(1);
                         }
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             // No task available, continue waiting
@@ -167,9 +160,7 @@ impl BackgroundExecutor {
         C: FnOnce(TaskResult<T>) + Send + 'static,
     {
         // Increment pending count
-        if let Ok(mut count) = self.pending_count.lock() {
-            *count += 1;
-        }
+        *self.pending_count.lock() += 1;
 
         let task = BackgroundTask {
             name: name.to_string(),
@@ -214,23 +205,18 @@ impl BackgroundExecutor {
 
     /// Check if there are any pending tasks.
     pub fn has_pending(&self) -> bool {
-        self.pending_count
-            .lock()
-            .map(|count| *count > 0)
-            .unwrap_or(false)
+        *self.pending_count.lock() > 0
     }
 
     /// Get the number of pending tasks.
     pub fn pending_count(&self) -> usize {
-        self.pending_count.lock().map(|c| *c).unwrap_or(0)
+        *self.pending_count.lock()
     }
 
     /// Shutdown the executor gracefully.
     pub fn shutdown(&mut self) {
         // Signal workers to stop
-        if let Ok(mut running) = self.running.lock() {
-            *running = false;
-        }
+        *self.running.lock() = false;
 
         // Wait for workers to finish (with timeout)
         for handle in self.workers.drain(..) {
