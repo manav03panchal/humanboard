@@ -884,6 +884,7 @@ pub fn render_tab_content(
                                             .primary()
                                             .small()
                                             .label("Save")
+                                            .tooltip("Save markdown changes")
                                             .on_click(cx.listener(|this, _, _window, cx| {
                                                 this.save_markdown(cx);
                                             })),
@@ -894,6 +895,7 @@ pub fn render_tab_content(
                                         .ghost()
                                         .small()
                                         .label("Cancel")
+                                        .tooltip("Cancel editing")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.toggle_markdown_edit(window, cx);
                                         }))
@@ -902,6 +904,7 @@ pub fn render_tab_content(
                                         .primary()
                                         .small()
                                         .label("Edit")
+                                        .tooltip("Edit markdown")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.toggle_markdown_edit(window, cx);
                                         }))
@@ -1040,6 +1043,7 @@ pub fn render_search_bar(
                         .icon(IconName::ChevronUp)
                         .xsmall()
                         .ghost()
+                        .tooltip("Previous match")
                         .disabled(match_count == 0)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.prev_search_match(cx);
@@ -1050,6 +1054,7 @@ pub fn render_search_bar(
                         .icon(IconName::ChevronDown)
                         .xsmall()
                         .ghost()
+                        .tooltip("Next match")
                         .disabled(match_count == 0)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.next_search_match(cx);
@@ -1060,6 +1065,7 @@ pub fn render_search_bar(
                         .icon(IconName::Close)
                         .xsmall()
                         .ghost()
+                        .tooltip("Close search")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.close_preview_search(cx);
                         })),

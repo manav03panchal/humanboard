@@ -120,6 +120,7 @@ fn render_quick_actions(cx: &mut Context<crate::app::Humanboard>) -> impl IntoEl
         .child(
             Button::new("view-boards")
                 .label("View Boards")
+                .tooltip("Go to boards list")
                 .primary()
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.view = crate::app::AppView::Landing;
@@ -129,6 +130,7 @@ fn render_quick_actions(cx: &mut Context<crate::app::Humanboard>) -> impl IntoEl
         .child(
             Button::new("new-board")
                 .label("New Board")
+                .tooltip("Create a new board")
                 .ghost()
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.create_new_board(window, cx);

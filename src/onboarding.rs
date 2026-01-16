@@ -69,6 +69,7 @@ pub fn render_onboarding_page(cx: &mut Context<Humanboard>) -> Div {
                             Button::new("get-started")
                                 .primary()
                                 .label("Get Started")
+                                .tooltip("Begin using Humanboard")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.complete_onboarding(cx);
                                 })),

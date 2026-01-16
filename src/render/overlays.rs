@@ -1785,6 +1785,7 @@ pub fn render_create_board_modal(
                             .child(
                                 Button::new("cancel")
                                     .label("Cancel")
+                                    .tooltip("Cancel board creation")
                                     .ghost()
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.close_create_board_modal(window, cx);
@@ -1793,6 +1794,7 @@ pub fn render_create_board_modal(
                             .child(
                                 Button::new("create")
                                     .label("Create Board")
+                                    .tooltip("Create new board with these settings")
                                     .primary()
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.confirm_create_board(window, cx);

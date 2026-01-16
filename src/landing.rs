@@ -73,6 +73,7 @@ pub fn render_landing_header(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 .small()
                 .icon(Icon::new(IconName::Plus))
                 .label("New Board")
+                .tooltip("Create a new board")
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.create_new_board(window, cx);
                 })),
@@ -149,6 +150,7 @@ pub fn render_board_card(
                                                 .primary()
                                                 .small()
                                                 .label("Save")
+                                                .tooltip("Save board name")
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.finish_editing_board(cx);
                                                 })),
@@ -158,6 +160,7 @@ pub fn render_board_card(
                                                 .ghost()
                                                 .small()
                                                 .label("Cancel")
+                                                .tooltip("Cancel editing")
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.cancel_editing(cx);
                                                 })),
@@ -199,6 +202,7 @@ pub fn render_board_card(
                                         .xsmall()
                                         .icon(Icon::new(IconName::Settings).size(px(12.0)))
                                         .label("Edit")
+                                        .tooltip("Edit board name")
                                         .on_click(
                                             cx.listener(move |this, _, window, cx| {
                                                 this.start_editing_board(
@@ -218,6 +222,7 @@ pub fn render_board_card(
                                         .xsmall()
                                         .icon(Icon::new(IconName::Delete).size(px(12.0)))
                                         .label("Delete")
+                                        .tooltip("Move board to trash")
                                         .on_click(
                                             cx.listener(move |this, _, _, cx| {
                                                 this.confirm_delete_board(
@@ -307,6 +312,7 @@ pub fn render_trashed_board_card(
                             .xsmall()
                             .icon(Icon::new(IconName::ArrowLeft).size(px(12.0)))
                             .label("Restore")
+                            .tooltip("Restore board from trash")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.restore_board(&board_id_for_restore, cx);
                             })),
@@ -320,6 +326,7 @@ pub fn render_trashed_board_card(
                             .xsmall()
                             .icon(Icon::new(IconName::Close).size(px(12.0)))
                             .label("Delete")
+                            .tooltip("Permanently delete board")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.permanently_delete_board(&board_id_for_delete, cx);
                             })),
@@ -384,6 +391,7 @@ pub fn render_empty_state(cx: &mut Context<crate::app::Humanboard>) -> Div {
                 .primary()
                 .icon(Icon::new(IconName::Plus))
                 .label("Create Your First Board")
+                .tooltip("Create your first board to get started")
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.create_new_board(window, cx);
                 })),
@@ -507,6 +515,7 @@ pub fn render_trash_section(
                         .xsmall()
                         .icon(Icon::new(IconName::Delete).size(px(12.0)))
                         .label("Empty Trash")
+                        .tooltip("Permanently delete all trashed boards")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.empty_trash(cx);
                         })),
@@ -586,6 +595,7 @@ pub fn render_delete_dialog(
                             Button::new("cancel-delete")
                                 .ghost()
                                 .label("Cancel")
+                                .tooltip("Cancel and keep board")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.cancel_delete(cx);
                                 })),
@@ -594,6 +604,7 @@ pub fn render_delete_dialog(
                             Button::new("confirm-delete")
                                 .danger()
                                 .label("Delete")
+                                .tooltip("Confirm deletion")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.delete_board(&board_id_confirm, cx);
                                 })),
