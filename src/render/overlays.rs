@@ -1364,6 +1364,42 @@ pub fn render_settings_modal(
                                                     ),
                                             ),
                                             cx,
+                                        ))
+                                        // Section: Accessibility
+                                        .child(render_section_header("Accessibility", cx))
+                                        .child(render_setting_row(
+                                            "High Contrast",
+                                            "Enable high contrast mode for better visibility (7:1 contrast ratio)",
+                                            {
+                                                let high_contrast_enabled = crate::settings::is_high_contrast();
+                                                div()
+                                                    .id("high-contrast-toggle")
+                                                    .w(px(44.0))
+                                                    .h(px(24.0))
+                                                    .rounded(px(12.0))
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .border_1()
+                                                    .border_color(if high_contrast_enabled { cx.theme().primary } else { border })
+                                                    .bg(if high_contrast_enabled { cx.theme().primary } else { input_bg })
+                                                    .flex()
+                                                    .items_center()
+                                                    .px(px(2.0))
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(|this, _, _, cx| {
+                                                            this.toggle_high_contrast(cx);
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .size(px(18.0))
+                                                            .rounded_full()
+                                                            .bg(gpui::white())
+                                                            .shadow_sm()
+                                                            .when(high_contrast_enabled, |d| d.ml(px(18.0)))
+                                                    )
+                                            },
+                                            cx,
                                         )),
                                 )
                             })

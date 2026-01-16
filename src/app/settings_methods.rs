@@ -3,6 +3,7 @@
 use super::{Humanboard, SettingsTab};
 use crate::focus::FocusContext;
 use gpui::*;
+use gpui_component::ActiveTheme;
 
 impl Humanboard {
     pub fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -120,6 +121,35 @@ impl Humanboard {
     pub fn toggle_shortcuts(&mut self, cx: &mut Context<Self>) {
         self.show_shortcuts = !self.show_shortcuts;
         cx.notify();
+    }
+
+    /// Toggle high contrast mode for accessibility
+    pub fn toggle_high_contrast(&mut self, cx: &mut Context<Self>) {
+        let current = crate::settings::is_high_contrast();
+        let new_value = !current;
+
+        if let Err(e) = crate::settings::set_high_contrast(new_value) {
+            tracing::error!("Failed to set high contrast: {}", e);
+            return;
+        }
+
+        // Apply appropriate high contrast theme
+        if new_value {
+            // Use High Contrast Dark or Light based on current theme mode
+            let theme_name = if cx.theme().mode.is_dark() {
+                "High Contrast Dark"
+            } else {
+                "High Contrast Light"
+            };
+            self.set_theme(theme_name.to_string(), cx);
+        }
+
+        cx.notify();
+    }
+
+    /// Check if high contrast mode is enabled
+    pub fn is_high_contrast(&self) -> bool {
+        crate::settings::is_high_contrast()
     }
 
     pub fn set_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {

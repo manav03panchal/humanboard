@@ -90,6 +90,10 @@ pub struct SettingsContent {
     /// Whether onboarding has been completed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onboarding_completed: Option<bool>,
+
+    /// Whether high contrast mode is enabled (accessibility)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub high_contrast: Option<bool>,
 }
 
 impl SettingsContent {
@@ -132,6 +136,9 @@ impl SettingsContent {
         if other.onboarding_completed.is_some() {
             self.onboarding_completed = other.onboarding_completed;
         }
+        if other.high_contrast.is_some() {
+            self.high_contrast = other.high_contrast;
+        }
     }
 }
 
@@ -153,6 +160,7 @@ pub struct AppSettings {
     pub max_undo_history: usize,
     pub zoom_sensitivity: f32,
     pub pan_sensitivity: f32,
+    pub high_contrast: bool,
 }
 
 impl Default for AppSettings {
@@ -169,6 +177,7 @@ impl Default for AppSettings {
             max_undo_history: 100,
             zoom_sensitivity: 1.0,
             pan_sensitivity: 1.0,
+            high_contrast: false,
         }
     }
 }
@@ -203,6 +212,7 @@ impl Setting for AppSettings {
             pan_sensitivity: content
                 .pan_sensitivity
                 .unwrap_or(defaults.pan_sensitivity),
+            high_contrast: content.high_contrast.unwrap_or(defaults.high_contrast),
         }
     }
 
@@ -317,6 +327,7 @@ impl SettingsStore {
             zoom_sensitivity: Some(defaults.zoom_sensitivity),
             pan_sensitivity: Some(defaults.pan_sensitivity),
             onboarding_completed: Some(false),
+            high_contrast: Some(defaults.high_contrast),
         }
     }
 
@@ -575,6 +586,20 @@ pub fn is_onboarding_completed() -> bool {
 pub fn mark_onboarding_completed() -> Result<(), SettingsError> {
     update_setting(SettingsSource::User, |content| {
         content.onboarding_completed = Some(true);
+    })
+}
+
+/// Check if high contrast mode is enabled.
+pub fn is_high_contrast() -> bool {
+    let store = global_settings();
+    let guard = store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.merged_content().high_contrast.unwrap_or(false)
+}
+
+/// Set high contrast mode.
+pub fn set_high_contrast(enabled: bool) -> Result<(), SettingsError> {
+    update_setting(SettingsSource::User, |content| {
+        content.high_contrast = Some(enabled);
     })
 }
 
