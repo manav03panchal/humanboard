@@ -143,11 +143,6 @@ fn render_item_content(
     muted_fg: Hsla,
     muted_bg: Hsla,
     _danger: Hsla,
-    title_bar: Hsla,
-    border: Hsla,
-    popover: Hsla,
-    list_hover: Hsla,
-    primary: Hsla,
 ) -> Div {
     let corner_radius = px(8.0 * zoom);
 
@@ -212,37 +207,37 @@ fn render_item_content(
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top - YouTube style
+                    // Drag handle bar at top
                     .child(
                         div()
                             .w_full()
-                            .h(px(28.0 * zoom))
-                            .rounded_t(corner_radius)
-                            .bg(title_bar)
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.1, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.2, 1.0))
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .w(px(36.0 * zoom))
-                                    .h(px(4.0 * zoom))
-                                    .rounded(px(2.0 * zoom))
-                                    .bg(muted_fg.opacity(0.4)),
+                                    .text_size(px(12.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.4, 1.0))
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
                     .child(
                         div()
                             .flex_1()
-                            .size_full()
-                            .min_h_0()
+                            .w_full()
+                            .overflow_hidden()
                             .child(webview.webview_entity.clone()),
                     )
             } else {
                 // Placeholder while loading
                 div()
                     .size_full()
-                    .bg(muted_bg)
+                    .bg(hsla(0.0, 0.0, 0.1, 1.0))
                     .rounded(corner_radius)
                     .flex()
                     .items_center()
@@ -263,37 +258,37 @@ fn render_item_content(
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top - YouTube style
+                    // Drag handle bar at top
                     .child(
                         div()
                             .w_full()
-                            .h(px(28.0 * zoom))
-                            .rounded_t(corner_radius)
-                            .bg(title_bar)
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.1, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.2, 1.0))
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .w(px(36.0 * zoom))
-                                    .h(px(4.0 * zoom))
-                                    .rounded(px(2.0 * zoom))
-                                    .bg(muted_fg.opacity(0.4)),
+                                    .text_size(px(12.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.4, 1.0))
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
                     .child(
                         div()
                             .flex_1()
-                            .size_full()
-                            .min_h_0()
+                            .w_full()
+                            .overflow_hidden()
                             .child(webview.webview_entity.clone()),
                     )
             } else {
                 // Placeholder while loading
                 div()
                     .size_full()
-                    .bg(muted_bg)
+                    .bg(hsla(0.0, 0.0, 0.1, 1.0))
                     .rounded(corner_radius)
                     .flex()
                     .items_center()
@@ -354,30 +349,31 @@ fn render_item_content(
                 // (overlays don't work on webviews - they render on top layer)
                 v_flex()
                     .size_full()
-                    // Drag handle bar at top - YouTube style pill
+                    // Drag handle bar at top - OUTSIDE the webview
                     .child(
                         div()
                             .w_full()
-                            .h(px(28.0 * zoom))
-                            .bg(title_bar)
+                            .h(px(24.0 * zoom))
+                            .bg(hsla(0.0, 0.0, 0.15, 1.0))
+                            .border_b_1()
+                            .border_color(hsla(0.0, 0.0, 0.3, 1.0))
                             .rounded_t(corner_radius)
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .w(px(36.0 * zoom))
-                                    .h(px(4.0 * zoom))
-                                    .rounded(px(2.0 * zoom))
-                                    .bg(muted_fg.opacity(0.4)),
+                                    .text_size(px(14.0 * zoom))
+                                    .text_color(hsla(0.0, 0.0, 0.5, 1.0))
+                                    .child("≡"),
                             ),
                     )
                     // WebView takes remaining space
                     .child(
                         div()
                             .flex_1()
-                            .size_full()
-                            .min_h_0()
+                            .w_full()
+                            .overflow_hidden()
                             .rounded_b(corner_radius)
                             .child(webview.webview().clone()),
                     )
@@ -406,21 +402,37 @@ fn render_item_content(
 
         ItemContent::Markdown { title, content, .. } => {
             // Use theme colors for markdown cards
+            let popover_bg = hsla(220.0 / 360.0, 0.15, 0.18, 1.0); // Subtle dark bg
+            let border = hsla(240.0 / 360.0, 0.2, 0.35, 1.0); // Muted border
+            let hover_bg = hsla(220.0 / 360.0, 0.15, 0.22, 1.0); // Slightly lighter on hover
+            let hover_border = hsla(240.0 / 360.0, 0.4, 0.55, 1.0); // More vibrant on hover
+            let icon_color = hsla(240.0 / 360.0, 0.6, 0.7, 1.0); // Blue-ish icon
+            let text_color = hsla(0.0, 0.0, 0.85, 1.0); // Light text
+
             render_collapsed_markdown(
                 title,
                 content,
                 zoom,
-                popover,      // card background
-                border,       // card border
-                list_hover,   // hover background
-                primary,      // hover border (accent)
-                primary,      // icon color (accent)
-                fg,           // text color
+                popover_bg,
+                border,
+                hover_bg,
+                hover_border,
+                icon_color,
+                text_color,
             )
         }
 
         ItemContent::Code { path, language } => {
             // Use theme colors for code file cards
+            let popover_bg = hsla(220.0 / 360.0, 0.15, 0.14, 1.0); // Darker bg for code
+            let border = hsla(200.0 / 360.0, 0.3, 0.35, 1.0); // Cyan-ish border
+            let hover_bg = hsla(220.0 / 360.0, 0.15, 0.18, 1.0);
+            let hover_border = hsla(200.0 / 360.0, 0.5, 0.5, 1.0); // Brighter cyan on hover
+            let icon_color = hsla(40.0 / 360.0, 0.8, 0.6, 1.0); // Orange-ish icon for code
+            let text_color = hsla(0.0, 0.0, 0.85, 1.0);
+            let badge_bg = hsla(200.0 / 360.0, 0.4, 0.25, 1.0); // Cyan badge bg
+            let badge_text = hsla(200.0 / 360.0, 0.6, 0.8, 1.0); // Cyan badge text
+
             let filename = path
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -430,14 +442,14 @@ fn render_item_content(
                 filename,
                 language,
                 zoom,
-                popover,                  // card background
-                border,                   // card border
-                list_hover,               // hover background
-                primary,                  // hover border (accent)
-                primary,                  // icon color (accent)
-                fg,                       // text color
-                primary.opacity(0.2),     // badge background
-                primary,                  // badge text
+                popover_bg,
+                border,
+                hover_bg,
+                hover_border,
+                icon_color,
+                text_color,
+                badge_bg,
+                badge_text,
             )
         }
 
@@ -667,10 +679,6 @@ pub fn render_items(
     let muted_bg = cx.theme().muted;
     let danger = cx.theme().danger;
     let primary = cx.theme().primary;
-    let title_bar = cx.theme().title_bar;
-    let border = cx.theme().border;
-    let popover = cx.theme().popover;
-    let list_hover = cx.theme().list_hover;
 
     items
         .iter()
@@ -704,15 +712,10 @@ pub fn render_items(
                     muted_fg,
                     muted_bg,
                     danger,
-                    title_bar,
-                    border,
-                    popover,
-                    list_hover,
-                    primary,
                 ))
                 .when(show_selection, |d| {
                     d
-                        // Selection border (no glow)
+                        // Selection border
                         .border_2()
                         .border_color(primary)
                         .rounded(px(8.0 * zoom))
