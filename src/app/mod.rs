@@ -1073,11 +1073,11 @@ impl Humanboard {
                         return;
                     }
 
-                    let closed_tab = preview.right_tabs.remove(tab_index);
+                    let mut closed_tab = preview.right_tabs.remove(tab_index);
+                    // Immediately cleanup (hide PDF webviews, etc.) before storing
+                    closed_tab.cleanup(cx);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
-                        // Clean up resources before removing the oldest tab
-                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1101,11 +1101,11 @@ impl Humanboard {
                         return;
                     }
 
-                    let closed_tab = preview.tabs.remove(tab_index);
+                    let mut closed_tab = preview.tabs.remove(tab_index);
+                    // Immediately cleanup (hide PDF webviews, etc.) before storing
+                    closed_tab.cleanup(cx);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
-                        // Clean up resources before removing the oldest tab
-                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1673,10 +1673,11 @@ impl Humanboard {
                         return;
                     }
 
-                    let closed_tab = preview.tabs.remove(tab_index);
+                    let mut closed_tab = preview.tabs.remove(tab_index);
+                    // Immediately cleanup (hide PDF webviews, etc.) before storing
+                    closed_tab.cleanup(cx);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
-                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1709,10 +1710,11 @@ impl Humanboard {
                         return;
                     }
 
-                    let closed_tab = preview.right_tabs.remove(tab_index);
+                    let mut closed_tab = preview.right_tabs.remove(tab_index);
+                    // Immediately cleanup (hide PDF webviews, etc.) before storing
+                    closed_tab.cleanup(cx);
                     preview.closed_tabs.push(closed_tab);
                     if preview.closed_tabs.len() > 20 {
-                        preview.closed_tabs[0].cleanup(cx);
                         preview.closed_tabs.remove(0);
                     }
 
@@ -1861,7 +1863,15 @@ impl Humanboard {
         if let Some(ref mut preview) = self.preview {
             if preview.is_pane_split {
                 // Move right pane tabs to left pane
-                let right_tabs: Vec<PreviewTab> = preview.right_tabs.drain(..).collect();
+                let mut right_tabs: Vec<PreviewTab> = preview.right_tabs.drain(..).collect();
+                for tab in &mut right_tabs {
+                    // Hide PDF webviews before move - they will be recreated in new position
+                    if let PreviewTab::Pdf { webview, .. } = tab {
+                        if let Some(wv) = webview.take() {
+                            wv.hide(cx);
+                        }
+                    }
+                }
                 for tab in right_tabs {
                     preview.tabs.push(tab);
                 }
@@ -1916,7 +1926,13 @@ impl Humanboard {
             match preview.focused_pane {
                 FocusedPane::Left => {
                     if !preview.tabs.is_empty() && preview.active_tab < preview.tabs.len() {
-                        let tab = preview.tabs.remove(preview.active_tab);
+                        let mut tab = preview.tabs.remove(preview.active_tab);
+                        // Hide PDF webview before move - it will be recreated in new pane
+                        if let PreviewTab::Pdf { webview, .. } = &mut tab {
+                            if let Some(wv) = webview.take() {
+                                wv.hide(cx);
+                            }
+                        }
                         preview.right_tabs.push(tab);
                         preview.right_active_tab = preview.right_tabs.len() - 1;
                         // Adjust left active tab
@@ -1931,7 +1947,13 @@ impl Humanboard {
                     if !preview.right_tabs.is_empty()
                         && preview.right_active_tab < preview.right_tabs.len()
                     {
-                        let tab = preview.right_tabs.remove(preview.right_active_tab);
+                        let mut tab = preview.right_tabs.remove(preview.right_active_tab);
+                        // Hide PDF webview before move - it will be recreated in new pane
+                        if let PreviewTab::Pdf { webview, .. } = &mut tab {
+                            if let Some(wv) = webview.take() {
+                                wv.hide(cx);
+                            }
+                        }
                         preview.tabs.push(tab);
                         preview.active_tab = preview.tabs.len() - 1;
                         // Adjust right active tab
