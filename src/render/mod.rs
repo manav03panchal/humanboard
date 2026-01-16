@@ -142,7 +142,7 @@ impl Render for Humanboard {
             )
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
-                d.child(render_toast_container(&toasts))
+                d.child(render_toast_container(&toasts, cx.theme()))
             })
     }
 }
