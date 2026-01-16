@@ -1,6 +1,7 @@
 //! Tool dock rendering - left-side toolbar for Miro-style tools
 
 use crate::app::Humanboard;
+use crate::focus_ring::focus_ring_shadow;
 use crate::types::ToolType;
 use gpui::*;
 use gpui_component::ActiveTheme as _;
@@ -8,7 +9,7 @@ use gpui_component::ActiveTheme as _;
 /// Width of the tool dock
 pub const DOCK_WIDTH: f32 = 44.0;
 
-/// Render a single tool button
+/// Render a single tool button with focus ring support
 fn render_tool_button(
     tool: ToolType,
     selected: bool,
@@ -26,6 +27,7 @@ fn render_tool_button(
         cx.theme().muted_foreground
     };
     let hover_bg = cx.theme().muted;
+    let focus_color = cx.theme().primary;
 
     div()
         .id(ElementId::Name(format!("tool-{:?}", tool).into()))
@@ -35,6 +37,8 @@ fn render_tool_button(
         .rounded(px(6.0))
         .bg(bg)
         .hover(|s| s.bg(if selected { bg } else { hover_bg }))
+        // Focus ring for keyboard navigation (WCAG compliance)
+        .focus(|s| s.shadow(focus_ring_shadow(focus_color)))
         .cursor_pointer()
         .flex()
         .items_center()

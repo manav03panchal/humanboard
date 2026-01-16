@@ -8,6 +8,7 @@
 
 use crate::app::{Humanboard, PreviewTab, SplitDirection};
 use crate::focus::FocusContext;
+use crate::focus_ring::focus_ring_shadow;
 use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -101,6 +102,8 @@ pub fn render_tab_bar(
                         // Dim the tab being dragged
                         .when(is_being_dragged, |d| d.opacity(0.5))
                         .hover(|style| style.bg(list_hover))
+                        // Focus ring for keyboard navigation (WCAG compliance)
+                        .focus(|s| s.shadow(focus_ring_shadow(primary)))
                         .cursor(if dragging_tab.is_some() {
                             CursorStyle::ClosedHand
                         } else {
@@ -153,7 +156,7 @@ pub fn render_tab_bar(
                         .child(if is_code {
                             Icon::new(IconName::SquareTerminal)
                                 .xsmall()
-                                .text_color(hsla(40.0 / 360.0, 0.8, 0.6, 1.0)) // Orange for code
+                                .text_color(primary) // Use theme primary for code
                         } else if is_markdown {
                             Icon::new(IconName::File).xsmall().text_color(primary)
                         } else {
@@ -813,6 +816,7 @@ pub fn render_tab_content(
     let title_bar = cx.theme().title_bar;
     let border = cx.theme().border;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
 
     match tab {
         PreviewTab::Pdf { .. } => {
@@ -884,6 +888,7 @@ pub fn render_tab_content(
                                             .primary()
                                             .small()
                                             .label("Save")
+                                            .tooltip("Save markdown changes")
                                             .on_click(cx.listener(|this, _, _window, cx| {
                                                 this.save_markdown(cx);
                                             })),
@@ -894,6 +899,7 @@ pub fn render_tab_content(
                                         .ghost()
                                         .small()
                                         .label("Cancel")
+                                        .tooltip("Cancel editing")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.toggle_markdown_edit(window, cx);
                                         }))
@@ -902,6 +908,7 @@ pub fn render_tab_content(
                                         .primary()
                                         .small()
                                         .label("Edit")
+                                        .tooltip("Edit markdown")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.toggle_markdown_edit(window, cx);
                                         }))
@@ -977,11 +984,11 @@ pub fn render_tab_content(
                                     div()
                                         .px(px(6.0))
                                         .py(px(2.0))
-                                        .bg(hsla(200.0 / 360.0, 0.4, 0.25, 1.0))
+                                        .bg(primary.opacity(0.2))
                                         .rounded(px(3.0))
                                         .text_xs()
                                         .font_weight(FontWeight::MEDIUM)
-                                        .text_color(hsla(200.0 / 360.0, 0.6, 0.8, 1.0))
+                                        .text_color(primary)
                                         .child(lang.to_uppercase()),
                                 )
                                 .child(
@@ -1040,6 +1047,7 @@ pub fn render_search_bar(
                         .icon(IconName::ChevronUp)
                         .xsmall()
                         .ghost()
+                        .tooltip("Previous match")
                         .disabled(match_count == 0)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.prev_search_match(cx);
@@ -1050,6 +1058,7 @@ pub fn render_search_bar(
                         .icon(IconName::ChevronDown)
                         .xsmall()
                         .ghost()
+                        .tooltip("Next match")
                         .disabled(match_count == 0)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.next_search_match(cx);
@@ -1060,6 +1069,7 @@ pub fn render_search_bar(
                         .icon(IconName::Close)
                         .xsmall()
                         .ghost()
+                        .tooltip("Close search")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.close_preview_search(cx);
                         })),

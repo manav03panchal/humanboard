@@ -351,122 +351,41 @@ fn render_styled_paragraph(
 pub fn render_markdown_content<V: 'static>(content: &str, zoom: f32, cx: &mut Context<V>) -> Div {
     use gpui_component::ActiveTheme as _;
 
-    // Get theme-aware colors
-    let is_dark = cx.theme().mode.is_dark();
+    // Get theme colors
+    let fg = cx.theme().foreground;
+    let muted_fg = cx.theme().muted_foreground;
+    let bg = cx.theme().background;
+    let muted_bg = cx.theme().muted;
+    let border = cx.theme().border;
+    let _primary = cx.theme().primary;
+    let success = cx.theme().success;
+    let danger = cx.theme().danger;
 
-    // Text colors based on theme mode
-    let heading_1: Hsla = if is_dark {
-        rgb(0xffffff).into()
-    } else {
-        rgb(0x1a1a1a).into()
-    };
-    let heading_2: Hsla = if is_dark {
-        rgb(0xf0f0f0).into()
-    } else {
-        rgb(0x2a2a2a).into()
-    };
-    let heading_3: Hsla = if is_dark {
-        rgb(0xe0e0e0).into()
-    } else {
-        rgb(0x3a3a3a).into()
-    };
-    let heading_4: Hsla = if is_dark {
-        rgb(0xd0d0d0).into()
-    } else {
-        rgb(0x4a4a4a).into()
-    };
-    let heading_5: Hsla = if is_dark {
-        rgb(0xc0c0c0).into()
-    } else {
-        rgb(0x5a5a5a).into()
-    };
-    let text_color: Hsla = if is_dark {
-        rgb(0xbbbbbb).into()
-    } else {
-        rgb(0x333333).into()
-    };
-    let text_bold: Hsla = if is_dark {
-        rgb(0xffffff).into()
-    } else {
-        rgb(0x000000).into()
-    };
-    let text_italic: Hsla = if is_dark {
-        rgb(0xcccccc).into()
-    } else {
-        rgb(0x444444).into()
-    };
-    let text_muted: Hsla = if is_dark {
-        rgb(0x666666).into()
-    } else {
-        rgb(0x999999).into()
-    };
-    let text_quote: Hsla = if is_dark {
-        rgb(0x888888).into()
-    } else {
-        rgb(0x666666).into()
-    };
+    // Text colors - use theme foreground with varying opacity for heading hierarchy
+    let heading_1 = fg;
+    let heading_2 = fg.opacity(0.95);
+    let heading_3 = fg.opacity(0.9);
+    let heading_4 = fg.opacity(0.85);
+    let heading_5 = fg.opacity(0.8);
+    let text_color = fg.opacity(0.9);
+    let text_bold = fg;
+    let text_italic = fg.opacity(0.85);
+    let text_muted = muted_fg;
+    let text_quote = muted_fg;
 
-    // Background and border colors
-    let code_bg: Hsla = if is_dark {
-        rgb(0x2a2a2a).into()
-    } else {
-        rgb(0xf5f5f5).into()
-    };
-    let code_border: Hsla = if is_dark {
-        rgb(0x252525).into()
-    } else {
-        rgb(0xe0e0e0).into()
-    };
-    let code_block_bg: Hsla = if is_dark {
-        rgb(0x0d0d0d).into()
-    } else {
-        rgb(0xfafafa).into()
-    };
-    let code_text: Hsla = if is_dark {
-        rgb(0xe06c75).into()
-    } else {
-        rgb(0xd73a49).into()
-    };
-    let code_block_color: Hsla = if is_dark {
-        rgb(0x98c379).into()
-    } else {
-        rgb(0x22863a).into()
-    };
-    let border_color: Hsla = if is_dark {
-        rgb(0x333333).into()
-    } else {
-        rgb(0xd1d5da).into()
-    };
-    let quote_border: Hsla = if is_dark {
-        rgb(0x4a4a4a).into()
-    } else {
-        rgb(0xdfe2e5).into()
-    };
-    let table_bg_header: Hsla = if is_dark {
-        rgb(0x1a1a1a).into()
-    } else {
-        rgb(0xf6f8fa).into()
-    };
-    let table_bg_alt: Hsla = if is_dark {
-        rgb(0x0f0f0f).into()
-    } else {
-        rgb(0xffffff).into()
-    };
-    let table_text: Hsla = if is_dark {
-        rgb(0xaaaaaa).into()
-    } else {
-        rgb(0x444444).into()
-    };
-    let table_text_header: Hsla = if is_dark {
-        rgb(0xdddddd).into()
-    } else {
-        rgb(0x24292e).into()
-    };
-    let hr_color: Hsla = if is_dark {
-        rgb(0x333333).into()
-    } else {
-        rgb(0xe1e4e8).into()
-    };
+    // Background and border colors from theme
+    let code_bg = muted_bg;
+    let code_border = border;
+    let code_block_bg = muted_bg.opacity(0.5);
+    let code_text = danger;           // Inline code uses danger color (red-ish)
+    let code_block_color = success;   // Code block uses success color (green-ish)
+    let border_color = border;
+    let quote_border = border;
+    let table_bg_header = muted_bg;
+    let table_bg_alt = bg;
+    let table_text = fg.opacity(0.85);
+    let table_text_header = fg;
+    let hr_color = border;
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);

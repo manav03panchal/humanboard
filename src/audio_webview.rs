@@ -306,7 +306,7 @@ impl AudioWebView {
             }
         });
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(100));
 
         let url = format!("http://127.0.0.1:{}/", port);
 
@@ -318,6 +318,7 @@ impl AudioWebView {
         ))]
         let webview = WebViewBuilder::new()
             .with_url(&url)
+            .with_autoplay(true)
             .build_as_child(window)
             .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
 

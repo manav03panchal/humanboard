@@ -13,6 +13,7 @@ impl Humanboard {
     /// Show the create board modal with input field
     pub fn show_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus.focus(FocusContext::Modal, window);
+        self.reset_modal_focus(); // Reset focus index for Tab cycling
 
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("Enter board name..."));
 
@@ -24,16 +25,23 @@ impl Humanboard {
         self.create_board_input = Some(input);
         self.create_board_location = StorageLocation::default();
         self.show_create_board_modal = true;
+        self.modal_animations.open_create_board();
         cx.notify();
     }
 
     /// Close the create board modal without creating
     pub fn close_create_board_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Start close animation - modal will be hidden when animation completes
+        self.modal_animations.close_create_board();
+        self.focus.release(FocusContext::Modal, window);
+        cx.notify();
+    }
+
+    /// Clean up create board modal after close animation completes
+    pub fn finish_close_create_board(&mut self) {
         self.show_create_board_modal = false;
         self.create_board_input = None;
         self.create_board_location = StorageLocation::default();
-        self.focus.release(FocusContext::Modal, window);
-        cx.notify();
     }
 
     /// Set the storage location for the new board
@@ -62,9 +70,10 @@ impl Humanboard {
         // Create the board with custom location
         let metadata = self.board_index.create_board_at(name, location);
 
-        // Close modal
+        // Close modal immediately (no animation when confirming - we're navigating away)
         self.show_create_board_modal = false;
         self.create_board_input = None;
+        self.modal_animations.create_board = None;
         self.focus.release(FocusContext::Modal, window);
         self.toast_manager
             .push(crate::notifications::Toast::success(format!(
@@ -98,7 +107,7 @@ impl Humanboard {
                     .push(crate::notifications::Toast::error(format!(
                         "Save failed: {}",
                         e
-                    )));
+                    )).with_action(crate::notifications::ToastAction::retry()));
             }
         }
         self.board = None;

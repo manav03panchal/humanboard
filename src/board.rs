@@ -18,8 +18,11 @@ use tracing::{debug, error, info, info_span, trace, warn};
 /// Save debounce delay - saves are batched within this window
 const SAVE_DEBOUNCE_MS: u64 = 500;
 
-/// Maximum history states to keep
-const MAX_HISTORY_STATES: usize = 50;
+/// Maximum history operations to keep
+const MAX_HISTORY_OPERATIONS: usize = 100;
+
+/// How often to create full snapshots (every N operations)
+const SNAPSHOT_INTERVAL: usize = 20;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BoardState {
@@ -27,6 +30,169 @@ pub struct BoardState {
     pub zoom: f32,
     pub items: Vec<CanvasItem>,
     pub next_item_id: u64,
+}
+
+/// A single undoable operation (delta-based)
+#[derive(Clone, Debug)]
+pub enum UndoOperation {
+    /// Add an item to the canvas
+    AddItem(CanvasItem),
+    /// Remove an item from the canvas (stores the removed item for undo)
+    RemoveItem(CanvasItem),
+    /// Move an item from old position to new position
+    MoveItem {
+        id: u64,
+        old_pos: (f32, f32),
+        new_pos: (f32, f32),
+    },
+    /// Resize an item
+    ResizeItem {
+        id: u64,
+        old_size: (f32, f32),
+        new_size: (f32, f32),
+    },
+    /// Move and resize combined (for drag operations that do both)
+    TransformItem {
+        id: u64,
+        old_pos: (f32, f32),
+        new_pos: (f32, f32),
+        old_size: (f32, f32),
+        new_size: (f32, f32),
+    },
+    /// Modify item content (stores old and new item states)
+    ModifyItem {
+        old_item: CanvasItem,
+        new_item: CanvasItem,
+    },
+    /// Batch of operations (for multi-item actions like file drop)
+    Batch(Vec<UndoOperation>),
+}
+
+impl UndoOperation {
+    /// Apply this operation to the board (for redo)
+    pub fn apply(&self, items: &mut Vec<CanvasItem>, items_index: &mut HashMap<u64, usize>) {
+        match self {
+            UndoOperation::AddItem(item) => {
+                items_index.insert(item.id, items.len());
+                items.push(item.clone());
+            }
+            UndoOperation::RemoveItem(item) => {
+                if let Some(&idx) = items_index.get(&item.id) {
+                    items.remove(idx);
+                    items_index.remove(&item.id);
+                    // Rebuild index for items after the removed one
+                    for (i, it) in items.iter().enumerate().skip(idx) {
+                        items_index.insert(it.id, i);
+                    }
+                }
+            }
+            UndoOperation::MoveItem { id, new_pos, .. } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.position = *new_pos;
+                    }
+                }
+            }
+            UndoOperation::ResizeItem { id, new_size, .. } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.size = *new_size;
+                    }
+                }
+            }
+            UndoOperation::TransformItem {
+                id,
+                new_pos,
+                new_size,
+                ..
+            } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.position = *new_pos;
+                        item.size = *new_size;
+                    }
+                }
+            }
+            UndoOperation::ModifyItem { new_item, .. } => {
+                if let Some(&idx) = items_index.get(&new_item.id) {
+                    items[idx] = new_item.clone();
+                }
+            }
+            UndoOperation::Batch(ops) => {
+                for op in ops {
+                    op.apply(items, items_index);
+                }
+            }
+        }
+    }
+
+    /// Reverse this operation (for undo)
+    pub fn reverse(&self, items: &mut Vec<CanvasItem>, items_index: &mut HashMap<u64, usize>) {
+        match self {
+            UndoOperation::AddItem(item) => {
+                // Undo add = remove
+                if let Some(&idx) = items_index.get(&item.id) {
+                    items.remove(idx);
+                    items_index.remove(&item.id);
+                    for (i, it) in items.iter().enumerate().skip(idx) {
+                        items_index.insert(it.id, i);
+                    }
+                }
+            }
+            UndoOperation::RemoveItem(item) => {
+                // Undo remove = add back
+                items_index.insert(item.id, items.len());
+                items.push(item.clone());
+            }
+            UndoOperation::MoveItem { id, old_pos, .. } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.position = *old_pos;
+                    }
+                }
+            }
+            UndoOperation::ResizeItem { id, old_size, .. } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.size = *old_size;
+                    }
+                }
+            }
+            UndoOperation::TransformItem {
+                id,
+                old_pos,
+                old_size,
+                ..
+            } => {
+                if let Some(&idx) = items_index.get(id) {
+                    if let Some(item) = items.get_mut(idx) {
+                        item.position = *old_pos;
+                        item.size = *old_size;
+                    }
+                }
+            }
+            UndoOperation::ModifyItem { old_item, .. } => {
+                if let Some(&idx) = items_index.get(&old_item.id) {
+                    items[idx] = old_item.clone();
+                }
+            }
+            UndoOperation::Batch(ops) => {
+                // Reverse in opposite order
+                for op in ops.iter().rev() {
+                    op.reverse(items, items_index);
+                }
+            }
+        }
+    }
+}
+
+/// A history entry - either an operation or a full snapshot
+#[derive(Clone)]
+enum HistoryEntry {
+    /// A delta operation
+    Operation(UndoOperation),
+    /// A full state snapshot (created periodically for efficiency)
+    Snapshot(BoardState),
 }
 
 impl BoardState {
@@ -92,9 +258,11 @@ pub struct Board {
 
     pub next_item_id: u64,
 
-    // History using VecDeque for O(1) front removal
-    history: VecDeque<BoardState>,
+    // Delta-based history using VecDeque for O(1) front removal
+    history: VecDeque<HistoryEntry>,
     history_index: usize,
+    /// Counter for operations since last snapshot
+    ops_since_snapshot: usize,
 
     // Debounced save tracking
     dirty: bool,
@@ -131,7 +299,6 @@ impl Board {
             }
 
             let items_index = Self::build_items_index(&state.items);
-            let initial_state = state.clone();
             Self {
                 id,
                 canvas_offset: point(px(state.canvas_offset.0), px(state.canvas_offset.1)),
@@ -139,8 +306,9 @@ impl Board {
                 items: state.items,
                 items_index,
                 next_item_id: state.next_item_id,
-                history: VecDeque::from([initial_state]),
+                history: VecDeque::new(),
                 history_index: 0,
+                ops_since_snapshot: 0,
                 dirty: fixed_count > 0, // Mark dirty if we fixed anything
                 last_change: Instant::now(),
                 storage_location,
@@ -158,12 +326,6 @@ impl Board {
 
     /// Create a new empty board with the given ID and storage location
     pub fn new_empty_with_location(id: String, storage_location: crate::board_index::StoredLocation) -> Self {
-        let initial_state = BoardState {
-            canvas_offset: (0.0, 0.0),
-            zoom: 1.0,
-            items: Vec::new(),
-            next_item_id: 0,
-        };
         Self {
             id,
             canvas_offset: point(px(0.0), px(0.0)),
@@ -171,8 +333,9 @@ impl Board {
             items: Vec::new(),
             items_index: HashMap::new(),
             next_item_id: 0,
-            history: VecDeque::from([initial_state]),
+            history: VecDeque::new(),
             history_index: 0,
+            ops_since_snapshot: 0,
             dirty: false,
             last_change: Instant::now(),
             storage_location,
@@ -210,7 +373,10 @@ impl Board {
     /// Add a single item (still triggers history + save for single operations)
     pub fn add_item(&mut self, position: Point<Pixels>, content: ItemContent) -> u64 {
         let id = self.add_item_internal(position, content);
-        self.push_history();
+        // Get the just-added item for the undo operation
+        if let Some(item) = self.get_item(id).cloned() {
+            self.push_operation(UndoOperation::AddItem(item));
+        }
         self.mark_dirty();
         id
     }
@@ -234,22 +400,36 @@ impl Board {
     /// Handle file drop - batched operation (single history push + save)
     /// For iCloud boards, files are copied to the board's files/ directory
     /// so they sync across devices.
-    pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) {
+    ///
+    /// Returns a list of error messages for any files that failed to copy.
+    /// The caller should display these to the user via toast notifications.
+    pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) -> Vec<String> {
+        let mut errors = Vec::new();
+
         if paths.is_empty() {
-            return;
+            return errors;
         }
 
         // Stagger offset for multiple files so they don't overlap
         const STAGGER_X: f32 = 30.0;
         const STAGGER_Y: f32 = 30.0;
 
+        let mut added_ids = Vec::new();
+
         for (i, path) in paths.iter().enumerate() {
             // For iCloud boards, copy the file to the board's files directory
             let actual_path = if self.should_copy_files() {
-                self.copy_file_to_board(path).unwrap_or_else(|e| {
-                    warn!("Failed to copy file to board storage: {}", e);
-                    path.clone()
-                })
+                match self.copy_file_to_board(path) {
+                    Ok(copied_path) => copied_path,
+                    Err(e) => {
+                        let filename = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("file");
+                        errors.push(format!("Failed to copy '{}': {}", filename, e));
+                        warn!("Failed to copy file to board storage: {}", e);
+                        path.clone()
+                    }
+                }
             } else {
                 path.clone()
             };
@@ -260,12 +440,27 @@ impl Board {
                 px(f32::from(base_pos.x) + (i as f32 * STAGGER_X)),
                 px(f32::from(base_pos.y) + (i as f32 * STAGGER_Y)),
             );
-            self.add_item_internal(staggered_pos, content);
+            let id = self.add_item_internal(staggered_pos, content);
+            added_ids.push(id);
         }
 
-        // Single history push and save for the entire batch
-        self.push_history();
+        // Create batch operation for all added items
+        let ops: Vec<UndoOperation> = added_ids
+            .iter()
+            .filter_map(|&id| self.get_item(id).cloned())
+            .map(UndoOperation::AddItem)
+            .collect();
+
+        if !ops.is_empty() {
+            if ops.len() == 1 {
+                self.push_operation(ops.into_iter().next().unwrap());
+            } else {
+                self.push_operation(UndoOperation::Batch(ops));
+            }
+        }
         self.mark_dirty();
+
+        errors
     }
 
     /// Check if files should be copied to the board's storage
@@ -353,9 +548,11 @@ impl Board {
     /// Remove an item by ID
     pub fn remove_item(&mut self, id: u64) -> bool {
         if let Some(&idx) = self.items_index.get(&id) {
+            // Clone the item before removing for undo operation
+            let item = self.items[idx].clone();
             self.items.remove(idx);
             self.rebuild_index();
-            self.push_history();
+            self.push_operation(UndoOperation::RemoveItem(item));
             self.mark_dirty();
             true
         } else {
@@ -542,12 +739,33 @@ impl Board {
         self.mark_dirty();
     }
 
-    pub fn push_history(&mut self) {
-        // Remove any states after current index (for redo branch pruning)
-        while self.history.len() > self.history_index + 1 {
+    /// Push a delta operation to history (memory-efficient)
+    pub fn push_operation(&mut self, op: UndoOperation) {
+        // Remove any operations after current index (for redo branch pruning)
+        while self.history.len() > self.history_index {
             self.history.pop_back();
         }
 
+        self.history.push_back(HistoryEntry::Operation(op));
+        self.history_index = self.history.len();
+        self.ops_since_snapshot += 1;
+
+        // Create periodic snapshot for efficient reconstruction
+        if self.ops_since_snapshot >= SNAPSHOT_INTERVAL {
+            self.create_snapshot();
+        }
+
+        // Limit history - O(1) removal from front with VecDeque
+        while self.history.len() > MAX_HISTORY_OPERATIONS {
+            self.history.pop_front();
+            if self.history_index > 0 {
+                self.history_index -= 1;
+            }
+        }
+    }
+
+    /// Create a full snapshot in history (for periodic checkpoints)
+    fn create_snapshot(&mut self) {
         let state = BoardState {
             canvas_offset: (
                 f32::from(self.canvas_offset.x),
@@ -557,48 +775,94 @@ impl Board {
             items: self.items.clone(),
             next_item_id: self.next_item_id,
         };
+        self.history.push_back(HistoryEntry::Snapshot(state));
+        self.history_index = self.history.len();
+        self.ops_since_snapshot = 0;
+    }
 
-        self.history.push_back(state);
-        self.history_index = self.history.len() - 1;
+    /// Legacy push_history - creates a snapshot (backward compatibility)
+    /// Prefer push_operation for new code
+    pub fn push_history(&mut self) {
+        // Remove any operations after current index (for redo branch pruning)
+        while self.history.len() > self.history_index {
+            self.history.pop_back();
+        }
 
-        // Limit history - O(1) removal from front with VecDeque
-        while self.history.len() > MAX_HISTORY_STATES {
+        self.create_snapshot();
+
+        // Limit history
+        while self.history.len() > MAX_HISTORY_OPERATIONS {
             self.history.pop_front();
-            self.history_index = self.history_index.saturating_sub(1);
+            if self.history_index > 0 {
+                self.history_index -= 1;
+            }
         }
     }
 
     pub fn undo(&mut self) -> bool {
-        if self.history_index > 0 {
-            self.history_index -= 1;
-            self.restore_from_history();
-            true
-        } else {
-            false
+        if self.history_index == 0 {
+            return false;
+        }
+
+        self.history_index -= 1;
+        let entry = self.history.get(self.history_index).cloned();
+
+        match entry {
+            Some(HistoryEntry::Operation(op)) => {
+                // Reverse the operation
+                op.reverse(&mut self.items, &mut self.items_index);
+                self.mark_dirty();
+                true
+            }
+            Some(HistoryEntry::Snapshot(_)) => {
+                // For snapshots, restore the PREVIOUS state (the one before this change)
+                // history[n] contains state AFTER change n, so we need history[n-1]
+                if self.history_index > 0 {
+                    if let Some(HistoryEntry::Snapshot(prev_state)) = self.history.get(self.history_index - 1).cloned() {
+                        self.restore_from_snapshot(&prev_state);
+                        return true;
+                    }
+                }
+                // Can't undo if there's no previous snapshot
+                self.history_index += 1; // Restore index since we can't actually undo
+                false
+            }
+            None => false,
         }
     }
 
     pub fn redo(&mut self) -> bool {
-        if self.history_index < self.history.len() - 1 {
-            self.history_index += 1;
-            self.restore_from_history();
-            true
-        } else {
-            false
+        if self.history_index >= self.history.len() {
+            return false;
+        }
+
+        let entry = self.history.get(self.history_index).cloned();
+        self.history_index += 1;
+
+        match entry {
+            Some(HistoryEntry::Operation(op)) => {
+                // Apply the operation
+                op.apply(&mut self.items, &mut self.items_index);
+                self.mark_dirty();
+                true
+            }
+            Some(HistoryEntry::Snapshot(state)) => {
+                // For snapshots on redo, we need to apply operations until next snapshot
+                // For simplicity, just restore the snapshot
+                self.restore_from_snapshot(&state);
+                true
+            }
+            None => false,
         }
     }
 
-    fn restore_from_history(&mut self) {
-        // Clone the state to avoid borrow issues
-        let state = self.history.get(self.history_index).cloned();
-        if let Some(state) = state {
-            self.canvas_offset = point(px(state.canvas_offset.0), px(state.canvas_offset.1));
-            self.zoom = state.zoom;
-            self.items = state.items.clone();
-            self.next_item_id = state.next_item_id;
-            self.rebuild_index();
-            self.mark_dirty();
-        }
+    fn restore_from_snapshot(&mut self, state: &BoardState) {
+        self.canvas_offset = point(px(state.canvas_offset.0), px(state.canvas_offset.1));
+        self.zoom = state.zoom;
+        self.items = state.items.clone();
+        self.next_item_id = state.next_item_id;
+        self.rebuild_index();
+        self.mark_dirty();
     }
 
     /// Create a fresh board for testing (doesn't load from disk)

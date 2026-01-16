@@ -24,6 +24,9 @@ impl Humanboard {
         });
         println!("[DEBUG] Input focused");
 
+        // Start fade-in animation
+        self.modal_animations.open_command_palette();
+
         // Subscribe to input events
         cx.subscribe(
             &input,
@@ -68,21 +71,29 @@ impl Humanboard {
 
     /// Hide command palette and release focus (when window is available)
     pub fn hide_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.clear_command_palette_state(cx);
+        // Start fade-out animation - cleanup happens when animation completes
+        self.modal_animations.close_command_palette();
         // Release focus back to canvas
         self.focus.release(FocusContext::CommandPalette, window);
+        cx.notify();
     }
 
     /// Clear command palette state without focus management
     /// Used when window is not available (e.g., from Blur callback)
     pub fn clear_command_palette_state(&mut self, cx: &mut Context<Self>) {
+        // Start fade-out animation
+        self.modal_animations.close_command_palette();
+        // Mark that focus should return to canvas (actual focus happens in render)
+        self.focus.mark_needs_canvas_focus();
+        cx.notify();
+    }
+
+    /// Clean up command palette after close animation completes
+    pub fn finish_close_command_palette(&mut self) {
         self.command_palette = None;
         self.search_results.clear();
         self.selected_result = 0;
         self.cmd_palette_mode = CmdPaletteMode::Items;
-        // Mark that focus should return to canvas (actual focus happens in render)
-        self.focus.mark_needs_canvas_focus();
-        cx.notify();
     }
 
     /// Update search results based on input text

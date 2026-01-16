@@ -66,6 +66,29 @@ impl Render for Humanboard {
             window.request_animation_frame();
         }
 
+        // Update modal animations and request next frame if still animating
+        if self.modal_animations.update() {
+            window.request_animation_frame();
+        }
+
+        // Check if settings close animation is complete
+        if self.modal_animations.settings_close_complete() {
+            self.show_settings = false;
+            self.modal_animations.settings = None;
+        }
+
+        // Check if create board close animation is complete
+        if self.modal_animations.create_board_close_complete() {
+            self.finish_close_create_board();
+            self.modal_animations.create_board = None;
+        }
+
+        // Check if command palette close animation is complete
+        if self.modal_animations.command_palette_close_complete() {
+            self.finish_close_command_palette();
+            self.modal_animations.command_palette = None;
+        }
+
         // Restore focus to canvas if needed (e.g., after closing command palette via blur)
         self.focus.restore_focus_if_needed(window);
 
@@ -90,12 +113,12 @@ impl Render for Humanboard {
         if let Some(ref mut board) = self.board {
             if board.should_save() {
                 if let Err(e) = board.flush_save() {
-                    // Show error toast for save failures
+                    // Show error toast for save failures with retry option
                     self.toast_manager
                         .push(crate::notifications::Toast::error(format!(
                             "Save failed: {}",
                             e
-                        )));
+                        )).with_action(crate::notifications::ToastAction::retry()));
                 }
             }
         }
@@ -103,6 +126,7 @@ impl Render for Humanboard {
         // Wrap everything in a container with overlays on top
         let bg = cx.theme().background;
         let toasts = self.toast_manager.toasts().to_vec();
+        let reduce_motion = crate::settings::app_settings().should_reduce_motion();
 
         // End frame timing (measures our render logic, not GPUI's paint)
         self.perf_monitor.end_frame();
@@ -124,6 +148,7 @@ impl Render for Humanboard {
                     &self.settings_theme_scroll,
                     self.settings_tab,
                     &self.focus.modal,
+                    self.modal_animations.settings_opacity(),
                     cx,
                 ))
             })
@@ -136,13 +161,14 @@ impl Render for Humanboard {
                         input,
                         &self.create_board_location,
                         &self.focus.modal,
+                        self.modal_animations.create_board_opacity(),
                         cx,
                     ))
                 },
             )
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
-                d.child(render_toast_container(&toasts))
+                d.child(render_toast_container(&toasts, reduce_motion, cx))
             })
     }
 }
@@ -229,7 +255,12 @@ impl Humanboard {
         if let Some(rx) = &self.file_drop_rx {
             if let Ok((pos, paths)) = rx.try_recv() {
                 if let Some(ref mut board) = self.board {
-                    board.handle_file_drop(pos, paths);
+                    let errors = board.handle_file_drop(pos, paths);
+                    // Show toast notifications for any file copy errors
+                    for error in errors {
+                        self.toast_manager.push(crate::notifications::Toast::error(error)
+                            .with_action(crate::notifications::ToastAction::retry()));
+                    }
                 }
                 self.file_drop_rx = None;
                 cx.notify();
@@ -238,18 +269,34 @@ impl Humanboard {
 
         // Ensure WebViews and editors are created if preview is active
         if self.preview.is_some() {
-            self.ensure_pdf_webview(window, cx);
+            let pdf_errors = self.ensure_pdf_webview(window, cx);
+            for error in pdf_errors {
+                self.toast_manager.push(crate::notifications::Toast::error(error)
+                    .with_action(crate::notifications::ToastAction::reload_webview()));
+            }
             self.ensure_code_editors(window, cx);
         }
 
         // Ensure YouTube WebViews are created for any YouTube items
-        self.ensure_youtube_webviews(window, cx);
+        let youtube_errors = self.ensure_youtube_webviews(window, cx);
+        for error in youtube_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
+        }
 
         // Ensure Audio WebViews are created for any Audio items
-        self.ensure_audio_webviews(window, cx);
+        let audio_errors = self.ensure_audio_webviews(window, cx);
+        for error in audio_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
+        }
 
         // Ensure Video WebViews are created for any Video items
-        self.ensure_video_webviews(window, cx);
+        let video_errors = self.ensure_video_webviews(window, cx);
+        for error in video_errors {
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
+        }
 
         // Update webview visibility based on canvas viewport
         // This hides webviews that are scrolled out of view to prevent z-index issues

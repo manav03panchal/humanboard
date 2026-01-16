@@ -3193,6 +3193,7 @@ dependencies = [
  "notify 6.1.1",
  "once_cell",
  "open",
+ "parking_lot",
  "pdfium-render",
  "pulldown-cmark",
  "rand 0.8.5",
