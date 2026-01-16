@@ -85,6 +85,7 @@ impl Humanboard {
             settings_theme_scroll: ScrollHandle::new(),
             settings_font_index: 0,
             settings_font_scroll: ScrollHandle::new(),
+            modal_focus_index: 0,
 
             toast_manager: ToastManager::new(),
             preview_tab_scroll: ScrollHandle::new(),

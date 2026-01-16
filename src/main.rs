@@ -7,11 +7,11 @@ use anyhow::{Context, Result};
 use gpui::*;
 use humanboard::actions::{
     CancelTextboxEdit, CloseCommandPalette, CloseTab, CmdPaletteDown, CmdPaletteUp, DeleteSelected,
-    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, ModalFocusTrap, MoveTabToOtherPane,
-    NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight, NudgeUp, OpenFile,
-    OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab, SaveCode, SelectAll,
-    ShowShortcuts, ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch, Undo, ZoomIn,
-    ZoomOut, ZoomReset,
+    DeselectAll, DuplicateSelected, GoBack, GoForward, GoHome, ModalFocusNext, ModalFocusPrev,
+    MoveTabToOtherPane, NewBoard, NextSearchMatch, NextTab, NudgeDown, NudgeLeft, NudgeRight,
+    NudgeUp, OpenFile, OpenSettings, Paste, PrevSearchMatch, PrevTab, Quit, Redo, ReopenClosedTab,
+    SaveCode, SelectAll, ShowShortcuts, ToggleCommandPalette, TogglePaneSplit, TogglePreviewSearch,
+    Undo, ZoomIn, ZoomOut, ZoomReset,
 };
 use humanboard::app::Humanboard;
 use humanboard::focus::FocusContext;
@@ -319,11 +319,11 @@ fn register_keybindings(cx: &mut App) {
     ]);
 
     // Modal context shortcuts (settings, dialogs)
-    // Focus trap: Tab and Shift+Tab are consumed to prevent focus from escaping modal
+    // Focus trap: Tab and Shift+Tab cycle focus within modal
     cx.bind_keys([
         KeyBinding::new("escape", OpenSettings, Some(FocusContext::KEY_MODAL)),
-        KeyBinding::new("tab", ModalFocusTrap, Some(FocusContext::KEY_MODAL)),
-        KeyBinding::new("shift-tab", ModalFocusTrap, Some(FocusContext::KEY_MODAL)),
+        KeyBinding::new("tab", ModalFocusNext, Some(FocusContext::KEY_MODAL)),
+        KeyBinding::new("shift-tab", ModalFocusPrev, Some(FocusContext::KEY_MODAL)),
     ]);
 
     debug!("Keybindings registered");

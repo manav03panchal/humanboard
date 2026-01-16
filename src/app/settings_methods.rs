@@ -10,6 +10,7 @@ impl Humanboard {
         if self.show_settings {
             // Set focus context to Modal
             self.focus.focus(FocusContext::Modal, window);
+            self.reset_modal_focus(); // Reset focus index for Tab cycling
 
             // Initialize theme index to current theme
             let themes = crate::settings::Settings::available_themes(cx);
@@ -187,5 +188,67 @@ impl Humanboard {
             cx.remove_global::<crate::render::overlays::FontDropdownOpen>();
         }
         cx.notify();
+    }
+
+    /// Get the number of focusable elements in the current modal
+    fn modal_focusable_count(&self) -> usize {
+        if self.show_create_board_modal {
+            // Create Board modal: name input only (buttons are click-only)
+            1
+        } else if self.show_settings {
+            // Settings modal: no keyboard-focusable elements (all mouse-driven)
+            0
+        } else {
+            0
+        }
+    }
+
+    /// Move focus to next element in modal (Tab key)
+    pub fn modal_focus_next(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let count = self.modal_focusable_count();
+        if count == 0 {
+            // No focusable elements, just consume the key
+            return;
+        }
+
+        self.modal_focus_index = (self.modal_focus_index + 1) % count;
+        self.apply_modal_focus(window, cx);
+    }
+
+    /// Move focus to previous element in modal (Shift+Tab key)
+    pub fn modal_focus_prev(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let count = self.modal_focusable_count();
+        if count == 0 {
+            // No focusable elements, just consume the key
+            return;
+        }
+
+        self.modal_focus_index = if self.modal_focus_index == 0 {
+            count - 1
+        } else {
+            self.modal_focus_index - 1
+        };
+        self.apply_modal_focus(window, cx);
+    }
+
+    /// Apply focus to the element at the current modal_focus_index
+    fn apply_modal_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.show_create_board_modal {
+            // Create Board modal: only the input is focusable
+            if self.modal_focus_index == 0 {
+                if let Some(ref input) = self.create_board_input {
+                    input.update(cx, |state, cx| {
+                        state.focus(window, cx);
+                    });
+                }
+            }
+        }
+        // Settings modal has no keyboard-focusable elements
+        cx.notify();
+    }
+
+    /// Reset modal focus index when opening a modal
+    pub fn reset_modal_focus(&mut self) {
+        self.modal_focus_index = 0;
     }
 }

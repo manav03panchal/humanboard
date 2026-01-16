@@ -106,6 +106,9 @@ pub struct Humanboard {
     pub settings_font_index: usize,
     pub settings_font_scroll: ScrollHandle,
 
+    // Modal focus trap state
+    pub modal_focus_index: usize, // Current focus index within modal (for Tab cycling)
+
     // Toast notifications
     pub toast_manager: ToastManager,
 
