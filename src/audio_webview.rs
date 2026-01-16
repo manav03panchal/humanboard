@@ -211,7 +211,7 @@ impl AudioWebView {
         </div>
     </div>
     <audio id="audio" preload="metadata">
-        <source src="http://127.0.0.1:{port}/audio" type="audio/mpeg">
+        <source src="/audio" type="audio/mpeg">
     </audio>
     <script>
         const audio = document.getElementById('audio');
@@ -231,15 +231,7 @@ impl AudioWebView {
 
         audio.addEventListener('loadedmetadata', () => {{
             dur.textContent = fmt(audio.duration);
-            console.log('Audio loaded, duration:', audio.duration);
         }});
-
-        audio.addEventListener('error', (e) => {{
-            console.error('Audio error:', audio.error?.code, audio.error?.message);
-        }});
-
-        // Try to load audio explicitly
-        audio.load();
 
         audio.addEventListener('timeupdate', () => {{
             const pct = (audio.currentTime / audio.duration) * 100;
@@ -254,12 +246,9 @@ impl AudioWebView {
 
         playBtn.onclick = () => {{
             if (audio.paused) {{
-                audio.play().then(() => {{
-                    playIcon.classList.add('hidden');
-                    pauseIcon.classList.remove('hidden');
-                }}).catch(e => {{
-                    console.log('Play interrupted:', e.name);
-                }});
+                audio.play();
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
             }} else {{
                 audio.pause();
                 playIcon.classList.remove('hidden');
@@ -275,7 +264,6 @@ impl AudioWebView {
     </script>
 </body>
 </html>"##,
-                port = port,
                 title = html_escape(&display_title),
                 artist = html_escape(&display_artist),
                 album_art = if let Some(ref art_data) = album_art_base64 {
