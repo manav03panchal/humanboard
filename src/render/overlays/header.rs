@@ -164,13 +164,14 @@ pub fn render_footer_bar(
     selected_item_name: Option<String>,
     board_name: Option<String>,
     is_dirty: bool,
-    cx: &Context<Humanboard>,
+    cx: &mut Context<Humanboard>,
 ) -> Div {
     let bg = cx.theme().title_bar;
     let border = cx.theme().border;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
     let success = cx.theme().success;
+    let muted = cx.theme().muted;
 
     h_flex()
         .absolute()
@@ -209,7 +210,68 @@ pub fn render_footer_bar(
                     div().text_color(success).child("Saved")
                 }),
         )
-        .when_some(selected_item_name, |d, name| {
-            d.child(div().text_color(fg).child(name))
-        })
+        // Right side: selected item name and help hints
+        .child(
+            h_flex()
+                .gap_4()
+                .items_center()
+                .when_some(selected_item_name, |d, name| {
+                    d.child(div().text_color(fg).child(name))
+                })
+                // Help hint: Cmd+K for search
+                .child(
+                    h_flex()
+                        .id("help-hint-search")
+                        .gap_1()
+                        .items_center()
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .rounded(px(4.0))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(muted))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.show_command_palette(window, cx);
+                        }))
+                        .child(
+                            div()
+                                .px(px(4.0))
+                                .py(px(1.0))
+                                .bg(muted)
+                                .border_1()
+                                .border_color(border)
+                                .rounded(px(3.0))
+                                .text_xs()
+                                .child("⌘K"),
+                        )
+                        .child(div().text_color(muted_fg).child("Search")),
+                )
+                // Help hint: ? for shortcuts
+                .child(
+                    h_flex()
+                        .id("help-hint-shortcuts")
+                        .gap_1()
+                        .items_center()
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .rounded(px(4.0))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(muted))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.show_shortcuts = !this.show_shortcuts;
+                            cx.notify();
+                        }))
+                        .child(
+                            div()
+                                .px(px(6.0))
+                                .py(px(1.0))
+                                .bg(muted)
+                                .border_1()
+                                .border_color(border)
+                                .rounded(px(3.0))
+                                .text_xs()
+                                .child("?"),
+                        )
+                        .child(div().text_color(muted_fg).child("Help")),
+                ),
+        )
 }
