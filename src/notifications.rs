@@ -1,10 +1,70 @@
 //! Toast notification system for Humanboard
 //!
 //! Provides a simple, elegant toast notification system with support for
-//! multiple concurrent toasts, auto-dismiss, and different visual variants.
+//! multiple concurrent toasts, auto-dismiss, different visual variants,
+//! and action buttons for error recovery.
 
 use gpui::*;
+use gpui_component::{ActiveTheme, Sizable};
 use std::time::Duration;
+
+/// Action that can be attached to a toast for error recovery
+#[derive(Clone)]
+pub struct ToastAction {
+    /// Label for the action button
+    pub label: String,
+    /// Unique identifier for this action type
+    pub action_type: ToastActionType,
+}
+
+/// Types of actions that can be performed from toasts
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToastActionType {
+    /// Retry the last failed operation
+    Retry,
+    /// Save to an alternative location
+    SaveAs,
+    /// Reset settings to defaults
+    ResetSettings,
+    /// Reload webview
+    ReloadWebview,
+    /// Dismiss the toast (no action)
+    Dismiss,
+}
+
+impl ToastAction {
+    /// Create a Retry action
+    pub fn retry() -> Self {
+        Self {
+            label: "Retry".to_string(),
+            action_type: ToastActionType::Retry,
+        }
+    }
+
+    /// Create a Save As action
+    pub fn save_as() -> Self {
+        Self {
+            label: "Save As...".to_string(),
+            action_type: ToastActionType::SaveAs,
+        }
+    }
+
+    /// Create a Reset Settings action
+    pub fn reset_settings() -> Self {
+        Self {
+            label: "Reset to Defaults".to_string(),
+            action_type: ToastActionType::ResetSettings,
+        }
+    }
+
+    /// Create a Reload Webview action
+    pub fn reload_webview() -> Self {
+        Self {
+            label: "Reload".to_string(),
+            action_type: ToastActionType::ReloadWebview,
+        }
+    }
+}
 
 /// Visual variant for toast notifications
 #[derive(Clone, Debug, PartialEq)]
@@ -52,7 +112,7 @@ impl ToastVariant {
 }
 
 /// A single toast notification
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Toast {
     /// Unique identifier for this toast
     pub id: u64,
@@ -64,6 +124,20 @@ pub struct Toast {
     pub created_at: std::time::Instant,
     /// How long before auto-dismiss
     pub duration: Duration,
+    /// Optional action button for error recovery
+    pub action: Option<ToastAction>,
+}
+
+impl std::fmt::Debug for Toast {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Toast")
+            .field("id", &self.id)
+            .field("message", &self.message)
+            .field("variant", &self.variant)
+            .field("duration", &self.duration)
+            .field("has_action", &self.action.is_some())
+            .finish()
+    }
 }
 
 impl Toast {
@@ -76,6 +150,7 @@ impl Toast {
             variant,
             created_at: std::time::Instant::now(),
             duration,
+            action: None,
         }
     }
 
@@ -102,6 +177,16 @@ impl Toast {
     /// Create a toast with a custom duration
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
+        self
+    }
+
+    /// Attach an action button to this toast
+    pub fn with_action(mut self, action: ToastAction) -> Self {
+        // Toasts with actions should stay longer to give users time to read and act
+        if self.duration < Duration::from_secs(8) {
+            self.duration = Duration::from_secs(8);
+        }
+        self.action = Some(action);
         self
     }
 
@@ -185,15 +270,23 @@ impl ToastManager {
     }
 }
 
-/// Render a single toast notification
-pub fn render_toast(toast: &Toast, theme: &gpui_component::theme::Theme) -> Div {
+/// Render a single toast notification with optional action button
+pub fn render_toast(
+    toast: &Toast,
+    theme: &gpui_component::theme::Theme,
+    cx: &mut Context<crate::app::Humanboard>,
+) -> Stateful<Div> {
+    use gpui_component::button::{Button, ButtonVariants};
+
     let bg = toast.variant.background_color(theme);
     let opacity = toast.opacity();
     let icon = toast.variant.icon();
     // Use white text for good contrast on colored backgrounds
     let text = gpui::white().opacity(opacity);
+    let toast_id = toast.id;
 
-    div()
+    let mut base = div()
+        .id(ElementId::Name(format!("toast-{}", toast_id).into()))
         .flex()
         .flex_row()
         .items_center()
@@ -206,7 +299,13 @@ pub fn render_toast(toast: &Toast, theme: &gpui_component::theme::Theme) -> Div 
         .rounded_lg()
         .shadow_lg()
         .overflow_hidden()
-        .child(div().text_lg().font_weight(FontWeight::BOLD).flex_shrink_0().child(icon))
+        .child(
+            div()
+                .text_lg()
+                .font_weight(FontWeight::BOLD)
+                .flex_shrink_0()
+                .child(icon),
+        )
         .child(
             div()
                 .flex_1()
@@ -216,11 +315,40 @@ pub fn render_toast(toast: &Toast, theme: &gpui_component::theme::Theme) -> Div 
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .child(toast.message.clone()),
-        )
+        );
+
+    // Add action button if present
+    if let Some(ref action) = toast.action {
+        let action_type = action.action_type.clone();
+        let label = action.label.clone();
+        base = base.child(
+            Button::new(SharedString::from(format!("toast-action-{}", toast_id)))
+                .xsmall()
+                .ghost()
+                .label(label.clone())
+                .tooltip(label)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.handle_toast_action(action_type.clone(), window, cx);
+                    this.toast_manager.remove(toast_id);
+                    cx.notify();
+                })),
+        );
+    }
+
+    base
 }
 
 /// Render all toasts in a container
-pub fn render_toast_container(toasts: &[Toast], theme: &gpui_component::theme::Theme) -> Div {
+pub fn render_toast_container(
+    toasts: &[Toast],
+    cx: &mut Context<crate::app::Humanboard>,
+) -> Div {
+    let theme = cx.theme().clone();
+    let mut rendered = Vec::with_capacity(toasts.len());
+    for toast in toasts {
+        rendered.push(render_toast(toast, &theme, cx));
+    }
+
     div()
         .absolute()
         .top(px(52.0)) // Below header bar (40px) + padding
@@ -229,5 +357,5 @@ pub fn render_toast_container(toasts: &[Toast], theme: &gpui_component::theme::T
         .flex_col()
         .items_end()
         .gap_2()
-        .children(toasts.iter().map(|toast| render_toast(toast, theme)))
+        .children(rendered)
 }

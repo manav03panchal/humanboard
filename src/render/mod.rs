@@ -90,12 +90,12 @@ impl Render for Humanboard {
         if let Some(ref mut board) = self.board {
             if board.should_save() {
                 if let Err(e) = board.flush_save() {
-                    // Show error toast for save failures
+                    // Show error toast for save failures with retry option
                     self.toast_manager
                         .push(crate::notifications::Toast::error(format!(
                             "Save failed: {}",
                             e
-                        )));
+                        )).with_action(crate::notifications::ToastAction::retry()));
                 }
             }
         }
@@ -142,7 +142,7 @@ impl Render for Humanboard {
             )
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
-                d.child(render_toast_container(&toasts, cx.theme()))
+                d.child(render_toast_container(&toasts, cx))
             })
     }
 }
@@ -232,7 +232,8 @@ impl Humanboard {
                     let errors = board.handle_file_drop(pos, paths);
                     // Show toast notifications for any file copy errors
                     for error in errors {
-                        self.toast_manager.push(crate::notifications::Toast::error(error));
+                        self.toast_manager.push(crate::notifications::Toast::error(error)
+                            .with_action(crate::notifications::ToastAction::retry()));
                     }
                 }
                 self.file_drop_rx = None;
@@ -244,7 +245,8 @@ impl Humanboard {
         if self.preview.is_some() {
             let pdf_errors = self.ensure_pdf_webview(window, cx);
             for error in pdf_errors {
-                self.toast_manager.push(crate::notifications::Toast::error(error));
+                self.toast_manager.push(crate::notifications::Toast::error(error)
+                    .with_action(crate::notifications::ToastAction::reload_webview()));
             }
             self.ensure_code_editors(window, cx);
         }
@@ -252,19 +254,22 @@ impl Humanboard {
         // Ensure YouTube WebViews are created for any YouTube items
         let youtube_errors = self.ensure_youtube_webviews(window, cx);
         for error in youtube_errors {
-            self.toast_manager.push(crate::notifications::Toast::error(error));
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
         }
 
         // Ensure Audio WebViews are created for any Audio items
         let audio_errors = self.ensure_audio_webviews(window, cx);
         for error in audio_errors {
-            self.toast_manager.push(crate::notifications::Toast::error(error));
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
         }
 
         // Ensure Video WebViews are created for any Video items
         let video_errors = self.ensure_video_webviews(window, cx);
         for error in video_errors {
-            self.toast_manager.push(crate::notifications::Toast::error(error));
+            self.toast_manager.push(crate::notifications::Toast::error(error)
+                .with_action(crate::notifications::ToastAction::reload_webview()));
         }
 
         // Update webview visibility based on canvas viewport

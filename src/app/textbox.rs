@@ -127,7 +127,7 @@ impl Humanboard {
                             .push(crate::notifications::Toast::error(format!(
                                 "Save failed: {}",
                                 e
-                            )));
+                            )).with_action(crate::notifications::ToastAction::retry()));
                     }
                 }
             }
@@ -160,7 +160,7 @@ impl Humanboard {
                             .push(crate::notifications::Toast::error(format!(
                                 "Save failed: {}",
                                 e
-                            )));
+                            )).with_action(crate::notifications::ToastAction::retry()));
                     }
                 }
             }

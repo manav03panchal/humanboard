@@ -26,6 +26,7 @@ mod preview_tabs;
 mod preview_panes;
 mod preview_search;
 mod textbox;
+mod error_recovery;
 
 pub use types::*;
 pub use state::Humanboard;
