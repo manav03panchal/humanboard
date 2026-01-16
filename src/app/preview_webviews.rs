@@ -94,8 +94,6 @@ impl Humanboard {
         // Create WebViews for new Audio items
         for (item_id, path) in &audio_items {
             if !self.audio_webviews.contains_key(item_id) {
-                tracing::info!("[AUDIO] Creating new webview for item_id={}, existing_ids={:?}",
-                    item_id, self.audio_webviews.keys().collect::<Vec<_>>());
                 match AudioWebView::new(path.clone(), window, cx) {
                     Ok(webview) => {
                         self.audio_webviews.insert(*item_id, webview);
@@ -121,7 +119,6 @@ impl Humanboard {
             .copied()
             .collect();
         for id in ids_to_remove {
-            tracing::info!("[AUDIO] Removing webview for item_id={}", id);
             if let Some(webview) = self.audio_webviews.remove(&id) {
                 webview.hide(cx);
             }
