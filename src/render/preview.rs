@@ -19,12 +19,14 @@ use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable, h_flex, v_flex};
 use std::path::PathBuf;
 
 /// Render the tab bar for the preview panel
+/// `is_left_pane` indicates which pane this tab bar belongs to for proper event routing
 pub fn render_tab_bar(
     tabs: &Vec<PreviewTab>,
     active_tab: usize,
     scroll_handle: &ScrollHandle,
     dragging_tab: Option<usize>,
     drag_target: Option<usize>,
+    is_left_pane: bool,
     cx: &mut Context<Humanboard>,
 ) -> Stateful<Div> {
     let bg = cx.theme().title_bar;
@@ -104,18 +106,18 @@ pub fn render_tab_bar(
                         })
                         .on_click(cx.listener(move |this, _event, _window, cx| {
                             if this.dragging_tab.is_none() {
-                                this.switch_tab(tab_index, cx);
+                                this.switch_tab_in_pane(tab_index, is_left_pane, cx);
                             }
                         }))
                         // Double-click converts preview to permanent
                         .on_double_click(cx.listener(move |this, _event, _window, cx| {
-                            this.make_tab_permanent(tab_index, cx);
+                            this.make_tab_permanent_in_pane(tab_index, is_left_pane, cx);
                         }))
                         // Start drag on mouse down
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
-                                this.start_tab_drag(tab_index_drag, event.position, cx);
+                                this.start_tab_drag_in_pane(tab_index_drag, event.position, is_left_pane, cx);
                             }),
                         )
                         // Update drag target and position on mouse move
@@ -178,7 +180,7 @@ pub fn render_tab_bar(
                                         .on_mouse_down(
                                             MouseButton::Left,
                                             cx.listener(move |this, _event, _window, cx| {
-                                                this.close_tab(tab_index_close, cx);
+                                                this.close_tab_in_pane(tab_index_close, is_left_pane, cx);
                                             }),
                                         )
                                         .child("×")
@@ -191,7 +193,7 @@ pub fn render_tab_bar(
                                         .on_mouse_down(
                                             MouseButton::Left,
                                             cx.listener(move |this, _event, _window, cx| {
-                                                this.toggle_tab_pinned(tab_index_pin, cx);
+                                                this.toggle_tab_pinned_in_pane(tab_index_pin, is_left_pane, cx);
                                             }),
                                         )
                                         .child("×")
@@ -511,6 +513,7 @@ fn render_pane(
             scroll,
             if is_focused { dragging_tab } else { None },
             if is_focused { drag_target } else { None },
+            is_left_pane,
             cx,
         ))
         .when(is_focused, |d| {

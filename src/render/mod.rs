@@ -568,6 +568,7 @@ impl Humanboard {
                                                 &self.preview_tab_scroll,
                                                 self.dragging_tab,
                                                 self.tab_drag_target,
+                                                true, // is_left_pane (single pane = left)
                                                 cx,
                                             ))
                                             // Search bar (when active)
@@ -689,6 +690,7 @@ impl Humanboard {
                                                 &self.preview_tab_scroll,
                                                 self.dragging_tab,
                                                 self.tab_drag_target,
+                                                true, // is_left_pane (single pane = left)
                                                 cx,
                                             ))
                                             // Search bar (when active)
