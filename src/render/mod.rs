@@ -590,7 +590,11 @@ impl Humanboard {
                                                             .into(),
                                                     ))
                                                     .flex_1()
+                                                    .min_h_0()
+                                                    .w_full()
                                                     .overflow_hidden()
+                                                    .flex()
+                                                    .flex_col()
                                                     .relative()
                                                     // Hide content when dragging (webviews overlap everything)
                                                     .when(dragging.is_none(), |d| {
@@ -712,7 +716,11 @@ impl Humanboard {
                                                             .into(),
                                                     ))
                                                     .flex_1()
+                                                    .min_h_0()
+                                                    .w_full()
                                                     .overflow_hidden()
+                                                    .flex()
+                                                    .flex_col()
                                                     .relative()
                                                     // Hide content when dragging (webviews overlap everything)
                                                     .when(dragging.is_none(), |d| {
