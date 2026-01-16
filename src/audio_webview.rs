@@ -79,124 +79,110 @@ impl AudioWebView {
         html, body {{
             width: 100%;
             height: 100%;
-            background: transparent;
+            background: #121212;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
-            color: #e4e4e7;
-            -webkit-font-smoothing: antialiased;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
         }}
         .container {{
             width: 100%;
             height: 100%;
             display: flex;
             flex-direction: column;
-            padding: 12px;
-            gap: 10px;
+            justify-content: center;
+            padding: 16px;
         }}
         .player {{
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }}
-        .artwork {{
-            width: 40px;
-            height: 40px;
-            min-width: 40px;
-            border-radius: 6px;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+        .icon {{
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 4px;
+            background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
         }}
-        .artwork svg {{
-            width: 20px;
-            height: 20px;
-            fill: rgba(255,255,255,0.9);
+        .icon svg {{
+            width: 24px;
+            height: 24px;
+            fill: #fff;
         }}
-        .artwork img {{
+        .icon img {{
             width: 100%;
             height: 100%;
             object-fit: cover;
         }}
-        .meta {{
+        .info {{
             flex: 1;
             min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
         }}
         .title {{
-            font-size: 12px;
-            font-weight: 500;
-            color: #fafafa;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            letter-spacing: -0.01em;
         }}
-        .artist {{
-            font-size: 10px;
-            color: #71717a;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .subtitle {{
+            font-size: 11px;
+            color: #b3b3b3;
+        }}
+        .controls {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }}
         .play-btn {{
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: #fafafa;
+            background: #fff;
             border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.15s ease;
-            flex-shrink: 0;
+            transition: transform 0.1s;
         }}
-        .play-btn:hover {{
-            background: #fff;
-            transform: scale(1.05);
-        }}
-        .play-btn:active {{
-            transform: scale(0.95);
-        }}
-        .play-btn svg {{
-            width: 14px;
-            height: 14px;
-            fill: #18181b;
-        }}
-        .play-icon {{ margin-left: 1px; }}
+        .play-btn:hover {{ transform: scale(1.06); }}
+        .play-btn:active {{ transform: scale(0.96); }}
+        .play-btn svg {{ width: 16px; height: 16px; fill: #000; }}
+        .play-icon {{ margin-left: 2px; }}
         .progress {{
+            margin-top: 12px;
             display: flex;
             align-items: center;
             gap: 8px;
         }}
         .time {{
-            font-size: 9px;
-            color: #52525b;
-            min-width: 28px;
+            font-size: 10px;
+            color: #a0a0a0;
+            min-width: 36px;
             font-variant-numeric: tabular-nums;
-            font-weight: 500;
         }}
         .time.end {{ text-align: right; }}
-        .track {{
+        .bar {{
             flex: 1;
-            height: 3px;
-            background: #27272a;
-            border-radius: 1.5px;
+            height: 4px;
+            background: #404040;
+            border-radius: 2px;
             cursor: pointer;
             position: relative;
-            overflow: hidden;
         }}
-        .track:hover .fill {{ background: #8b5cf6; }}
+        .bar:hover .fill {{ background: #e91e63; }}
         .fill {{
             height: 100%;
-            background: #52525b;
-            border-radius: 1.5px;
+            background: #fff;
+            border-radius: 2px;
             width: 0%;
-            transition: width 0.1s linear, background 0.15s ease;
+            transition: width 0.1s linear;
         }}
         .hidden {{ display: none; }}
     </style>
@@ -204,19 +190,21 @@ impl AudioWebView {
 <body>
     <div class="container">
         <div class="player">
-            <div class="artwork">{album_art}</div>
-            <div class="meta">
+            <div class="icon">{album_art}</div>
+            <div class="info">
                 <div class="title">{title}</div>
-                <div class="artist">{artist}</div>
+                <div class="subtitle">{artist}</div>
             </div>
-            <button class="play-btn" id="playBtn">
-                <svg class="play-icon" id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <svg class="hidden" id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-            </button>
+            <div class="controls">
+                <button class="play-btn" id="playBtn">
+                    <svg class="play-icon" id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg class="hidden" id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+            </div>
         </div>
         <div class="progress">
             <span class="time" id="cur">0:00</span>
-            <div class="track" id="bar">
+            <div class="bar" id="bar">
                 <div class="fill" id="fill"></div>
             </div>
             <span class="time end" id="dur">0:00</span>
