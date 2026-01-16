@@ -713,18 +713,10 @@ pub fn render_items(
                 ))
                 .when(show_selection, |d| {
                     d
-                        // Selection border with glow effect
+                        // Selection border (no glow)
                         .border_2()
                         .border_color(primary)
                         .rounded(px(8.0 * zoom))
-                        .shadow(vec![
-                            gpui::BoxShadow {
-                                color: primary.opacity(0.4),
-                                offset: point(px(0.0), px(0.0)),
-                                blur_radius: px(12.0),
-                                spread_radius: px(2.0),
-                            }
-                        ])
                         .child(
                             // Resize handle - small corner indicator
                             div()
