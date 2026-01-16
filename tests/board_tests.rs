@@ -2,12 +2,12 @@
 //!
 //! Tests for the Board struct including item management, undo/redo, and history.
 
-use humanboard::board::Board;
+use humanboard::board::{Board, UndoOperation};
 use humanboard::types::{CanvasItem, ItemContent};
 use gpui::{point, px};
 
-// Re-export the constant for tests
-const MAX_HISTORY_STATES: usize = 50;
+// Match the constant from board.rs for delta-based history
+const MAX_HISTORY_OPERATIONS: usize = 100;
 
 #[test]
 fn test_board_new_empty() {
@@ -213,7 +213,7 @@ fn test_history_limit() {
         );
     }
 
-    assert!(board.history_len() <= MAX_HISTORY_STATES + 1);
+    assert!(board.history_len() <= MAX_HISTORY_OPERATIONS + 1);
 }
 
 #[test]
@@ -312,7 +312,7 @@ fn test_zoom_bounds() {
 // ========================================================================
 
 #[test]
-fn test_undo_preserves_canvas_offset() {
+fn test_undo_does_not_affect_canvas_offset() {
     let mut board = Board::new_for_test();
 
     // Add item at initial offset
@@ -321,21 +321,23 @@ fn test_undo_preserves_canvas_offset() {
         ItemContent::Text("First".to_string()),
     );
 
-    // Change canvas offset and add another item
+    // Change canvas offset (view state, independent of items)
     board.canvas_offset = point(px(100.0), px(200.0));
     board.add_item(
         point(px(50.0), px(50.0)),
         ItemContent::Text("Second".to_string()),
     );
 
-    // Undo should restore previous canvas offset
+    // Undo removes item but does NOT change canvas offset (delta-based undo only affects items)
     board.undo();
-    assert_eq!(f32::from(board.canvas_offset.x), 0.0);
-    assert_eq!(f32::from(board.canvas_offset.y), 0.0);
+    assert_eq!(board.items.len(), 1); // Second item removed
+    // Canvas offset is view state, unchanged by item undo
+    assert_eq!(f32::from(board.canvas_offset.x), 100.0);
+    assert_eq!(f32::from(board.canvas_offset.y), 200.0);
 }
 
 #[test]
-fn test_undo_preserves_zoom() {
+fn test_undo_does_not_affect_zoom() {
     let mut board = Board::new_for_test();
 
     // Add item at default zoom
@@ -343,22 +345,23 @@ fn test_undo_preserves_zoom() {
         point(px(0.0), px(0.0)),
         ItemContent::Text("First".to_string()),
     );
-    let initial_zoom = board.zoom;
 
-    // Change zoom and add another item
+    // Change zoom (view state, independent of items)
     board.zoom = 2.5;
     board.add_item(
         point(px(50.0), px(50.0)),
         ItemContent::Text("Second".to_string()),
     );
 
-    // Undo should restore previous zoom
+    // Undo removes item but does NOT change zoom (delta-based undo only affects items)
     board.undo();
-    assert_eq!(board.zoom, initial_zoom);
+    assert_eq!(board.items.len(), 1); // Second item removed
+    // Zoom is view state, unchanged by item undo
+    assert_eq!(board.zoom, 2.5);
 }
 
 #[test]
-fn test_undo_preserves_next_item_id() {
+fn test_undo_keeps_next_item_id_monotonic() {
     let mut board = Board::new_for_test();
 
     board.add_item(
@@ -373,9 +376,10 @@ fn test_undo_preserves_next_item_id() {
     );
     assert_eq!(board.next_item_id, 2);
 
-    // Undo should restore previous next_item_id
+    // Undo removes item but next_item_id stays monotonic (prevents ID collisions)
     board.undo();
-    assert_eq!(board.next_item_id, 1);
+    assert_eq!(board.items.len(), 1);
+    assert_eq!(board.next_item_id, 2); // Stays at 2 to prevent ID reuse
 }
 
 #[test]
@@ -586,8 +590,8 @@ fn test_branch_pruning_clears_all_redo_states() {
 fn test_history_limit_removes_oldest_state() {
     let mut board = Board::new_for_test();
 
-    // Add more items than MAX_HISTORY_STATES
-    for i in 0..(MAX_HISTORY_STATES + 10) {
+    // Add more items than MAX_HISTORY_OPERATIONS
+    for i in 0..(MAX_HISTORY_OPERATIONS + 10) {
         board.add_item(
             point(px(i as f32 * 10.0), px(0.0)),
             ItemContent::Text(format!("Item {}", i)),
@@ -595,7 +599,7 @@ fn test_history_limit_removes_oldest_state() {
     }
 
     // History should be limited
-    assert!(board.history_len() <= MAX_HISTORY_STATES + 1);
+    assert!(board.history_len() <= MAX_HISTORY_OPERATIONS + 1);
 
     // We can't undo all the way back to empty state
     let mut undo_count = 0;
@@ -603,8 +607,8 @@ fn test_history_limit_removes_oldest_state() {
         undo_count += 1;
     }
 
-    // Should be able to undo MAX_HISTORY_STATES times at most
-    assert!(undo_count <= MAX_HISTORY_STATES);
+    // Should be able to undo MAX_HISTORY_OPERATIONS times at most
+    assert!(undo_count <= MAX_HISTORY_OPERATIONS);
     // Items should not be empty because oldest states were pruned
     assert!(board.items.len() > 0);
 }
@@ -617,17 +621,24 @@ fn test_undo_redo_with_item_position_changes() {
         point(px(0.0), px(0.0)),
         ItemContent::Text("Test".to_string()),
     );
+    let original_pos = board.items[0].position;
 
-    // Modify item position and push history
-    board.items[0].position = (100.0, 200.0);
-    board.push_history();
+    // Modify item position using delta operation
+    let old_pos = board.items[0].position;
+    let new_pos = (100.0, 200.0);
+    board.items[0].position = new_pos;
+    board.push_operation(UndoOperation::MoveItem {
+        id: 0,
+        old_pos,
+        new_pos,
+    });
 
     // Verify new position
     assert_eq!(board.items[0].position, (100.0, 200.0));
 
     // Undo should restore original position
     board.undo();
-    assert_eq!(board.items[0].position, (0.0, 0.0));
+    assert_eq!(board.items[0].position, original_pos);
 
     // Redo should restore modified position
     board.redo();
@@ -644,9 +655,15 @@ fn test_undo_redo_with_item_size_changes() {
     );
     let original_size = board.items[0].size;
 
-    // Modify item size and push history
-    board.items[0].size = (500.0, 300.0);
-    board.push_history();
+    // Modify item size using delta operation
+    let old_size = board.items[0].size;
+    let new_size = (500.0, 300.0);
+    board.items[0].size = new_size;
+    board.push_operation(UndoOperation::ResizeItem {
+        id: 0,
+        old_size,
+        new_size,
+    });
 
     // Undo should restore original size
     board.undo();
@@ -661,9 +678,9 @@ fn test_undo_redo_with_item_size_changes() {
 fn test_history_index_consistency() {
     let mut board = Board::new_for_test();
 
-    // Initial state: history_index should be 0
+    // Initial state: with delta-based history, we start empty
     assert_eq!(board.current_history_index(), 0);
-    assert_eq!(board.history_len(), 1);
+    assert_eq!(board.history_len(), 0);
 
     // Add items and verify history_index grows
     board.add_item(
@@ -671,12 +688,14 @@ fn test_history_index_consistency() {
         ItemContent::Text("First".to_string()),
     );
     assert_eq!(board.current_history_index(), 1);
+    assert_eq!(board.history_len(), 1);
 
     board.add_item(
         point(px(100.0), px(0.0)),
         ItemContent::Text("Second".to_string()),
     );
     assert_eq!(board.current_history_index(), 2);
+    assert_eq!(board.history_len(), 2);
 
     // Undo and verify history_index decreases
     board.undo();
@@ -725,21 +744,29 @@ fn test_undo_redo_state_isolation() {
         ItemContent::Text("Test".to_string()),
     );
 
-    // Capture state before modification
-    let original_text = if let ItemContent::Text(t) = &board.items[0].content {
-        t.clone()
+    // Capture the original item
+    let old_item = board.items[0].clone();
+
+    // Modify the item content using delta operation
+    let mut new_item = old_item.clone();
+    new_item.content = ItemContent::Text("Modified".to_string());
+    board.items[0] = new_item.clone();
+    board.push_operation(UndoOperation::ModifyItem {
+        old_item: old_item.clone(),
+        new_item,
+    });
+
+    // Verify modification
+    if let ItemContent::Text(t) = &board.items[0].content {
+        assert_eq!(t, "Modified");
     } else {
         panic!("Expected Text content");
-    };
-
-    // Modify the item content directly (simulating user edit)
-    board.items[0].content = ItemContent::Text("Modified".to_string());
-    board.push_history();
+    }
 
     // Undo should restore original content
     board.undo();
     if let ItemContent::Text(t) = &board.items[0].content {
-        assert_eq!(t, &original_text);
+        assert_eq!(t, "Test");
     } else {
         panic!("Expected Text content after undo");
     }
@@ -750,7 +777,7 @@ fn test_push_history_at_capacity() {
     let mut board = Board::new_for_test();
 
     // Fill history to capacity
-    for i in 0..MAX_HISTORY_STATES {
+    for i in 0..MAX_HISTORY_OPERATIONS {
         board.add_item(
             point(px(i as f32 * 10.0), px(0.0)),
             ItemContent::Text(format!("Item {}", i)),
