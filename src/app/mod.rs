@@ -421,21 +421,24 @@ impl Humanboard {
             let dock_width = 40.0; // Tool dock on left
             let tab_bar_height = 36.0;
 
+            let main_splitter_size = 8.0; // Splitter between canvas and preview panel
             let (panel_x, panel_y, panel_width, panel_height) = match preview.split {
                 SplitDirection::Vertical => {
-                    let panel_x = dock_width + (window_width - dock_width) * (1.0 - preview.size);
+                    // Account for splitter between canvas and preview
+                    let panel_x = dock_width + (window_width - dock_width) * (1.0 - preview.size) + main_splitter_size;
                     let panel_y = header_height;
-                    let panel_width = (window_width - dock_width) * preview.size;
+                    let panel_width = (window_width - dock_width) * preview.size - main_splitter_size;
                     let panel_height = window_height - header_height - footer_height;
                     (panel_x, panel_y, panel_width, panel_height)
                 }
                 SplitDirection::Horizontal => {
                     let panel_x = dock_width;
+                    // Account for splitter between canvas and preview
                     let panel_y = header_height
-                        + (window_height - header_height - footer_height) * (1.0 - preview.size);
+                        + (window_height - header_height - footer_height) * (1.0 - preview.size) + main_splitter_size;
                     let panel_width = window_width - dock_width;
                     let panel_height =
-                        (window_height - header_height - footer_height) * preview.size;
+                        (window_height - header_height - footer_height) * preview.size - main_splitter_size;
                     (panel_x, panel_y, panel_width, panel_height)
                 }
             };
