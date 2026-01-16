@@ -70,10 +70,11 @@ pub struct Humanboard {
     /// Focus manager for handling focus across different contexts
     pub focus: FocusManager,
     pub preview: Option<PreviewPanel>,
-    pub dragging_tab: Option<usize>,    // Index of tab being dragged
+    pub dragging_tab: Option<usize>,    // Index of tab being dragged (only set after threshold)
     pub tab_drag_target: Option<usize>, // Target position for tab drop
     pub tab_drag_split_zone: Option<SplitDropZone>, // Drop zone for creating split
     pub tab_drag_position: Option<Point<Pixels>>, // Current drag position for ghost
+    pub tab_drag_pending: Option<(usize, Point<Pixels>, bool)>, // (tab_index, start_pos, is_left_pane) - pending drag before threshold
     pub preview_search: Option<Entity<InputState>>, // Search input for preview panel
     pub preview_search_query: String,   // Current search query
     pub preview_search_matches: Vec<(usize, usize)>, // (line, column) positions of matches
@@ -191,6 +192,7 @@ impl Humanboard {
             tab_drag_target: None,
             tab_drag_split_zone: None,
             tab_drag_position: None,
+            tab_drag_pending: None,
             preview_search: None,
             preview_search_query: String::new(),
             preview_search_matches: Vec::new(),
@@ -1226,7 +1228,29 @@ impl Humanboard {
     }
 
     /// Update drag position as mouse moves
+    /// If there's a pending drag, check if threshold is reached and promote to actual drag
     pub fn update_tab_drag_position(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        // Check if we should promote pending drag to actual drag
+        if let Some((tab_index, start_pos, _is_left_pane)) = self.tab_drag_pending {
+            let dx = (f32::from(position.x) - f32::from(start_pos.x)).abs();
+            let dy = (f32::from(position.y) - f32::from(start_pos.y)).abs();
+            let distance = (dx * dx + dy * dy).sqrt();
+
+            // Threshold of 5px before starting actual drag
+            if distance > 5.0 {
+                // Promote to actual drag
+                self.dragging_tab = Some(tab_index);
+                self.tab_drag_target = Some(tab_index);
+                self.tab_drag_split_zone = None;
+                self.tab_drag_position = Some(position);
+                self.tab_drag_pending = None;
+                tracing::debug!("Promoted pending drag to actual drag: index={}", tab_index);
+                cx.notify();
+                return;
+            }
+        }
+
+        // Update position for active drag
         if self.dragging_tab.is_some() {
             self.tab_drag_position = Some(position);
             cx.notify();
@@ -1639,6 +1663,8 @@ impl Humanboard {
 
     /// Close a tab in the specified pane
     pub fn close_tab_in_pane(&mut self, tab_index: usize, is_left_pane: bool, cx: &mut Context<Self>) {
+        let mut should_close_preview = false;
+
         if let Some(ref mut preview) = self.preview {
             if is_left_pane {
                 // Close from left pane
@@ -1662,8 +1688,11 @@ impl Humanboard {
                             preview.back_stack = std::mem::take(&mut preview.right_back_stack);
                             preview.forward_stack = std::mem::take(&mut preview.right_forward_stack);
                             preview.is_pane_split = false;
+                            preview.focused_pane = FocusedPane::Left;
+                        } else {
+                            // No tabs left - close the preview panel entirely
+                            should_close_preview = true;
                         }
-                        preview.focused_pane = FocusedPane::Left;
                     } else {
                         if preview.active_tab >= preview.tabs.len() {
                             preview.active_tab = preview.tabs.len() - 1;
@@ -1701,6 +1730,12 @@ impl Humanboard {
                     cx.notify();
                 }
             }
+        }
+
+        // Close preview if all tabs are gone (after the borrow is released)
+        if should_close_preview {
+            self.preview = None;
+            cx.notify();
         }
     }
 
@@ -1748,16 +1783,21 @@ impl Humanboard {
         }
     }
 
-    /// Start tab drag in the specified pane
+    /// Start tab drag in the specified pane (sets pending state, actual drag starts after threshold)
     pub fn start_tab_drag_in_pane(&mut self, tab_index: usize, position: Point<Pixels>, is_left_pane: bool, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
             // Set the focused pane to the one being dragged from
             preview.focused_pane = if is_left_pane { FocusedPane::Left } else { FocusedPane::Right };
         }
-        self.dragging_tab = Some(tab_index);
-        self.tab_drag_target = Some(tab_index);
-        self.tab_drag_split_zone = None;
-        self.tab_drag_position = Some(position);
+        // Set pending drag - actual drag starts after mouse moves beyond threshold
+        self.tab_drag_pending = Some((tab_index, position, is_left_pane));
+        // Don't set dragging_tab yet - wait for threshold
+        cx.notify();
+    }
+
+    /// Cancel pending drag (called on mouse up if threshold wasn't reached)
+    pub fn cancel_pending_drag(&mut self, cx: &mut Context<Self>) {
+        self.tab_drag_pending = None;
         cx.notify();
     }
 

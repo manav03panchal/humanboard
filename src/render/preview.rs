@@ -55,6 +55,8 @@ pub fn render_tab_bar(
             cx.listener(|this, _event, _window, cx| {
                 if this.dragging_tab.is_some() {
                     this.finish_tab_drag(cx);
+                } else if this.tab_drag_pending.is_some() {
+                    this.cancel_pending_drag(cx);
                 }
             }),
         )
@@ -123,9 +125,12 @@ pub fn render_tab_bar(
                         // Update drag target and position on mouse move
                         .on_mouse_move(cx.listener(
                             move |this, event: &MouseMoveEvent, _window, cx| {
-                                if this.dragging_tab.is_some() {
+                                // Check pending drag threshold or update active drag
+                                if this.tab_drag_pending.is_some() || this.dragging_tab.is_some() {
                                     this.update_tab_drag_position(event.position, cx);
-                                    this.update_tab_drag_target(tab_index_drag, cx);
+                                    if this.dragging_tab.is_some() {
+                                        this.update_tab_drag_target(tab_index_drag, cx);
+                                    }
                                 }
                             },
                         ))
@@ -135,6 +140,9 @@ pub fn render_tab_bar(
                             cx.listener(move |this, _event, _window, cx| {
                                 if this.dragging_tab.is_some() {
                                     this.finish_tab_drag(cx);
+                                } else if this.tab_drag_pending.is_some() {
+                                    // Threshold wasn't reached - cancel pending and let click handle tab switch
+                                    this.cancel_pending_drag(cx);
                                 }
                             }),
                         )
