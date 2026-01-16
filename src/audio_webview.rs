@@ -231,7 +231,15 @@ impl AudioWebView {
 
         audio.addEventListener('loadedmetadata', () => {{
             dur.textContent = fmt(audio.duration);
+            console.log('Audio loaded, duration:', audio.duration);
         }});
+
+        audio.addEventListener('error', (e) => {{
+            console.error('Audio error:', audio.error?.code, audio.error?.message);
+        }});
+
+        // Try to load audio explicitly
+        audio.load();
 
         audio.addEventListener('timeupdate', () => {{
             const pct = (audio.currentTime / audio.duration) * 100;
