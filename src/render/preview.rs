@@ -613,6 +613,8 @@ pub fn render_split_panes(
             .when(!is_horizontal, |d| d.w(Fraction(pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
+            .flex()
+            .flex_col()
             .relative()
             .child(first_pane)
             .child(
@@ -653,6 +655,8 @@ pub fn render_split_panes(
             .when(!is_horizontal, |d| d.w(Fraction(pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
+            .flex()
+            .flex_col()
             .child(first_pane)
     };
 
@@ -671,6 +675,8 @@ pub fn render_split_panes(
             .when(!is_horizontal, |d| d.w(Fraction(1.0 - pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
+            .flex()
+            .flex_col()
             .relative()
             .child(second_pane)
             .child(
@@ -711,6 +717,8 @@ pub fn render_split_panes(
             .when(!is_horizontal, |d| d.w(Fraction(1.0 - pane_ratio)).h_full())
             .min_h_0()
             .min_w_0()
+            .flex()
+            .flex_col()
             .child(second_pane)
     };
 
