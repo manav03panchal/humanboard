@@ -49,6 +49,32 @@ impl Humanboard {
         )
         .detach();
 
+        // Observe keystrokes at window level to intercept arrow keys before Input handles them
+        // This is necessary because Input's internal MoveUp/MoveDown handlers capture arrow keys
+        cx.observe_keystrokes(|this, event, _window, cx| {
+            // Only handle when command palette is open
+            if this.command_palette.is_some() {
+                match event.keystroke.key.as_str() {
+                    "up" => {
+                        this.select_prev_result(cx);
+                    }
+                    "down" => {
+                        this.select_next_result(cx);
+                    }
+                    "escape" => {
+                        this.command_palette = None;
+                        this.search_results.clear();
+                        this.selected_result = 0;
+                        this.cmd_palette_mode = CmdPaletteMode::Items;
+                        this.focus.mark_needs_canvas_focus();
+                        cx.notify();
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .detach();
+
         self.command_palette = Some(input);
 
         // Show all items initially
