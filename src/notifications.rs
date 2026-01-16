@@ -83,10 +83,21 @@ impl ToastVariant {
     /// Get the background color for this variant from the theme
     pub fn background_color(&self, theme: &gpui_component::theme::Theme) -> Hsla {
         match self {
-            ToastVariant::Success => theme.success.opacity(0.95),
-            ToastVariant::Error => theme.danger.opacity(0.95),
-            ToastVariant::Info => theme.primary.opacity(0.95),
-            ToastVariant::Warning => theme.warning.opacity(0.95),
+            ToastVariant::Success => theme.success,
+            ToastVariant::Error => theme.danger,
+            // Use a dark background for info toasts for better contrast
+            ToastVariant::Info => hsla(220.0 / 360.0, 0.15, 0.18, 0.98),
+            ToastVariant::Warning => theme.warning,
+        }
+    }
+
+    /// Get the text color for this variant
+    pub fn text_color(&self, _theme: &gpui_component::theme::Theme) -> Hsla {
+        match self {
+            // Dark text for warning (yellow background)
+            ToastVariant::Warning => hsla(0.0, 0.0, 0.1, 1.0),
+            // White text for other variants
+            _ => gpui::white(),
         }
     }
 
@@ -287,8 +298,7 @@ pub fn render_toast(
     let bg = toast.variant.background_color(theme);
     let opacity = toast.opacity(reduce_motion);
     let icon = toast.variant.icon();
-    // Use white text for good contrast on colored backgrounds
-    let text = gpui::white().opacity(opacity);
+    let text = toast.variant.text_color(theme).opacity(opacity);
     let toast_id = toast.id;
 
     let mut base = div()
