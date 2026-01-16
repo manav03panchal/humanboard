@@ -103,6 +103,7 @@ impl Render for Humanboard {
         // Wrap everything in a container with overlays on top
         let bg = cx.theme().background;
         let toasts = self.toast_manager.toasts().to_vec();
+        let reduce_motion = crate::settings::app_settings().should_reduce_motion();
 
         // End frame timing (measures our render logic, not GPUI's paint)
         self.perf_monitor.end_frame();
@@ -142,7 +143,7 @@ impl Render for Humanboard {
             )
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
-                d.child(render_toast_container(&toasts, cx))
+                d.child(render_toast_container(&toasts, reduce_motion, cx))
             })
     }
 }

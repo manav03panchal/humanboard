@@ -90,6 +90,11 @@ pub struct SettingsContent {
     /// Whether onboarding has been completed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onboarding_completed: Option<bool>,
+
+    /// Reduce motion preference: "system" (default), "on", or "off"
+    /// When "system", follows OS prefers-reduced-motion setting
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduce_motion: Option<String>,
 }
 
 impl SettingsContent {
@@ -132,6 +137,9 @@ impl SettingsContent {
         if other.onboarding_completed.is_some() {
             self.onboarding_completed = other.onboarding_completed;
         }
+        if other.reduce_motion.is_some() {
+            self.reduce_motion = other.reduce_motion.clone();
+        }
     }
 }
 
@@ -153,6 +161,8 @@ pub struct AppSettings {
     pub max_undo_history: usize,
     pub zoom_sensitivity: f32,
     pub pan_sensitivity: f32,
+    /// Reduce motion preference: "system", "on", or "off"
+    pub reduce_motion: String,
 }
 
 impl Default for AppSettings {
@@ -169,6 +179,7 @@ impl Default for AppSettings {
             max_undo_history: 100,
             zoom_sensitivity: 1.0,
             pan_sensitivity: 1.0,
+            reduce_motion: "system".to_string(),
         }
     }
 }
@@ -203,6 +214,10 @@ impl Setting for AppSettings {
             pan_sensitivity: content
                 .pan_sensitivity
                 .unwrap_or(defaults.pan_sensitivity),
+            reduce_motion: content
+                .reduce_motion
+                .clone()
+                .unwrap_or(defaults.reduce_motion),
         }
     }
 
@@ -239,6 +254,65 @@ impl AppSettings {
             "sans-serif",
             "monospace",
         ]
+    }
+
+    /// Check if animations should be reduced based on settings and system preference.
+    /// Returns true if animations should be minimized/disabled.
+    pub fn should_reduce_motion(&self) -> bool {
+        match self.reduce_motion.as_str() {
+            "on" => true,
+            "off" => false,
+            _ => Self::system_prefers_reduced_motion(), // "system" or any other value
+        }
+    }
+
+    /// Detect system prefers-reduced-motion setting.
+    /// Returns true if the OS has reduced motion enabled.
+    #[cfg(target_os = "macos")]
+    pub fn system_prefers_reduced_motion() -> bool {
+        use std::process::Command;
+        // On macOS, check the accessibility preference
+        let output = Command::new("defaults")
+            .args(["read", "com.apple.universalaccess", "reduceMotion"])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let result = String::from_utf8_lossy(&out.stdout);
+                result.trim() == "1"
+            }
+            Err(_) => false,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn system_prefers_reduced_motion() -> bool {
+        // On Windows, this would check SPI_GETCLIENTAREAANIMATION
+        // For now, return false as default
+        false
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn system_prefers_reduced_motion() -> bool {
+        use std::process::Command;
+        // On Linux/GNOME, check gtk-enable-animations setting
+        let output = Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "enable-animations"])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let result = String::from_utf8_lossy(&out.stdout);
+                // If animations are disabled, reduce motion
+                result.trim() == "false"
+            }
+            Err(_) => false,
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    pub fn system_prefers_reduced_motion() -> bool {
+        false
     }
 }
 
@@ -317,6 +391,7 @@ impl SettingsStore {
             zoom_sensitivity: Some(defaults.zoom_sensitivity),
             pan_sensitivity: Some(defaults.pan_sensitivity),
             onboarding_completed: Some(false),
+            reduce_motion: Some(defaults.reduce_motion),
         }
     }
 

@@ -203,7 +203,12 @@ impl Toast {
     }
 
     /// Get the opacity based on fade-out animation
-    pub fn opacity(&self) -> f32 {
+    /// If reduce_motion is true, returns 1.0 (no fade animation)
+    pub fn opacity(&self, reduce_motion: bool) -> f32 {
+        if reduce_motion {
+            // No fade animation when reduced motion is enabled
+            return 1.0;
+        }
         let remaining = self.remaining_percent();
         if remaining > 0.2 {
             1.0
@@ -274,12 +279,13 @@ impl ToastManager {
 pub fn render_toast(
     toast: &Toast,
     theme: &gpui_component::theme::Theme,
+    reduce_motion: bool,
     cx: &mut Context<crate::app::Humanboard>,
 ) -> Stateful<Div> {
     use gpui_component::button::{Button, ButtonVariants};
 
     let bg = toast.variant.background_color(theme);
-    let opacity = toast.opacity();
+    let opacity = toast.opacity(reduce_motion);
     let icon = toast.variant.icon();
     // Use white text for good contrast on colored backgrounds
     let text = gpui::white().opacity(opacity);
@@ -341,12 +347,13 @@ pub fn render_toast(
 /// Render all toasts in a container
 pub fn render_toast_container(
     toasts: &[Toast],
+    reduce_motion: bool,
     cx: &mut Context<crate::app::Humanboard>,
 ) -> Div {
     let theme = cx.theme().clone();
     let mut rendered = Vec::with_capacity(toasts.len());
     for toast in toasts {
-        rendered.push(render_toast(toast, &theme, cx));
+        rendered.push(render_toast(toast, &theme, reduce_motion, cx));
     }
 
     div()
