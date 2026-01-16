@@ -28,6 +28,7 @@ pub mod command_palette;
 pub mod command_registry;
 pub mod error;
 pub mod focus;
+pub mod focus_ring;
 pub mod hit_testing;
 pub mod home;
 pub mod input;

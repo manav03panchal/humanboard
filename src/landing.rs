@@ -12,6 +12,7 @@
 //! - **Delete Dialog**: Confirmation modal for board deletion
 
 use crate::board_index::{BoardIndex, BoardMetadata};
+use crate::focus_ring::focus_ring_shadow;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::Sizable;
@@ -86,7 +87,7 @@ pub fn render_board_card(
     is_editing: bool,
     edit_input: Option<&Entity<InputState>>,
     cx: &mut Context<crate::app::Humanboard>,
-) -> Div {
+) -> Stateful<Div> {
     let board_id_for_click = metadata.id.clone();
     let board_id_for_edit = metadata.id.clone();
     let board_id_for_delete = metadata.id.clone();
@@ -97,8 +98,10 @@ pub fn render_board_card(
     let muted = cx.theme().muted;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
 
     v_flex()
+        .id(ElementId::Name(format!("board-card-{}", metadata.id).into()))
         .w(px(240.0))
         .bg(bg)
         .border_1()
@@ -106,6 +109,8 @@ pub fn render_board_card(
         .rounded(px(12.0))
         .overflow_hidden()
         .hover(|s| s.border_color(list_hover).bg(list_hover))
+        // Focus ring for keyboard navigation (WCAG compliance)
+        .focus(|s| s.shadow(focus_ring_shadow(primary)))
         .when(!is_editing, |d| d.cursor_pointer())
         .child(
             // Thumbnail area (clickable to open board)
@@ -242,7 +247,7 @@ pub fn render_board_card(
 pub fn render_trashed_board_card(
     metadata: &BoardMetadata,
     cx: &mut Context<crate::app::Humanboard>,
-) -> Div {
+) -> Stateful<Div> {
     let board_id_for_restore = metadata.id.clone();
     let board_id_for_delete = metadata.id.clone();
 
@@ -251,8 +256,10 @@ pub fn render_trashed_board_card(
     let muted = cx.theme().muted;
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
 
     v_flex()
+        .id(ElementId::Name(format!("trashed-card-{}", metadata.id).into()))
         .w(px(200.0))
         .bg(bg)
         .border_1()
@@ -260,6 +267,8 @@ pub fn render_trashed_board_card(
         .rounded(px(12.0))
         .overflow_hidden()
         .opacity(0.7)
+        // Focus ring for keyboard navigation (WCAG compliance)
+        .focus(|s| s.shadow(focus_ring_shadow(primary)))
         .cursor(CursorStyle::Arrow)
         .child(
             // Thumbnail area (greyed out)

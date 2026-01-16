@@ -8,6 +8,7 @@
 
 use crate::app::{Humanboard, PreviewTab, SplitDirection};
 use crate::focus::FocusContext;
+use crate::focus_ring::focus_ring_shadow;
 use crate::loading::render_loading_spinner;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -101,6 +102,8 @@ pub fn render_tab_bar(
                         // Dim the tab being dragged
                         .when(is_being_dragged, |d| d.opacity(0.5))
                         .hover(|style| style.bg(list_hover))
+                        // Focus ring for keyboard navigation (WCAG compliance)
+                        .focus(|s| s.shadow(focus_ring_shadow(primary)))
                         .cursor(if dragging_tab.is_some() {
                             CursorStyle::ClosedHand
                         } else {

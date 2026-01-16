@@ -10,6 +10,7 @@
 use crate::actions::{CloseCommandPalette, CmdPaletteDown, CmdPaletteUp, ModalFocusTrap, OpenSettings};
 use crate::app::{Humanboard, SettingsTab};
 use crate::focus::FocusContext;
+use crate::focus_ring::focus_ring_shadow;
 use crate::settings::Settings;
 
 use gpui::prelude::FluentBuilder;
@@ -72,6 +73,8 @@ pub fn render_header_bar(
                         .cursor(CursorStyle::PointingHand)
                         .hover(|s| s.bg(muted.opacity(0.5)))
                         .active(|s| s.bg(muted.opacity(0.7)))
+                        // Focus ring for keyboard navigation (WCAG compliance)
+                        .focus(|s| s.shadow(focus_ring_shadow(primary)))
                         .text_sm()
                         .text_color(muted_fg)
                         .child("←")
@@ -148,6 +151,8 @@ pub fn render_header_bar(
                         .border_1()
                         .border_color(if is_open { primary } else { border })
                         .rounded(px(6.0))
+                        // Focus ring for keyboard navigation (WCAG compliance)
+                        .focus(|s| s.shadow(focus_ring_shadow(primary)))
                         .px_3()
                         .flex()
                         .items_center()
@@ -243,6 +248,8 @@ pub fn render_header_bar(
                                                     .gap_2()
                                                     .rounded(px(4.0))
                                                     .cursor(CursorStyle::PointingHand)
+                                                    // Focus ring for keyboard navigation (WCAG compliance)
+                                                    .focus(|s| s.shadow(focus_ring_shadow(primary)))
                                                     .when(is_selected, |d| {
                                                         d.bg(list_active)
                                                             .border_l_2()
