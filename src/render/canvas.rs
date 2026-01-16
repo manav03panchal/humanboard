@@ -212,22 +212,22 @@ fn render_item_content(
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top
+                    // Drag handle bar at top - YouTube style
                     .child(
                         div()
                             .w_full()
-                            .h(px(24.0 * zoom))
+                            .h(px(28.0 * zoom))
+                            .rounded_t(corner_radius)
                             .bg(title_bar)
-                            .border_b_1()
-                            .border_color(border)
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child("≡"),
+                                    .w(px(36.0 * zoom))
+                                    .h(px(4.0 * zoom))
+                                    .rounded(px(2.0 * zoom))
+                                    .bg(muted_fg.opacity(0.4)),
                             ),
                     )
                     // WebView takes remaining space
@@ -263,22 +263,22 @@ fn render_item_content(
                     .size_full()
                     .rounded(corner_radius)
                     .overflow_hidden()
-                    // Drag handle bar at top
+                    // Drag handle bar at top - YouTube style
                     .child(
                         div()
                             .w_full()
-                            .h(px(24.0 * zoom))
+                            .h(px(28.0 * zoom))
+                            .rounded_t(corner_radius)
                             .bg(title_bar)
-                            .border_b_1()
-                            .border_color(border)
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child("≡"),
+                                    .w(px(36.0 * zoom))
+                                    .h(px(4.0 * zoom))
+                                    .rounded(px(2.0 * zoom))
+                                    .bg(muted_fg.opacity(0.4)),
                             ),
                     )
                     // WebView takes remaining space
@@ -354,23 +354,22 @@ fn render_item_content(
                 // (overlays don't work on webviews - they render on top layer)
                 v_flex()
                     .size_full()
-                    // Drag handle bar at top - OUTSIDE the webview
+                    // Drag handle bar at top - YouTube style pill
                     .child(
                         div()
                             .w_full()
-                            .h(px(24.0 * zoom))
+                            .h(px(28.0 * zoom))
                             .bg(title_bar)
-                            .border_b_1()
-                            .border_color(border)
                             .rounded_t(corner_radius)
                             .flex()
                             .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .text_size(px(14.0 * zoom))
-                                    .text_color(muted_fg)
-                                    .child("≡"),
+                                    .w(px(36.0 * zoom))
+                                    .h(px(4.0 * zoom))
+                                    .rounded(px(2.0 * zoom))
+                                    .bg(muted_fg.opacity(0.4)),
                             ),
                     )
                     // WebView takes remaining space
