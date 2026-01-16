@@ -153,7 +153,7 @@ pub fn render_tab_bar(
                         .child(if is_code {
                             Icon::new(IconName::SquareTerminal)
                                 .xsmall()
-                                .text_color(hsla(40.0 / 360.0, 0.8, 0.6, 1.0)) // Orange for code
+                                .text_color(primary) // Use theme primary for code
                         } else if is_markdown {
                             Icon::new(IconName::File).xsmall().text_color(primary)
                         } else {
@@ -813,6 +813,7 @@ pub fn render_tab_content(
     let title_bar = cx.theme().title_bar;
     let border = cx.theme().border;
     let muted_fg = cx.theme().muted_foreground;
+    let primary = cx.theme().primary;
 
     match tab {
         PreviewTab::Pdf { .. } => {
@@ -977,11 +978,11 @@ pub fn render_tab_content(
                                     div()
                                         .px(px(6.0))
                                         .py(px(2.0))
-                                        .bg(hsla(200.0 / 360.0, 0.4, 0.25, 1.0))
+                                        .bg(primary.opacity(0.2))
                                         .rounded(px(3.0))
                                         .text_xs()
                                         .font_weight(FontWeight::MEDIUM)
-                                        .text_color(hsla(200.0 / 360.0, 0.6, 0.8, 1.0))
+                                        .text_color(primary)
                                         .child(lang.to_uppercase()),
                                 )
                                 .child(

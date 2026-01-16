@@ -20,13 +20,13 @@ pub enum ToastVariant {
 }
 
 impl ToastVariant {
-    /// Get the background color for this variant
-    pub fn background_color(&self) -> Hsla {
+    /// Get the background color for this variant from the theme
+    pub fn background_color(&self, theme: &gpui_component::theme::Theme) -> Hsla {
         match self {
-            ToastVariant::Success => hsla(145.0 / 360.0, 0.6, 0.35, 0.95),
-            ToastVariant::Error => hsla(0.0, 0.7, 0.45, 0.95),
-            ToastVariant::Info => hsla(210.0 / 360.0, 0.6, 0.45, 0.95),
-            ToastVariant::Warning => hsla(45.0 / 360.0, 0.8, 0.45, 0.95),
+            ToastVariant::Success => theme.success.opacity(0.95),
+            ToastVariant::Error => theme.danger.opacity(0.95),
+            ToastVariant::Info => theme.primary.opacity(0.95),
+            ToastVariant::Warning => theme.warning.opacity(0.95),
         }
     }
 
@@ -186,10 +186,12 @@ impl ToastManager {
 }
 
 /// Render a single toast notification
-pub fn render_toast(toast: &Toast) -> Div {
-    let bg = toast.variant.background_color();
+pub fn render_toast(toast: &Toast, theme: &gpui_component::theme::Theme) -> Div {
+    let bg = toast.variant.background_color(theme);
     let opacity = toast.opacity();
     let icon = toast.variant.icon();
+    // Use white text for good contrast on colored backgrounds
+    let text = gpui::white().opacity(opacity);
 
     div()
         .flex()
@@ -200,7 +202,7 @@ pub fn render_toast(toast: &Toast) -> Div {
         .py_3()
         .mb_2()
         .bg(bg)
-        .text_color(hsla(0.0, 0.0, 1.0, opacity))
+        .text_color(text)
         .rounded_lg()
         .shadow_lg()
         .overflow_hidden()
@@ -218,7 +220,7 @@ pub fn render_toast(toast: &Toast) -> Div {
 }
 
 /// Render all toasts in a container
-pub fn render_toast_container(toasts: &[Toast]) -> Div {
+pub fn render_toast_container(toasts: &[Toast], theme: &gpui_component::theme::Theme) -> Div {
     div()
         .absolute()
         .top(px(52.0)) // Below header bar (40px) + padding
@@ -227,5 +229,5 @@ pub fn render_toast_container(toasts: &[Toast]) -> Div {
         .flex_col()
         .items_end()
         .gap_2()
-        .children(toasts.iter().map(render_toast))
+        .children(toasts.iter().map(|toast| render_toast(toast, theme)))
 }
