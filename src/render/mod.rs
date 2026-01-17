@@ -53,6 +53,9 @@ pub const UI_FONT: &str = "Iosevka Nerd Font";
 
 impl Render for Humanboard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Pump GTK events on Linux for webview functionality
+        crate::linux_webview::pump_gtk_events();
+
         // Start frame timing
         self.perf_monitor.begin_frame();
 

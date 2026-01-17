@@ -351,6 +351,10 @@ fn main() {
     // Initialize logging first (following Zed pattern)
     init_logging();
 
+    // Initialize GTK for Linux webview support (X11 and Wayland)
+    // Must be called before creating any webviews
+    humanboard::linux_webview::init_gtk();
+
     // Initialize required directories
     if let Err(e) = init_paths() {
         error!("Failed to initialize paths: {}", e);

@@ -34,6 +34,7 @@ pub mod hit_testing;
 pub mod home;
 pub mod input;
 pub mod landing;
+pub mod linux_webview;
 pub mod loading;
 pub mod markdown_card;
 pub mod notifications;

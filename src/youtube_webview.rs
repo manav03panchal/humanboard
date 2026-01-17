@@ -24,6 +24,9 @@ use tiny_http::{Response, Server};
 use tracing::error;
 use wry::WebViewBuilder;
 
+#[cfg(target_os = "linux")]
+use crate::linux_webview::{create_linux_webview, LinuxWebViewHandle};
+
 // Global port counter for unique server ports
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(19800);
 
@@ -39,6 +42,9 @@ pub struct YouTubeWebView {
     port: u16,
     shutdown_flag: Arc<AtomicBool>,
     _server_thread: Option<JoinHandle<()>>,
+    /// Linux-specific: Handle for Wayland GTK container (if on Wayland)
+    #[cfg(target_os = "linux")]
+    linux_handle: LinuxWebViewHandle,
 }
 
 impl YouTubeWebView {
@@ -124,27 +130,39 @@ impl YouTubeWebView {
         // URL to our local server
         let url = format!("http://127.0.0.1:{}/", port);
 
-        // Create WebView entity pointing to local server
-        #[cfg(any(
-            target_os = "macos",
-            target_os = "windows",
-            target_os = "linux",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let webview = WebViewBuilder::new()
-            .with_url(&url)
-            .build_as_child(window)
-            .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
+        // Platform-specific webview creation
+        #[cfg(target_os = "linux")]
+        let (webview, linux_handle) = {
+            let builder = WebViewBuilder::new().with_url(&url);
+            let (wv, container) = create_linux_webview(window, builder)?;
+            (wv, LinuxWebViewHandle::new(container))
+        };
 
-        #[cfg(not(any(
-            target_os = "macos",
-            target_os = "windows",
-            target_os = "linux",
-            target_os = "ios",
-            target_os = "android"
-        )))]
-        return Err("WebView not supported on this platform".to_string());
+        #[cfg(not(target_os = "linux"))]
+        let webview = {
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "ios",
+                target_os = "android"
+            ))]
+            {
+                WebViewBuilder::new()
+                    .with_url(&url)
+                    .build_as_child(window)
+                    .map_err(|e| format!("Failed to create WebView: {:?}", e))?
+            }
+
+            #[cfg(not(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "ios",
+                target_os = "android"
+            )))]
+            {
+                return Err("WebView not supported on this platform".to_string());
+            }
+        };
 
         let webview_entity = cx.new(|cx| WebView::new(webview, window, cx));
 
@@ -154,6 +172,8 @@ impl YouTubeWebView {
             port,
             shutdown_flag,
             _server_thread: Some(server_thread),
+            #[cfg(target_os = "linux")]
+            linux_handle,
         })
     }
 
@@ -180,6 +200,9 @@ impl YouTubeWebView {
     /// Hide the webview (should be called before dropping to prevent orphaned UI)
     pub fn hide(&self, cx: &mut App) {
         self.webview_entity.update(cx, |wv, _| wv.hide());
+
+        #[cfg(target_os = "linux")]
+        self.linux_handle.hide_container();
     }
 }
 

@@ -13,12 +13,21 @@
 //! - Native PDF rendering with zoom and scroll
 //! - Bounds control for positioning within the canvas
 //! - Show/hide for visibility management
+//!
+//! ## Linux Support
+//!
+//! On Linux, this module supports both X11 and Wayland display servers:
+//! - X11: Uses wry's build_as_child() for native child window
+//! - Wayland: Uses a GTK popup window with build_gtk() for webview hosting
 
 use gpui::*;
 use gpui_component::webview::WebView;
 use std::path::{Path, PathBuf};
 use wry::dpi::{LogicalPosition, LogicalSize};
 use wry::{Rect, WebViewBuilder};
+
+#[cfg(target_os = "linux")]
+use crate::linux_webview::{create_linux_webview, LinuxWebViewHandle};
 
 /// Convert a path to a properly encoded file:// URL.
 /// Each path component is URL-encoded to prevent path traversal attacks (CWE-22).
@@ -56,6 +65,9 @@ fn path_to_file_url(path: &Path) -> String {
 pub struct PdfWebView {
     webview_entity: Entity<WebView>,
     path: PathBuf,
+    /// Linux-specific: Handle for Wayland GTK container (if on Wayland)
+    #[cfg(target_os = "linux")]
+    linux_handle: LinuxWebViewHandle,
 }
 
 impl PdfWebView {
@@ -63,28 +75,40 @@ impl PdfWebView {
     pub fn new(path: PathBuf, window: &mut Window, cx: &mut App) -> Result<Self, String> {
         let file_url = path_to_file_url(&path);
 
-        // Create WebView entity
-        let builder = WebViewBuilder::new();
+        // Platform-specific webview creation
+        #[cfg(target_os = "linux")]
+        let (webview, linux_handle) = {
+            let builder = WebViewBuilder::new();
+            let (wv, container) = create_linux_webview(window, builder)?;
+            (wv, LinuxWebViewHandle::new(container))
+        };
 
-        #[cfg(any(
-            target_os = "macos",
-            target_os = "windows",
-            target_os = "linux",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let webview = builder
-            .build_as_child(window)
-            .map_err(|e| format!("Failed to create WebView: {:?}", e))?;
+        #[cfg(not(target_os = "linux"))]
+        let webview = {
+            let builder = WebViewBuilder::new();
 
-        #[cfg(not(any(
-            target_os = "macos",
-            target_os = "windows",
-            target_os = "linux",
-            target_os = "ios",
-            target_os = "android"
-        )))]
-        return Err("WebView not supported on this platform".to_string());
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "ios",
+                target_os = "android"
+            ))]
+            {
+                builder
+                    .build_as_child(window)
+                    .map_err(|e| format!("Failed to create WebView: {:?}", e))?
+            }
+
+            #[cfg(not(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "ios",
+                target_os = "android"
+            )))]
+            {
+                return Err("WebView not supported on this platform".to_string());
+            }
+        };
 
         let webview_entity = cx.new(|cx| WebView::new(webview, window, cx));
 
@@ -96,6 +120,8 @@ impl PdfWebView {
         Ok(Self {
             webview_entity,
             path,
+            #[cfg(target_os = "linux")]
+            linux_handle,
         })
     }
 
@@ -119,21 +145,33 @@ impl PdfWebView {
 
     /// Set the bounds of the webview explicitly (x, y, width, height in logical pixels)
     pub fn set_bounds(&self, x: f32, y: f32, width: f32, height: f32, cx: &mut App) {
+        // Update the wry webview bounds
         self.webview_entity.update(cx, |view, _| {
             let _ = view.raw().set_bounds(Rect {
                 position: wry::dpi::Position::Logical(LogicalPosition::new(x as f64, y as f64)),
                 size: wry::dpi::Size::Logical(LogicalSize::new(width as f64, height as f64)),
             });
         });
+
+        // On Linux Wayland, also update the GTK container bounds
+        #[cfg(target_os = "linux")]
+        self.linux_handle
+            .set_container_bounds(x as i32, y as i32, width as i32, height as i32);
     }
 
     /// Show the webview
     pub fn show(&self, cx: &mut App) {
         self.webview_entity.update(cx, |view, _| view.show());
+
+        #[cfg(target_os = "linux")]
+        self.linux_handle.show_container();
     }
 
     /// Hide the webview
     pub fn hide(&self, cx: &mut App) {
         self.webview_entity.update(cx, |view, _| view.hide());
+
+        #[cfg(target_os = "linux")]
+        self.linux_handle.hide_container();
     }
 }
