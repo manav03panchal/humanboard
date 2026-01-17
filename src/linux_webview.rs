@@ -1,21 +1,10 @@
-//! Linux WebView support with X11 and Wayland compatibility.
+//! Linux WebView support using XWayland compatibility mode.
 //!
-//! This module provides WebView creation that works on both X11 and Wayland display servers.
-//!
-//! ## Architecture
-//!
-//! - **X11**: Uses wry's `build_as_child()` which creates a child X11 window
-//! - **Wayland**: Uses wry's `build_gtk()` with a standalone GTK window
-//!
-//! On Wayland, since gpui doesn't use GTK internally, we create a separate GTK popup
-//! window that hosts the webview and position it to overlay the gpui window area.
+//! Forces GDK_BACKEND=x11 to ensure WebKitGTK uses XWayland on Wayland systems,
+//! allowing consistent use of wry's `build_as_child()` across all Linux display servers.
 
 #[cfg(target_os = "linux")]
-use gtk::prelude::*;
-#[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(target_os = "linux")]
-use wry::WebViewBuilderExtUnix;
 
 /// Flag indicating whether GTK has been initialized
 #[cfg(target_os = "linux")]
@@ -77,6 +66,10 @@ pub fn init_gtk() -> bool {
         return true;
     }
 
+    // Force WebKitGTK to use XWayland for compatibility
+    // SAFETY: Called once during init, before any other threads access this env var
+    unsafe { std::env::set_var("GDK_BACKEND", "x11") };
+
     match gtk::init() {
         Ok(()) => {
             GTK_INITIALIZED.store(true, Ordering::Relaxed);
@@ -115,112 +108,29 @@ pub fn pump_gtk_events() {
     // No-op on non-Linux platforms
 }
 
-/// GTK window container for Wayland webviews
-/// This wraps a GTK window and Fixed container for hosting webviews on Wayland
+/// Placeholder for Wayland container (unused - we use XWayland mode)
 #[cfg(target_os = "linux")]
-pub struct WaylandWebViewContainer {
-    window: gtk::Window,
-    fixed: gtk::Fixed,
-}
+pub struct WaylandWebViewContainer;
 
-#[cfg(target_os = "linux")]
-impl WaylandWebViewContainer {
-    /// Create a new GTK container for hosting a webview on Wayland
-    pub fn new() -> Result<Self, String> {
-        if !GTK_INITIALIZED.load(Ordering::Relaxed) {
-            init_gtk();
-        }
-
-        // Create a popup-style window (no decorations, stays on top)
-        let window = gtk::Window::new(gtk::WindowType::Popup);
-        window.set_decorated(false);
-        window.set_skip_taskbar_hint(true);
-        window.set_skip_pager_hint(true);
-        window.set_accept_focus(true);
-        window.set_keep_above(true);
-
-        // Create Fixed container for the webview
-        let fixed = gtk::Fixed::new();
-        window.add(&fixed);
-
-        Ok(Self { window, fixed })
-    }
-
-    /// Get a reference to the Fixed container for building webviews
-    pub fn container(&self) -> &gtk::Fixed {
-        &self.fixed
-    }
-
-    /// Show the container window
-    pub fn show(&self) {
-        self.window.show_all();
-    }
-
-    /// Hide the container window
-    pub fn hide(&self) {
-        self.window.hide();
-    }
-
-    /// Set the position and size of the container window
-    pub fn set_bounds(&self, x: i32, y: i32, width: i32, height: i32) {
-        self.window.move_(x, y);
-        self.window.resize(width.max(1), height.max(1));
-    }
-
-    /// Close and destroy the container
-    pub fn close(&self) {
-        self.window.close();
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl Drop for WaylandWebViewContainer {
-    fn drop(&mut self) {
-        self.window.close();
-    }
-}
-
-/// Create a webview appropriate for the current Linux display server
+/// Create a webview for Linux using XWayland compatibility mode
 ///
-/// On X11: Uses build_as_child() with the gpui window handle
-/// On Wayland: Creates a GTK container and uses build_gtk()
-///
-/// Returns the wry::WebView and optionally the GTK container (for Wayland)
+/// Uses build_as_child() with the gpui window handle. Works on both X11 and
+/// Wayland (via XWayland, forced by GDK_BACKEND=x11 in init_gtk).
 #[cfg(target_os = "linux")]
 pub fn create_linux_webview<W: raw_window_handle::HasWindowHandle>(
     window: &W,
     builder: wry::WebViewBuilder,
 ) -> Result<(wry::WebView, Option<WaylandWebViewContainer>), String> {
-    let display = detect_display_server();
+    let webview = builder
+        .build_as_child(window)
+        .map_err(|e| format!("Failed to create webview: {:?}", e))?;
 
-    match display {
-        DisplayServer::X11 | DisplayServer::Unknown => {
-            // Use standard build_as_child for X11
-            let webview = builder
-                .build_as_child(window)
-                .map_err(|e| format!("Failed to create X11 webview: {:?}", e))?;
-
-            Ok((webview, None))
-        }
-        DisplayServer::Wayland => {
-            // Create GTK container for Wayland
-            let container = WaylandWebViewContainer::new()?;
-
-            let webview = builder
-                .build_gtk(container.container())
-                .map_err(|e| format!("Failed to create Wayland webview: {:?}", e))?;
-
-            container.show();
-
-            Ok((webview, Some(container)))
-        }
-    }
+    Ok((webview, None))
 }
 
-/// Wrapper that holds both the webview and its Wayland container (if any)
+/// Wrapper for Linux webview (container is unused in XWayland mode)
 #[cfg(target_os = "linux")]
 pub struct LinuxWebViewHandle {
-    /// The Wayland GTK container (None on X11)
     pub container: Option<WaylandWebViewContainer>,
 }
 
@@ -230,26 +140,9 @@ impl LinuxWebViewHandle {
         Self { container }
     }
 
-    /// Update bounds for the Wayland container
-    pub fn set_container_bounds(&self, x: i32, y: i32, width: i32, height: i32) {
-        if let Some(ref container) = self.container {
-            container.set_bounds(x, y, width, height);
-        }
-    }
-
-    /// Show the Wayland container
-    pub fn show_container(&self) {
-        if let Some(ref container) = self.container {
-            container.show();
-        }
-    }
-
-    /// Hide the Wayland container
-    pub fn hide_container(&self) {
-        if let Some(ref container) = self.container {
-            container.hide();
-        }
-    }
+    pub fn set_container_bounds(&self, _x: i32, _y: i32, _width: i32, _height: i32) {}
+    pub fn show_container(&self) {}
+    pub fn hide_container(&self) {}
 }
 
 // Stub implementations for non-Linux platforms
