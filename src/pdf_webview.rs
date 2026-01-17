@@ -69,6 +69,7 @@ impl PdfWebView {
         #[cfg(any(
             target_os = "macos",
             target_os = "windows",
+            target_os = "linux",
             target_os = "ios",
             target_os = "android"
         ))]
@@ -79,6 +80,7 @@ impl PdfWebView {
         #[cfg(not(any(
             target_os = "macos",
             target_os = "windows",
+            target_os = "linux",
             target_os = "ios",
             target_os = "android"
         )))]

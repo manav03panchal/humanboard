@@ -313,6 +313,7 @@ impl AudioWebView {
         #[cfg(any(
             target_os = "macos",
             target_os = "windows",
+            target_os = "linux",
             target_os = "ios",
             target_os = "android"
         ))]
@@ -325,6 +326,7 @@ impl AudioWebView {
         #[cfg(not(any(
             target_os = "macos",
             target_os = "windows",
+            target_os = "linux",
             target_os = "ios",
             target_os = "android"
         )))]
