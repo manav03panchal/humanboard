@@ -52,7 +52,7 @@ jobs:
             ### Homebrew (recommended)
             ```bash
             brew tap manav03panchal/humanboard
-            brew install --cask humanboard
+            brew install --cask --no-quarantine humanboard
             ```
 
             ### Manual Download
