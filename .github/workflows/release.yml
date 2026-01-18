@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos:
+    runs-on: macos-14  # Apple Silicon runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Create app bundle and DMG
+        run: |
+          chmod +x build-app.sh
+          ./build-app.sh
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          SHA=$(shasum -a 256 Humanboard.dmg | awk '{print $1}')
+          echo "sha256=$SHA" >> $GITHUB_OUTPUT
+          echo "SHA256: $SHA"
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Humanboard v${{ steps.version.outputs.version }}
+          body: |
+            ## Installation
+
+            ### Homebrew (recommended)
+            ```bash
+            brew tap manav03panchal/humanboard
+            brew install --cask humanboard
+            ```
+
+            ### Manual Download
+            1. Download `Humanboard.dmg` below
+            2. Open the DMG and drag Humanboard to Applications
+            3. First launch: Right-click → Open → Open (to bypass Gatekeeper)
+
+            ---
+            **SHA256:** `${{ steps.sha.outputs.sha256 }}`
+          files: Humanboard.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output Homebrew update info
+        run: |
+          echo "========================================"
+          echo "Update homebrew-humanboard cask with:"
+          echo "  version \"${{ steps.version.outputs.version }}\""
+          echo "  sha256 \"${{ steps.sha.outputs.sha256 }}\""
+          echo "========================================"
