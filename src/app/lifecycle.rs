@@ -77,6 +77,7 @@ impl Humanboard {
             youtube_webviews: HashMap::new(),
             audio_webviews: HashMap::new(),
             video_webviews: HashMap::new(),
+            webview_out_of_range_since: HashMap::new(),
 
             settings: Settings::load(),
             show_settings: false,

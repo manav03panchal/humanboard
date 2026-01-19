@@ -18,6 +18,16 @@ impl Humanboard {
 
         if was_modifying {
             if let Some(ref mut board) = self.board {
+                // Update spatial index for modified items
+                if let Some(resize_id) = self.resizing_item {
+                    board.update_spatial_index(resize_id);
+                } else {
+                    // Update spatial index for all dragged items
+                    for &item_id in &self.selected_items {
+                        board.update_spatial_index(item_id);
+                    }
+                }
+
                 board.push_history();
                 if let Err(e) = board.flush_save() {
                     self.toast_manager
@@ -29,7 +39,7 @@ impl Humanboard {
             }
         }
 
-        // Finalize marquee selection
+        // Finalize marquee selection using spatial index for O(log n + k) query
         if let (Some(start), Some(end)) = (self.marquee_start, self.marquee_current) {
             if let Some(ref board) = self.board {
                 let header_offset = HEADER_HEIGHT;
@@ -41,31 +51,26 @@ impl Humanboard {
 
                 // Only select if marquee has some size (not just a click)
                 if (max_x - min_x) > 5.0 || (max_y - min_y) > 5.0 {
-                    for item in &board.items {
-                        let item_x = item.position.0 * board.zoom
-                            + f32::from(board.canvas_offset.x)
-                            + DOCK_WIDTH;
-                        let item_y = item.position.1 * board.zoom
-                            + f32::from(board.canvas_offset.y)
-                            + header_offset;
-                        let item_w = item.size.0 * board.zoom;
-                        let item_h = item.size.1 * board.zoom;
+                    // Convert screen coordinates to canvas coordinates
+                    let canvas_min_x = (min_x - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
+                    let canvas_max_x = (max_x - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
+                    let canvas_min_y = (min_y - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
+                    let canvas_max_y = (max_y - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
 
-                        let intersects = !(item_x + item_w < min_x
-                            || item_x > max_x
-                            || item_y + item_h < min_y
-                            || item_y > max_y);
+                    // Query spatial index for items in rectangle
+                    let intersecting_ids = board.query_items_in_rect(
+                        canvas_min_x, canvas_min_y, canvas_max_x, canvas_max_y
+                    );
 
-                        if intersects {
-                            if event.modifiers.shift {
-                                if self.selected_items.contains(&item.id) {
-                                    self.selected_items.remove(&item.id);
-                                } else {
-                                    self.selected_items.insert(item.id);
-                                }
+                    for item_id in intersecting_ids {
+                        if event.modifiers.shift {
+                            if self.selected_items.contains(&item_id) {
+                                self.selected_items.remove(&item_id);
                             } else {
-                                self.selected_items.insert(item.id);
+                                self.selected_items.insert(item_id);
                             }
+                        } else {
+                            self.selected_items.insert(item_id);
                         }
                     }
                 }

@@ -1,7 +1,16 @@
 //! Mouse down event handling - selection, drag/resize initiation, drawing tools.
+//!
+//! ## Performance Notes
+//!
+//! Mouse down is a hot path during user interaction. Key optimizations:
+//! - O(log n) hit testing via R-tree spatial index
+//! - Coordinate transformations for zoom/pan
+//!
+//! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::app::{Humanboard, SplitDirection};
 use crate::constants::{HEADER_HEIGHT, SPLITTER_WIDTH};
+use crate::profile_scope;
 use crate::render::dock::DOCK_WIDTH;
 use crate::types::{ItemContent, ToolType};
 use gpui::*;
@@ -13,6 +22,8 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        profile_scope!("handle_mouse_down");
+
         let Some(ref board) = self.board else { return };
         let mouse_pos = event.position;
 
@@ -70,33 +81,38 @@ impl Humanboard {
             return;
         }
 
-        // Check if clicking on an item (in reverse order so top items are checked first)
+        // Check if clicking on an item using spatial index for O(log n) lookup
+        profile_scope!("hit_test_items");
+
+        // Convert mouse position to canvas coordinates for spatial query
+        let canvas_x = (f32::from(mouse_pos.x) - dock_offset - f32::from(board.canvas_offset.x)) / board.zoom;
+        let canvas_y = (f32::from(mouse_pos.y) - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
+
+        // Get candidate items from spatial index (O(log n))
+        let candidates: std::collections::HashSet<u64> = board
+            .query_items_at_point(canvas_x, canvas_y)
+            .into_iter()
+            .collect();
+
+        // Check candidates in reverse z-order (front to back) for the topmost hit
         let clicked_item_id = board
             .items
             .iter()
             .rev()
+            .filter(|item| candidates.contains(&item.id))
             .find(|item| {
-                let scaled_x =
-                    item.position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
-                let scaled_y =
-                    item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
-                let scaled_width = item.size.0 * board.zoom;
-                let scaled_height = item.size.1 * board.zoom;
-
-                let mx = f32::from(mouse_pos.x);
-                let my = f32::from(mouse_pos.y);
-
-                let in_bounds = mx >= scaled_x
-                    && mx <= scaled_x + scaled_width
-                    && my >= scaled_y
-                    && my <= scaled_y + scaled_height;
-
-                if !in_bounds {
-                    return false;
-                }
-
                 // For Shape items, only select if clicking on the border (not interior)
                 if let ItemContent::Shape { border_width, .. } = &item.content {
+                    let scaled_x =
+                        item.position.0 * board.zoom + f32::from(board.canvas_offset.x) + dock_offset;
+                    let scaled_y =
+                        item.position.1 * board.zoom + f32::from(board.canvas_offset.y) + header_offset;
+                    let scaled_width = item.size.0 * board.zoom;
+                    let scaled_height = item.size.1 * board.zoom;
+
+                    let mx = f32::from(mouse_pos.x);
+                    let my = f32::from(mouse_pos.y);
+
                     let border_hit_area = (border_width * board.zoom).max(8.0);
                     let near_left = mx - scaled_x < border_hit_area;
                     let near_right = (scaled_x + scaled_width) - mx < border_hit_area;

@@ -97,6 +97,9 @@ pub struct Humanboard {
     // Video WebViews (keyed by item ID)
     pub video_webviews: HashMap<u64, VideoWebView>,
 
+    // Webview lifecycle tracking - when items went out of viewport (for delayed unload)
+    pub webview_out_of_range_since: HashMap<u64, std::time::Instant>,
+
     // Settings
     pub settings: Settings,
     pub show_settings: bool,

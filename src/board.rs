@@ -2,9 +2,21 @@
 //!
 //! This module provides the core data structures for managing the infinite canvas,
 //! including items, undo/redo history, and debounced saving.
+//!
+//! ## Performance Notes
+//!
+//! Key performance considerations:
+//! - Item lookup: O(1) via HashMap index
+//! - Undo/redo: O(k) where k is items affected by operation
+//! - Save: Debounced to avoid frequent disk I/O
+//! - History: Uses VecDeque for O(1) front/back operations
+//!
+//! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::board_index::BoardIndex;
 use crate::error::BoardError;
+use crate::profile_scope;
+use crate::spatial_index::SpatialIndex;
 use crate::types::{CanvasItem, ItemContent};
 use crate::validation::validate_items;
 use gpui::{point, px, Pixels, Point, Size};
@@ -256,6 +268,9 @@ pub struct Board {
     pub items: Vec<CanvasItem>,
     items_index: HashMap<u64, usize>, // id -> index in items vec
 
+    // Spatial index for O(log n) hit testing queries
+    spatial_index: SpatialIndex,
+
     pub next_item_id: u64,
 
     // Delta-based history using VecDeque for O(1) front removal
@@ -299,12 +314,16 @@ impl Board {
             }
 
             let items_index = Self::build_items_index(&state.items);
+            let spatial_index = SpatialIndex::from_items(
+                state.items.iter().map(|item| (item.id, item.position, item.size))
+            );
             Self {
                 id,
                 canvas_offset: point(px(state.canvas_offset.0), px(state.canvas_offset.1)),
                 zoom: state.zoom,
                 items: state.items,
                 items_index,
+                spatial_index,
                 next_item_id: state.next_item_id,
                 history: VecDeque::new(),
                 history_index: 0,
@@ -332,6 +351,7 @@ impl Board {
             zoom: 1.0,
             items: Vec::new(),
             items_index: HashMap::new(),
+            spatial_index: SpatialIndex::new(),
             next_item_id: 0,
             history: VecDeque::new(),
             history_index: 0,
@@ -354,6 +374,9 @@ impl Board {
     /// Rebuild the index after items vec changes
     fn rebuild_index(&mut self) {
         self.items_index = Self::build_items_index(&self.items);
+        self.spatial_index.rebuild(
+            self.items.iter().map(|item| (item.id, item.position, item.size))
+        );
     }
 
     /// Get item by ID in O(1)
@@ -368,6 +391,26 @@ impl Board {
         self.items_index
             .get(&id)
             .and_then(|&idx| self.items.get_mut(idx))
+    }
+
+    /// Query the spatial index for items at a point in canvas coordinates.
+    /// Returns item IDs that contain the point. O(log n) performance.
+    pub fn query_items_at_point(&self, x: f32, y: f32) -> Vec<u64> {
+        self.spatial_index.query_point(x, y)
+    }
+
+    /// Query the spatial index for items in a rectangle (for marquee selection).
+    /// Returns item IDs that intersect the rectangle. O(log n + k) where k is results.
+    pub fn query_items_in_rect(&self, min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Vec<u64> {
+        self.spatial_index.query_rect(min_x, min_y, max_x, max_y)
+    }
+
+    /// Update an item's position in the spatial index.
+    /// Call this after modifying an item's position directly.
+    pub fn update_spatial_index(&mut self, id: u64) {
+        if let Some(item) = self.get_item(id) {
+            self.spatial_index.update(id, item.position, item.size);
+        }
     }
 
     /// Add a single item (still triggers history + save for single operations)
@@ -385,14 +428,16 @@ impl Board {
     fn add_item_internal(&mut self, position: Point<Pixels>, content: ItemContent) -> u64 {
         let size = content.default_size();
         let id = self.next_item_id;
+        let pos = (f32::from(position.x), f32::from(position.y));
 
         self.items.push(CanvasItem {
             id,
-            position: (f32::from(position.x), f32::from(position.y)),
+            position: pos,
             size,
             content,
         });
         self.items_index.insert(id, self.items.len() - 1);
+        self.spatial_index.insert(id, pos, size);
         self.next_item_id += 1;
         id
     }
@@ -403,7 +448,14 @@ impl Board {
     ///
     /// Returns a list of error messages for any files that failed to copy.
     /// The caller should display these to the user via toast notifications.
+    ///
+    /// ## Performance
+    /// This can be slow for many files or large files due to:
+    /// - File I/O for copying (iCloud boards)
+    /// - Content type detection
     pub fn handle_file_drop(&mut self, position: Point<Pixels>, paths: Vec<PathBuf>) -> Vec<String> {
+        profile_scope!("handle_file_drop");
+
         let mut errors = Vec::new();
 
         if paths.is_empty() {
@@ -704,6 +756,8 @@ impl Board {
 
     /// Try to save, returning any errors
     pub fn try_save(&self) -> Result<(), BoardError> {
+        profile_scope!("board_save");
+
         let state = BoardState {
             canvas_offset: (
                 f32::from(self.canvas_offset.x),
@@ -800,6 +854,8 @@ impl Board {
     }
 
     pub fn undo(&mut self) -> bool {
+        profile_scope!("board_undo");
+
         if self.history_index == 0 {
             return false;
         }
@@ -811,6 +867,10 @@ impl Board {
             Some(HistoryEntry::Operation(op)) => {
                 // Reverse the operation
                 op.reverse(&mut self.items, &mut self.items_index);
+                // Rebuild spatial index after operation
+                self.spatial_index.rebuild(
+                    self.items.iter().map(|item| (item.id, item.position, item.size))
+                );
                 self.mark_dirty();
                 true
             }
@@ -832,6 +892,8 @@ impl Board {
     }
 
     pub fn redo(&mut self) -> bool {
+        profile_scope!("board_redo");
+
         if self.history_index >= self.history.len() {
             return false;
         }
@@ -843,6 +905,10 @@ impl Board {
             Some(HistoryEntry::Operation(op)) => {
                 // Apply the operation
                 op.apply(&mut self.items, &mut self.items_index);
+                // Rebuild spatial index after operation
+                self.spatial_index.rebuild(
+                    self.items.iter().map(|item| (item.id, item.position, item.size))
+                );
                 self.mark_dirty();
                 true
             }

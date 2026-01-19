@@ -5,10 +5,20 @@
 //! - Item background shapes (painted via GPU)
 //! - Individual item content rendering
 //! - Item selection and resize handles
+//!
+//! ## Performance Notes
+//!
+//! This is a hot path - rendering happens every frame. Key optimizations:
+//! - Early culling of off-screen items (viewport culling)
+//! - Batched GPU paint operations for backgrounds
+//! - Minimal allocations in render loop
+//!
+//! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
 use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
+use crate::profile_scope;
 use crate::types::{CanvasItem, ItemContent};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -94,6 +104,26 @@ fn render_item_backgrounds(
     zoom: f32,
     colors: ContentTypeColors,
 ) {
+    profile_scope!("render_item_backgrounds");
+
+    // Early exit if no items
+    if items.is_empty() {
+        return;
+    }
+
+    // Viewport bounds with margin for culling (prevents pop-in at edges)
+    use crate::constants::CULLING_MARGIN;
+    let vp_left = f32::from(bounds.origin.x) - CULLING_MARGIN;
+    let vp_top = f32::from(bounds.origin.y) - CULLING_MARGIN;
+    let vp_right = f32::from(bounds.origin.x) + f32::from(bounds.size.width) + CULLING_MARGIN;
+    let vp_bottom = f32::from(bounds.origin.y) + f32::from(bounds.size.height) + CULLING_MARGIN;
+
+    // Count items for profiling
+    #[cfg(feature = "profiling")]
+    let mut painted_count = 0usize;
+    #[cfg(feature = "profiling")]
+    let mut culled_count = 0usize;
+
     for item in items {
         // Skip items that render themselves (images, markdown cards, code files, shapes, arrows, textboxes)
         if matches!(
@@ -108,12 +138,25 @@ fn render_item_backgrounds(
             continue;
         }
 
+        // Calculate screen-space position for culling check
+        let item_x = f32::from(bounds.origin.x) + item.position.0 * zoom + f32::from(canvas_offset.x);
+        let item_y = f32::from(bounds.origin.y) + item.position.1 * zoom + f32::from(canvas_offset.y);
+        let item_w = item.size.0 * zoom;
+        let item_h = item.size.1 * zoom;
+
+        // VIEWPORT CULLING: Skip items completely outside visible area
+        if item_x + item_w < vp_left || item_x > vp_right ||
+           item_y + item_h < vp_top || item_y > vp_bottom {
+            #[cfg(feature = "profiling")]
+            {
+                culled_count += 1;
+            }
+            continue;
+        }
+
         let item_bounds = Bounds {
-            origin: point(
-                bounds.origin.x + px(item.position.0 * zoom) + canvas_offset.x,
-                bounds.origin.y + px(item.position.1 * zoom) + canvas_offset.y,
-            ),
-            size: size(px(item.size.0 * zoom), px(item.size.1 * zoom)),
+            origin: point(px(item_x), px(item_y)),
+            size: size(px(item_w), px(item_h)),
         };
 
         // Use theme-aware colors for content types
@@ -127,6 +170,16 @@ fn render_item_backgrounds(
             colors.border,
             Default::default(),
         ));
+
+        #[cfg(feature = "profiling")]
+        {
+            painted_count += 1;
+        }
+    }
+
+    #[cfg(feature = "profiling")]
+    if painted_count > 0 || culled_count > 0 {
+        tracing::trace!(painted = painted_count, culled = culled_count, "Item backgrounds");
     }
 }
 
@@ -659,6 +712,9 @@ fn parse_hex_color(hex: &str) -> Option<Hsla> {
 }
 
 /// Render all canvas items with positioning and selection
+///
+/// This is a key hot path - called every frame for all visible items.
+/// Performance scales with O(n) where n is the number of items.
 pub fn render_items(
     items: &[CanvasItem],
     canvas_offset: Point<Pixels>,
@@ -671,6 +727,8 @@ pub fn render_items(
     textbox_input: Option<&Entity<InputState>>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
+    profile_scope!("render_items");
+
     let offset_x = f32::from(canvas_offset.x);
     let offset_y = f32::from(canvas_offset.y);
 
@@ -737,6 +795,11 @@ pub fn render_items(
 }
 
 /// Render the canvas area container
+///
+/// This is the main entry point for canvas rendering. It composes:
+/// 1. Background canvas with item backgrounds (GPU painted)
+/// 2. Individual item content elements
+/// 3. Selection overlays (marquee, drawing preview)
 pub fn render_canvas_area(
     canvas_offset: Point<Pixels>,
     zoom: f32,
@@ -751,6 +814,8 @@ pub fn render_canvas_area(
     drawing_preview: Option<(Point<Pixels>, Point<Pixels>, crate::types::ToolType)>,
     cx: &Context<Humanboard>,
 ) -> Div {
+    profile_scope!("render_canvas_area");
+
     let bg = cx.theme().background;
     let primary = cx.theme().primary;
     let fg = cx.theme().foreground;

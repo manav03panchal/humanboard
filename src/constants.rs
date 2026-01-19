@@ -123,3 +123,24 @@ pub const MIN_BORDER_WIDTH: f32 = 0.0;
 
 /// Maximum shape border width
 pub const MAX_BORDER_WIDTH: f32 = 50.0;
+
+// ============================================================================
+// Viewport Culling
+// ============================================================================
+
+/// Margin in pixels around viewport for culling (prevents pop-in at edges)
+pub const CULLING_MARGIN: f32 = 50.0;
+
+// ============================================================================
+// Memory Optimization - Webview Lifecycle
+// ============================================================================
+
+/// Distance from viewport edge (in canvas units) at which webviews are destroyed
+pub const WEBVIEW_UNLOAD_DISTANCE: f32 = 2000.0;
+
+/// Distance from viewport edge (in canvas units) at which webviews are preloaded
+pub const WEBVIEW_PRELOAD_DISTANCE: f32 = 500.0;
+
+/// Minimum time (in milliseconds) a webview must be out of range before unloading
+/// 5 minutes - preserves playback state for reasonable pan-away durations
+pub const WEBVIEW_UNLOAD_DELAY_MS: u64 = 300_000;
