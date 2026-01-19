@@ -1,0 +1,47 @@
+# =============================================================================
+# CARGO BUILD CONFIGURATION
+# =============================================================================
+
+[build]
+jobs = -1
+
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "split-debuginfo=unpacked",
+    "-C", "target-cpu=native",
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "split-debuginfo=unpacked",
+    "-C", "target-cpu=native",
+]
+
+# =============================================================================
+# SCCACHE (uncomment after: brew install sccache)
+# =============================================================================
+# [build]
+# rustc-wrapper = "sccache"
+
+[env]
+CARGO_INCREMENTAL = "1"
+
+[registries.crates-io]
+protocol = "sparse"
+
+[net]
+git-fetch-with-cli = true
+retry = 3
+
+# =============================================================================
+# ALIASES
+# =============================================================================
+[alias]
+b = "build"
+bf = "build --profile dev-fast"
+br = "build --release"
+r = "run"
+rf = "run --profile dev-fast"
+rr = "run --release"
+c = "check"
+cf = "check --profile dev-fast"

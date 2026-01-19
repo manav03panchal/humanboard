@@ -1,7 +1,18 @@
 //! Drag operations - item dragging, resizing, splitter dragging.
+//!
+//! ## Performance Notes
+//!
+//! Mouse move is called very frequently during drag operations (potentially
+//! 60+ times per second). Key optimizations:
+//! - Early exit for non-drag states
+//! - Minimal state updates per move
+//! - Batched item position updates for group moves
+//!
+//! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::app::{Humanboard, SplitDirection};
 use crate::constants::HEADER_HEIGHT;
+use crate::profile_scope;
 use crate::render::dock::DOCK_WIDTH;
 use crate::types::ItemContent;
 use gpui::*;
@@ -13,6 +24,8 @@ impl Humanboard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        profile_scope!("handle_mouse_move");
+
         self.last_drop_pos = Some(event.position);
 
         // Handle splitter dragging (canvas/preview split)
@@ -98,6 +111,8 @@ impl Humanboard {
 
         // Handle item resizing
         if let Some(item_id) = self.resizing_item {
+            profile_scope!("item_resize");
+
             if let Some(start_size) = self.resize_start_size {
                 if let Some(start_pos) = self.resize_start_pos {
                     let zoom = board.zoom;
@@ -167,6 +182,8 @@ impl Humanboard {
             }
         } else if let Some(item_id) = self.dragging_item {
             // Handle item dragging
+            profile_scope!("item_drag");
+
             if let Some(offset) = self.item_drag_offset {
                 let zoom = board.zoom;
                 let canvas_offset_x = f32::from(board.canvas_offset.x);

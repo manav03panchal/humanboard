@@ -45,6 +45,7 @@ pub mod preview;
 pub mod render;
 pub mod selection;
 pub mod settings;
+pub mod spatial_index;
 pub mod settings_watcher;
 pub mod types;
 pub mod validation;

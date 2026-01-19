@@ -39,6 +39,9 @@ once_cell = "1.19"
 # Faster mutex implementation (Zed pattern)
 parking_lot = "0.12"
 
+# Spatial indexing for efficient hit testing (R-tree)
+rstar = "0.12"
+
 # File watching for settings hot-reload
 notify = "6.1"
 
@@ -48,11 +51,66 @@ tempfile = "3.10"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-text = "20.1"
 
+# =============================================================================
+# FEATURES
+# =============================================================================
+# cargo build --features profiling  -> Enable detailed performance profiling
+# =============================================================================
+
+[features]
+default = []
+# Enable detailed performance profiling instrumentation.
+# This adds timing to hot paths (rendering, hit testing, input handling).
+# Use for development/debugging only - has runtime overhead.
+profiling = []
+
+# =============================================================================
+# BUILD PROFILES
+# =============================================================================
+# cargo build             -> dev (fast incremental builds)
+# cargo build --profile dev-fast -> dev-fast (fastest iteration)
+# cargo build --release   -> release (full optimization for distribution)
+# =============================================================================
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+incremental = true
+codegen-units = 256
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev.package.gpui]
+opt-level = 3
+
+[profile.dev.package.gpui-component]
+opt-level = 2
+
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.pdfium-render]
+opt-level = 2
+
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 0
+debug = false
+codegen-units = 256
+
+[profile.dev-fast.package."*"]
+opt-level = 1
+debug = false
+
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+panic = "abort"
 
 
 [package.metadata.bundle]

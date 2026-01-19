@@ -14,8 +14,17 @@
 //! - **Resize corner**: Bottom-right corner for resizing
 //! - **Shape border**: For shape items, only the border is clickable
 //! - **Splitter**: The divider between canvas and preview panel
+//!
+//! ## Performance Notes
+//!
+//! Hit testing is O(n) where n is the number of items. For boards with many
+//! items (>500), consider implementing spatial indexing (quadtree/R-tree).
+//! Current implementation iterates through all items in reverse order.
+//!
+//! Enable profiling with `cargo build --features profiling` to track hit test times.
 
 use crate::constants::{DOCK_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT, MIN_HIT_AREA, SPLITTER_WIDTH};
+use crate::profile_scope;
 use crate::types::ItemContent;
 use gpui::*;
 
@@ -151,6 +160,10 @@ impl HitTester {
     ///
     /// ## Returns
     /// The hit test result indicating what was hit.
+    ///
+    /// ## Performance
+    /// O(n) where n is the number of items. UI chrome checks (header, dock, etc.)
+    /// are O(1) and checked first for early exit.
     pub fn hit_test(
         &self,
         mouse_pos: Point<Pixels>,
@@ -160,6 +173,8 @@ impl HitTester {
         window_size: Size<Pixels>,
         preview_split: Option<PreviewSplit>,
     ) -> HitTestResult {
+        profile_scope!("hit_test");
+
         let mx = f32::from(mouse_pos.x);
         let my = f32::from(mouse_pos.y);
         let window_height = f32::from(window_size.height);
