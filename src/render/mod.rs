@@ -303,15 +303,16 @@ impl Humanboard {
         self.update_webview_visibility(window, cx);
 
         // Get board data (with fallback defaults if somehow no board)
-        let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
+        let (canvas_offset, zoom, items, item_count, data_sources) = if let Some(ref board) = self.board {
             (
                 board.canvas_offset,
                 board.zoom,
                 board.items.clone(),
                 board.items.len(),
+                board.data_sources.clone(),
             )
         } else {
-            (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0)
+            (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0, std::collections::HashMap::new())
         };
 
         let fps = self.calculate_fps();
@@ -586,8 +587,11 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
+                                            &data_sources,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
+                                            self.editing_table_cell,
+                                            self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
                                             cx,
@@ -712,8 +716,11 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
+                                            &data_sources,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
+                                            self.editing_table_cell,
+                                            self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
                                             cx,
@@ -829,8 +836,11 @@ impl Humanboard {
                     &self.youtube_webviews,
                     &self.audio_webviews,
                     &self.video_webviews,
+                    &data_sources,
                     self.editing_textbox_id,
                     self.textbox_input.as_ref(),
+                    self.editing_table_cell,
+                    self.table_cell_input.as_ref(),
                     marquee,
                     drawing_preview,
                     cx,

@@ -20,11 +20,12 @@ use crate::audio_webview::AudioWebView;
 use crate::constants::HEADER_HEIGHT;
 use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
 use crate::profile_scope;
-use crate::types::{CanvasItem, ItemContent};
+use crate::types::{CanvasItem, DataSource, ItemContent};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::prelude::FluentBuilder;
 use gpui::{PathBuilder, *};
+use gpui_component::chart::{BarChart, LineChart, PieChart};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme as _, h_flex, v_flex};
 use std::collections::HashMap;
@@ -79,7 +80,7 @@ impl ContentTypeColors {
     }
 }
 
-/// Render the main canvas with item backgrounds
+/// Render the main canvas with item backgrounds and connection lines
 pub fn render_canvas(
     canvas_offset: Point<Pixels>,
     zoom: f32,
@@ -90,10 +91,78 @@ pub fn render_canvas(
         move |_bounds, _window, _cx| (),
         move |bounds, _data, window, _cx| {
             render_item_backgrounds(bounds, window, &items, canvas_offset, zoom, colors);
+            render_connection_lines(bounds, window, &items, canvas_offset, zoom);
         },
     )
     .absolute()
     .size_full()
+}
+
+/// Draw connection lines between charts and their source tables
+fn render_connection_lines(
+    bounds: Bounds<Pixels>,
+    window: &mut Window,
+    items: &[CanvasItem],
+    canvas_offset: Point<Pixels>,
+    zoom: f32,
+) {
+    // Build a map of item id -> position/size for quick lookup
+    let item_map: std::collections::HashMap<u64, ((f32, f32), (f32, f32))> = items
+        .iter()
+        .map(|item| (item.id, (item.position, item.size)))
+        .collect();
+
+    // Line style: soft blue color
+    let line_color = hsla(210.0 / 360.0, 0.6, 0.5, 0.6);
+
+    // Find charts with source_item_id and draw lines to their sources
+    for item in items {
+        if let ItemContent::Chart { source_item_id: Some(source_id), .. } = &item.content {
+            if let Some(&(source_pos, source_size)) = item_map.get(source_id) {
+                // Calculate screen positions
+                let offset_x = f32::from(canvas_offset.x);
+                let offset_y = f32::from(canvas_offset.y);
+
+                // Source table: connect from right edge, center height
+                let source_x = f32::from(bounds.origin.x) + source_pos.0 * zoom + source_size.0 * zoom + offset_x;
+                let source_y = f32::from(bounds.origin.y) + source_pos.1 * zoom + source_size.1 * zoom / 2.0 + offset_y;
+
+                // Chart: connect to left edge, center height
+                let chart_x = f32::from(bounds.origin.x) + item.position.0 * zoom + offset_x;
+                let chart_y = f32::from(bounds.origin.y) + item.position.1 * zoom + item.size.1 * zoom / 2.0 + offset_y;
+
+                // Draw the connection line using quadratic bezier
+                // curve_to takes (destination, control_point)
+                let mut path = PathBuilder::stroke(px(2.0 * zoom));
+                path.move_to(point(px(source_x), px(source_y)));
+
+                // Use midpoint as control point for a nice curve
+                let mid_x = (source_x + chart_x) / 2.0;
+                let mid_y = (source_y + chart_y) / 2.0;
+                path.curve_to(
+                    point(px(chart_x), px(chart_y)),  // destination
+                    point(px(mid_x), px(mid_y)),      // control point
+                );
+
+                if let Ok(built_path) = path.build() {
+                    window.paint_path(built_path, line_color);
+                }
+
+                // Draw a small filled diamond at the source end
+                let size = 5.0 * zoom;
+                let mut diamond = PathBuilder::fill();
+                diamond.move_to(point(px(source_x + size), px(source_y)));
+                diamond.line_to(point(px(source_x), px(source_y + size)));
+                diamond.line_to(point(px(source_x - size), px(source_y)));
+                diamond.line_to(point(px(source_x), px(source_y - size)));
+                diamond.close();
+
+                if let Ok(built_diamond) = diamond.build() {
+                    window.paint_path(built_diamond, line_color);
+                }
+            }
+        }
+    }
 }
 
 /// Paint item background shapes directly to GPU
@@ -126,7 +195,7 @@ fn render_item_backgrounds(
     let mut culled_count = 0usize;
 
     for item in items {
-        // Skip items that render themselves (images, markdown cards, code files, shapes, arrows, textboxes)
+        // Skip items that render themselves (images, markdown cards, code files, shapes, arrows, textboxes, tables, charts)
         if matches!(
             &item.content,
             ItemContent::Image(_)
@@ -135,6 +204,8 @@ fn render_item_backgrounds(
                 | ItemContent::TextBox { .. }
                 | ItemContent::Arrow { .. }
                 | ItemContent::Shape { .. }
+                | ItemContent::Table { .. }
+                | ItemContent::Chart { .. }
         ) {
             continue;
         }
@@ -191,8 +262,11 @@ fn render_item_content(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
+    data_sources: &HashMap<u64, DataSource>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
+    editing_table_cell: Option<(u64, usize, usize)>,
+    table_cell_input: Option<&Entity<InputState>>,
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -671,6 +745,529 @@ fn render_item_content(
                 .border_color(stroke)
                 .when_some(fill, |d, c| d.bg(c))
         }
+
+        ItemContent::Table { data_source_id, show_headers, stripe } => {
+            let border_color = muted_fg.opacity(0.3);
+            let header_bg = muted_bg.opacity(0.5);
+            let stripe_bg = muted_bg.opacity(0.3);
+            let cell_height = 28.0 * zoom;
+            let cell_padding = 8.0 * zoom;
+            let font_size = 12.0 * zoom;
+
+            // Look up the data source
+            if let Some(data_source) = data_sources.get(data_source_id) {
+                let col_count = data_source.column_count();
+                let row_count = data_source.row_count();
+
+                // Calculate column widths (equal distribution for now)
+                let item_width = item.size.0 * zoom;
+                let col_width = if col_count > 0 {
+                    (item_width - 2.0) / col_count as f32 // -2 for borders
+                } else {
+                    100.0 * zoom
+                };
+
+                let mut table = div()
+                    .size_full()
+                    .bg(muted_bg.opacity(0.1))
+                    .rounded(corner_radius)
+                    .border_1()
+                    .border_color(border_color)
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden();
+
+                // Render header row
+                if *show_headers && col_count > 0 {
+                    let mut header_row = div()
+                        .w_full()
+                        .h(px(cell_height))
+                        .flex()
+                        .flex_shrink_0()
+                        .bg(header_bg)
+                        .border_b_1()
+                        .border_color(border_color);
+
+                    for (col_idx, col) in data_source.columns.iter().enumerate() {
+                        let is_last = col_idx == col_count - 1;
+                        header_row = header_row.child(
+                            div()
+                                .w(px(col_width))
+                                .h_full()
+                                .px(px(cell_padding))
+                                .flex()
+                                .items_center()
+                                .overflow_hidden()
+                                .when(!is_last, |d| d.border_r_1().border_color(border_color))
+                                .child(
+                                    div()
+                                        .text_size(px(font_size))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(fg)
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .whitespace_nowrap()
+                                        .child(col.name.clone())
+                                )
+                        );
+                    }
+                    table = table.child(header_row);
+                }
+
+                // Render data rows (limit to visible area for performance)
+                let visible_rows = ((item.size.1 * zoom - cell_height) / cell_height).ceil() as usize;
+                let rows_to_render = row_count.min(visible_rows.max(3));
+
+                for (row_idx, row) in data_source.rows.iter().take(rows_to_render).enumerate() {
+                    let row_bg = if *stripe && row_idx % 2 == 1 {
+                        stripe_bg
+                    } else {
+                        Hsla::transparent_black()
+                    };
+                    let is_last_row = row_idx == rows_to_render - 1;
+
+                    let mut data_row = div()
+                        .w_full()
+                        .h(px(cell_height))
+                        .flex()
+                        .flex_shrink_0()
+                        .bg(row_bg)
+                        .when(!is_last_row, |d| d.border_b_1().border_color(border_color.opacity(0.5)));
+
+                    for (col_idx, cell) in row.cells.iter().enumerate() {
+                        let is_last_col = col_idx == col_count - 1;
+                        let cell_text = cell.to_string();
+
+                        // Check if this cell is being edited
+                        let is_editing_cell = editing_table_cell
+                            .map(|(table_id, edit_row, edit_col)| {
+                                table_id == item.id && edit_row == row_idx && edit_col == col_idx
+                            })
+                            .unwrap_or(false);
+
+                        data_row = data_row.child(
+                            div()
+                                .w(px(col_width))
+                                .h_full()
+                                .px(px(cell_padding))
+                                .flex()
+                                .items_center()
+                                .overflow_hidden()
+                                .when(!is_last_col, |d| d.border_r_1().border_color(border_color.opacity(0.5)))
+                                .when(is_editing_cell && table_cell_input.is_some(), |d| {
+                                    // Show input field when editing
+                                    d.child(
+                                        div()
+                                            .size_full()
+                                            .child(Input::new(table_cell_input.unwrap()).appearance(false).size_full())
+                                    )
+                                })
+                                .when(!is_editing_cell || table_cell_input.is_none(), |d| {
+                                    // Show static text when not editing
+                                    d.child(
+                                        div()
+                                            .text_size(px(font_size))
+                                            .text_color(if cell_text.is_empty() { muted_fg } else { fg })
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .whitespace_nowrap()
+                                            .child(if cell_text.is_empty() { "-".to_string() } else { cell_text })
+                                    )
+                                })
+                        );
+                    }
+                    table = table.child(data_row);
+                }
+
+                // Show row count indicator if there are more rows
+                if row_count > rows_to_render {
+                    table = table.child(
+                        div()
+                            .w_full()
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(font_size * 0.9))
+                                    .text_color(muted_fg)
+                                    .child(format!("... {} more rows", row_count - rows_to_render))
+                            )
+                    );
+                }
+
+                table
+            } else {
+                // Data source not found - show placeholder
+                div()
+                    .size_full()
+                    .bg(muted_bg)
+                    .rounded(corner_radius)
+                    .border_1()
+                    .border_color(border_color)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(14.0 * zoom))
+                            .text_color(muted_fg)
+                            .child("Data source not found")
+                    )
+            }
+        }
+
+        ItemContent::Chart { data_source_id, config, .. } => {
+            let border_color = muted_fg.opacity(0.3);
+            let chart_type_label = config.chart_type.label();
+            let header_height = 36.0 * zoom;
+            let padding = 12.0 * zoom;
+            let font_size = 11.0 * zoom;
+
+            if let Some(data_source) = data_sources.get(data_source_id) {
+                let col_count = data_source.column_count();
+
+                // Get column names for context
+                let x_col = config.x_column.unwrap_or(0);
+                let y_col = if config.y_columns.is_empty() {
+                    if col_count > 1 { 1 } else { 0 }
+                } else {
+                    config.y_columns[0]
+                };
+
+                let x_col_name = data_source.columns.get(x_col).map(|c| c.name.as_str()).unwrap_or("X");
+                let y_col_name = data_source.columns.get(y_col).map(|c| c.name.as_str()).unwrap_or("Value");
+
+                // Build chart data points
+                #[derive(Clone)]
+                struct ChartPoint {
+                    label: String,
+                    value: f64,
+                    color: Hsla,
+                }
+
+                // Highly distinct colors - maximally separated on color wheel
+                let chart_colors = [
+                    hsla(220.0 / 360.0, 0.85, 0.55, 1.0),  // Bright Blue
+                    hsla(140.0 / 360.0, 0.75, 0.45, 1.0),  // Green
+                    hsla(30.0 / 360.0, 0.95, 0.55, 1.0),   // Orange
+                    hsla(270.0 / 360.0, 0.75, 0.55, 1.0),  // Violet/Purple
+                    hsla(0.0 / 360.0, 0.80, 0.55, 1.0),    // Red
+                    hsla(175.0 / 360.0, 0.75, 0.45, 1.0),  // Cyan/Teal
+                    hsla(55.0 / 360.0, 0.90, 0.50, 1.0),   // Yellow
+                    hsla(320.0 / 360.0, 0.75, 0.55, 1.0),  // Pink/Magenta
+                ];
+
+                let data: Vec<ChartPoint> = data_source.rows.iter().enumerate()
+                    .take(12)  // Limit for readability
+                    .map(|(i, row)| {
+                        let label = row.cells.get(x_col).map(|c| c.to_string()).unwrap_or_default();
+                        let value = row.cells.get(y_col).map(|c| c.to_f64()).unwrap_or(0.0);
+                        let color = chart_colors[i % chart_colors.len()];
+                        ChartPoint { label, value, color }
+                    })
+                    .collect();
+
+                let mut chart_container = div()
+                    .size_full()
+                    .bg(muted_bg.opacity(0.05))
+                    .rounded(corner_radius)
+                    .border_1()
+                    .border_color(border_color)
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden();
+
+                // Header with title and Y-axis column name
+                let title = config.title.as_deref().unwrap_or(&data_source.name);
+                chart_container = chart_container.child(
+                    div()
+                        .w_full()
+                        .h(px(header_height))
+                        .px(px(padding))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .border_b_1()
+                        .border_color(border_color)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_size(px(font_size * 1.1))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(fg)
+                                        .child(title.to_string())
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(font_size * 0.85))
+                                        .text_color(muted_fg)
+                                        .child(format!("{} by {}", y_col_name, x_col_name))
+                                )
+                        )
+                        .child(
+                            div()
+                                .px(px(6.0 * zoom))
+                                .py(px(2.0 * zoom))
+                                .bg(muted_bg.opacity(0.3))
+                                .rounded(px(4.0 * zoom))
+                                .text_size(px(font_size * 0.85))
+                                .text_color(muted_fg)
+                                .child(chart_type_label.to_string())
+                        )
+                );
+
+                // Helper to format axis values
+                fn format_axis_value(val: f64) -> String {
+                    if val == 0.0 {
+                        "0".to_string()
+                    } else if val.abs() >= 1_000_000.0 {
+                        format!("{:.1}M", val / 1_000_000.0)
+                    } else if val.abs() >= 1_000.0 {
+                        format!("{:.1}K", val / 1_000.0)
+                    } else if val.abs() >= 100.0 {
+                        format!("{:.0}", val)
+                    } else if val.fract() == 0.0 {
+                        format!("{:.0}", val)
+                    } else {
+                        format!("{:.1}", val)
+                    }
+                }
+
+                // Calculate Y-axis range for bar/line/scatter charts
+                let max_val = data.iter().map(|d| d.value).fold(0.0_f64, |a, b| a.max(b));
+                let y_axis_font_size = font_size * 0.75;
+                let y_axis_width = 32.0 * zoom;
+
+                // Chart content
+                match config.chart_type {
+                    crate::types::ChartType::Bar => {
+                        let bar_chart = BarChart::new(data.clone())
+                            .x(|d| d.label.clone())
+                            .y(|d| d.value)
+                            .fill(|d| d.color);
+
+                        chart_container = chart_container.child(
+                            div()
+                                .flex_1()
+                                .w_full()
+                                .p(px(padding))
+                                .flex()
+                                .flex_row()
+                                // Y-axis labels
+                                .child(
+                                    div()
+                                        .w(px(y_axis_width))
+                                        .h_full()
+                                        .flex_shrink_0()
+                                        .flex()
+                                        .flex_col()
+                                        .justify_between()
+                                        .pr(px(4.0 * zoom))
+                                        .text_size(px(y_axis_font_size))
+                                        .text_color(muted_fg)
+                                        .child(div().text_right().child(format_axis_value(max_val)))
+                                        .child(div().text_right().child(format_axis_value(max_val * 0.5)))
+                                        .child(div().text_right().child("0"))
+                                )
+                                // Chart area
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .h_full()
+                                        .child(bar_chart)
+                                )
+                        );
+                    }
+                    crate::types::ChartType::Line | crate::types::ChartType::Area => {
+                        let line_color = chart_colors[0];
+                        let line_chart = LineChart::new(data.clone())
+                            .x(|d| d.label.clone())
+                            .y(|d| d.value)
+                            .stroke(line_color)
+                            .dot();
+
+                        chart_container = chart_container.child(
+                            div()
+                                .flex_1()
+                                .w_full()
+                                .p(px(padding))
+                                .flex()
+                                .flex_row()
+                                // Y-axis labels
+                                .child(
+                                    div()
+                                        .w(px(y_axis_width))
+                                        .h_full()
+                                        .flex_shrink_0()
+                                        .flex()
+                                        .flex_col()
+                                        .justify_between()
+                                        .pr(px(4.0 * zoom))
+                                        .text_size(px(y_axis_font_size))
+                                        .text_color(muted_fg)
+                                        .child(div().text_right().child(format_axis_value(max_val)))
+                                        .child(div().text_right().child(format_axis_value(max_val * 0.5)))
+                                        .child(div().text_right().child("0"))
+                                )
+                                // Chart area
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .h_full()
+                                        .child(line_chart)
+                                )
+                        );
+                    }
+                    crate::types::ChartType::Pie => {
+                        // Calculate pie size based on available height
+                        let available_height = item.size.1 * zoom - header_height - padding * 2.0;
+                        let pie_size = (available_height * 0.4).min(80.0 * zoom).max(30.0 * zoom);
+
+                        let pie_chart = PieChart::new(data.clone())
+                            .value(|d| d.value as f32)
+                            .color(|d| d.color)
+                            .outer_radius(pie_size)
+                            .inner_radius(pie_size * 0.55);  // Donut style
+
+                        // Pie with legend side by side
+                        let total: f64 = data.iter().map(|d| d.value).sum();
+                        chart_container = chart_container.child(
+                            div()
+                                .flex_1()
+                                .w_full()
+                                .p(px(padding))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(padding * 1.5))
+                                // Pie container - fixed width
+                                .child(
+                                    div()
+                                        .w(px(pie_size * 2.2))
+                                        .h(px(pie_size * 2.2))
+                                        .flex_shrink_0()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(pie_chart)
+                                )
+                                // Legend container - takes remaining space
+                                .child({
+                                    let mut legend = div()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(3.0 * zoom))
+                                        .overflow_hidden();
+
+                                    for point in data.iter().take(6) {
+                                        let pct = if total > 0.0 { point.value / total * 100.0 } else { 0.0 };
+                                        legend = legend.child(
+                                            div()
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap(px(6.0 * zoom))
+                                                .child(
+                                                    div()
+                                                        .w(px(12.0 * zoom))
+                                                        .h(px(12.0 * zoom))
+                                                        .flex_shrink_0()
+                                                        .bg(point.color)
+                                                        .rounded(px(3.0 * zoom))
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w_0()
+                                                        .text_size(px(font_size * 0.85))
+                                                        .text_color(fg)
+                                                        .overflow_hidden()
+                                                        .text_ellipsis()
+                                                        .whitespace_nowrap()
+                                                        .child(point.label.clone())
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex_shrink_0()
+                                                        .text_size(px(font_size * 0.8))
+                                                        .text_color(muted_fg)
+                                                        .child(format!("{:.0}%", pct))
+                                                )
+                                        );
+                                    }
+                                    legend
+                                })
+                        );
+                    }
+                    crate::types::ChartType::Scatter => {
+                        // Use line chart without connecting lines (just dots)
+                        let line_color = chart_colors[0];
+                        let scatter_chart = LineChart::new(data.clone())
+                            .x(|d| d.label.clone())
+                            .y(|d| d.value)
+                            .stroke(line_color.opacity(0.0))  // No line
+                            .dot();
+
+                        chart_container = chart_container.child(
+                            div()
+                                .flex_1()
+                                .w_full()
+                                .p(px(padding))
+                                .flex()
+                                .flex_row()
+                                // Y-axis labels
+                                .child(
+                                    div()
+                                        .w(px(y_axis_width))
+                                        .h_full()
+                                        .flex_shrink_0()
+                                        .flex()
+                                        .flex_col()
+                                        .justify_between()
+                                        .pr(px(4.0 * zoom))
+                                        .text_size(px(y_axis_font_size))
+                                        .text_color(muted_fg)
+                                        .child(div().text_right().child(format_axis_value(max_val)))
+                                        .child(div().text_right().child(format_axis_value(max_val * 0.5)))
+                                        .child(div().text_right().child("0"))
+                                )
+                                // Chart area
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .h_full()
+                                        .child(scatter_chart)
+                                )
+                        );
+                    }
+                }
+
+                chart_container
+            } else {
+                // Data source not found
+                div()
+                    .size_full()
+                    .bg(muted_bg)
+                    .rounded(corner_radius)
+                    .border_1()
+                    .border_color(border_color)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(14.0 * zoom))
+                            .text_color(muted_fg)
+                            .child("No data")
+                    )
+            }
+        }
     }
 }
 
@@ -724,8 +1321,11 @@ pub fn render_items(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
+    data_sources: &HashMap<u64, DataSource>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
+    editing_table_cell: Option<(u64, usize, usize)>,
+    table_cell_input: Option<&Entity<InputState>>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     profile_scope!("render_items");
@@ -753,6 +1353,10 @@ pub fn render_items(
             // Don't show selection border while editing textbox (it has its own editing border)
             let show_selection = is_selected && !is_editing_this;
 
+            // Check if this is a table item (for chart creation button)
+            let is_table = matches!(&item.content, ItemContent::Table { .. });
+            let item_id = item.id;
+
             div()
                 .absolute()
                 .left(px(x))
@@ -765,13 +1369,146 @@ pub fn render_items(
                     youtube_webviews,
                     audio_webviews,
                     video_webviews,
+                    data_sources,
                     editing_textbox_id,
                     textbox_input,
+                    editing_table_cell,
+                    table_cell_input,
                     fg,
                     muted_fg,
                     muted_bg,
                     danger,
                 ))
+                // Add double-click handler for table cell editing (only when NOT currently editing this table)
+                .when(is_table && editing_table_cell.map(|(id, _, _)| id != item_id).unwrap_or(true), |d| {
+                    // Get table dimensions for cell position calculation
+                    let cell_height = 28.0 * zoom;
+                    let header_height = cell_height; // Header is same height as cells
+                    let table_width = w;
+                    let table_x = x;
+                    let table_y = y;
+
+                    d.child(
+                        div()
+                            .id(ElementId::Name(format!("table-click-{}", item_id).into()))
+                            .absolute()
+                            .inset_0()
+                            .on_mouse_down(MouseButton::Left, cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                // Check for double-click
+                                if event.click_count == 2 {
+                                    // Calculate which cell was clicked
+                                    // event.position is in window coordinates, need to convert to canvas coordinates
+                                    let click_x: f32 = event.position.x.into();
+                                    let click_y: f32 = event.position.y.into();
+
+                                    // Subtract dock width and header height to get canvas-relative coordinates
+                                    let canvas_click_x = click_x - crate::constants::DOCK_WIDTH;
+                                    let canvas_click_y = click_y - crate::constants::HEADER_HEIGHT;
+
+                                    if let Some(ref board) = this.board {
+                                        if let Some(table_item) = board.items.iter().find(|i| i.id == item_id) {
+                                            if let ItemContent::Table { data_source_id, show_headers, .. } = &table_item.content {
+                                                if let Some(ds) = board.data_sources.get(data_source_id) {
+                                                    let col_count = ds.column_count();
+                                                    if col_count == 0 { return; }
+
+                                                    let col_width = table_width / col_count as f32;
+
+                                                    // Calculate row and column from click position (relative to table)
+                                                    let local_y = canvas_click_y - table_y;
+                                                    let local_x = canvas_click_x - table_x;
+
+                                                    // Skip header row if shown
+                                                    let header_offset = if *show_headers { header_height } else { 0.0 };
+
+                                                    if local_y < header_offset {
+                                                        return; // Clicked on header, don't edit
+                                                    }
+
+                                                    let row = ((local_y - header_offset) / cell_height).floor() as usize;
+                                                    let col = (local_x / col_width).floor() as usize;
+
+                                                    // Bounds check
+                                                    if row < ds.row_count() && col < col_count {
+                                                        this.start_table_cell_editing(item_id, row, col, window, cx);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }))
+                    )
+                })
+                // Add chart creation buttons for tables when selected (top-left corner)
+                .when(is_table && show_selection, |d| {
+                    let primary_fg = cx.theme().primary_foreground;
+                    let btn_size = 20.0 * zoom;
+                    let btn_gap = 2.0 * zoom;
+                    d.child(
+                        div()
+                            .absolute()
+                            .top(px(4.0 * zoom))
+                            .left(px(4.0 * zoom))
+                            .flex()
+                            .flex_row()
+                            .gap(px(btn_gap))
+                            .child(
+                                // Bar chart button
+                                div()
+                                    .id(ElementId::Name(format!("chart-bar-{}", item_id).into()))
+                                    .w(px(btn_size))
+                                    .h(px(btn_size))
+                                    .bg(primary)
+                                    .rounded(px(3.0 * zoom))
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.create_chart_from_table(item_id, crate::types::ChartType::Bar, cx);
+                                    }))
+                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("▮"))
+                            )
+                            .child(
+                                // Line chart button
+                                div()
+                                    .id(ElementId::Name(format!("chart-line-{}", item_id).into()))
+                                    .w(px(btn_size))
+                                    .h(px(btn_size))
+                                    .bg(primary)
+                                    .rounded(px(3.0 * zoom))
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.create_chart_from_table(item_id, crate::types::ChartType::Line, cx);
+                                    }))
+                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("📈"))
+                            )
+                            .child(
+                                // Pie chart button
+                                div()
+                                    .id(ElementId::Name(format!("chart-pie-{}", item_id).into()))
+                                    .w(px(btn_size))
+                                    .h(px(btn_size))
+                                    .bg(primary)
+                                    .rounded(px(3.0 * zoom))
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.create_chart_from_table(item_id, crate::types::ChartType::Pie, cx);
+                                    }))
+                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("◐"))
+                            )
+                    )
+                })
                 .when(show_selection, |d| {
                     d
                         // Selection border
@@ -809,8 +1546,11 @@ pub fn render_canvas_area(
     youtube_webviews: &HashMap<u64, YouTubeWebView>,
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
+    data_sources: &HashMap<u64, DataSource>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
+    editing_table_cell: Option<(u64, usize, usize)>,
+    table_cell_input: Option<&Entity<InputState>>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     drawing_preview: Option<(Point<Pixels>, Point<Pixels>, crate::types::ToolType)>,
     cx: &Context<Humanboard>,
@@ -836,8 +1576,11 @@ pub fn render_canvas_area(
             youtube_webviews,
             audio_webviews,
             video_webviews,
+            data_sources,
             editing_textbox_id,
             textbox_input,
+            editing_table_cell,
+            table_cell_input,
             cx,
         ))
         // Render marquee selection rectangle

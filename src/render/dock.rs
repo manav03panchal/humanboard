@@ -63,8 +63,10 @@ where
     let on_select2 = on_select.clone();
     let on_select3 = on_select.clone();
     let on_select4 = on_select.clone();
+    let on_select5 = on_select.clone();
 
     let border_color = cx.theme().border;
+    let divider_color = cx.theme().muted;
 
     div()
         .id("tool-dock")
@@ -77,12 +79,14 @@ where
         .gap(px(4.0))
         .border_r_1()
         .border_color(border_color)
+        // Selection tool
         .child(
             render_tool_button(ToolType::Select, selected_tool == ToolType::Select, "V", cx)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     on_select1(this, ToolType::Select, window, cx);
                 })),
         )
+        // Text tool
         .child(
             render_tool_button(ToolType::Text, selected_tool == ToolType::Text, "T", cx).on_click(
                 cx.listener(move |this, _, window, cx| {
@@ -90,16 +94,33 @@ where
                 }),
             ),
         )
+        // Arrow tool
         .child(
             render_tool_button(ToolType::Arrow, selected_tool == ToolType::Arrow, "→", cx)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     on_select3(this, ToolType::Arrow, window, cx);
                 })),
         )
+        // Shape tool
         .child(
             render_tool_button(ToolType::Shape, selected_tool == ToolType::Shape, "□", cx)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     on_select4(this, ToolType::Shape, window, cx);
+                })),
+        )
+        // Divider for data visualization tools
+        .child(
+            div()
+                .w(px(24.0))
+                .h(px(1.0))
+                .my(px(4.0))
+                .bg(divider_color)
+        )
+        // Table tool
+        .child(
+            render_tool_button(ToolType::Table, selected_tool == ToolType::Table, "▦", cx)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    on_select5(this, ToolType::Table, window, cx);
                 })),
         )
 }

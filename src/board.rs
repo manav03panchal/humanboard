@@ -18,7 +18,8 @@ use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
 use crate::error::BoardError;
 use crate::profile_scope;
 use crate::spatial_index::SpatialIndex;
-use crate::types::{CanvasItem, ItemContent};
+use crate::data::{is_data_file, parse_csv_file, parse_json_file};
+use crate::types::{CanvasItem, DataSource, ItemContent};
 use crate::validation::validate_items;
 use gpui::{point, px, Pixels, Point, Size};
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,11 @@ pub struct BoardState {
     pub zoom: f32,
     pub items: Vec<CanvasItem>,
     pub next_item_id: u64,
+    /// Shared data sources for tables and charts
+    #[serde(default)]
+    pub data_sources: HashMap<u64, DataSource>,
+    #[serde(default)]
+    pub next_data_source_id: u64,
 }
 
 /// A single undoable operation (delta-based)
@@ -274,6 +280,10 @@ pub struct Board {
 
     pub next_item_id: u64,
 
+    /// Shared data sources for tables and charts
+    pub data_sources: HashMap<u64, DataSource>,
+    pub next_data_source_id: u64,
+
     // Delta-based history using VecDeque for O(1) front removal
     history: VecDeque<HistoryEntry>,
     history_index: usize,
@@ -326,6 +336,8 @@ impl Board {
                 items_index,
                 spatial_index,
                 next_item_id: state.next_item_id,
+                data_sources: state.data_sources,
+                next_data_source_id: state.next_data_source_id,
                 history: VecDeque::new(),
                 history_index: 0,
                 ops_since_snapshot: 0,
@@ -354,6 +366,8 @@ impl Board {
             items_index: HashMap::new(),
             spatial_index: SpatialIndex::new(),
             next_item_id: 0,
+            data_sources: HashMap::new(),
+            next_data_source_id: 0,
             history: VecDeque::new(),
             history_index: 0,
             ops_since_snapshot: 0,
@@ -487,14 +501,58 @@ impl Board {
                 path.clone()
             };
 
-            let content = ItemContent::from_path(&actual_path);
             let base_pos = self.screen_to_canvas(position);
             let staggered_pos = point(
                 px(f32::from(base_pos.x) + (i as f32 * STAGGER_X)),
                 px(f32::from(base_pos.y) + (i as f32 * STAGGER_Y)),
             );
-            let id = self.add_item_internal(staggered_pos, content);
-            added_ids.push(id);
+
+            // Check if this is a data file (CSV/TSV/JSON)
+            if is_data_file(&actual_path) {
+                let filename = actual_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("data");
+
+                // Parse the data file
+                let parse_result = if actual_path.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase() == "json")
+                    .unwrap_or(false)
+                {
+                    parse_json_file(&actual_path)
+                } else {
+                    parse_csv_file(&actual_path)
+                };
+
+                match parse_result {
+                    Ok(mut data_source) => {
+                        // Assign ID and store the data source
+                        data_source.id = self.next_data_source_id;
+                        self.next_data_source_id += 1;
+                        let ds_id = data_source.id;
+                        self.data_sources.insert(ds_id, data_source);
+
+                        // Create a table item referencing this data source
+                        let content = ItemContent::Table {
+                            data_source_id: ds_id,
+                            show_headers: true,
+                            stripe: true,
+                        };
+                        let id = self.add_item_internal(staggered_pos, content);
+                        added_ids.push(id);
+                        info!("Created table from data file: {}", filename);
+                    }
+                    Err(e) => {
+                        errors.push(format!("Failed to parse '{}': {}", filename, e));
+                        warn!("Failed to parse data file '{}': {}", filename, e);
+                    }
+                }
+            } else {
+                // Handle as regular file (image, video, etc.)
+                let content = ItemContent::from_path(&actual_path);
+                let id = self.add_item_internal(staggered_pos, content);
+                added_ids.push(id);
+            }
         }
 
         // Create batch operation for all added items
@@ -764,6 +822,8 @@ impl Board {
             zoom: self.zoom,
             items: self.items.clone(),
             next_item_id: self.next_item_id,
+            data_sources: self.data_sources.clone(),
+            next_data_source_id: self.next_data_source_id,
         };
 
         // Get path from board index (supports custom storage locations)
@@ -826,6 +886,8 @@ impl Board {
             zoom: self.zoom,
             items: self.items.clone(),
             next_item_id: self.next_item_id,
+            data_sources: self.data_sources.clone(),
+            next_data_source_id: self.next_data_source_id,
         };
         self.history.push_back(HistoryEntry::Snapshot(state));
         self.history_index = self.history.len();
@@ -925,6 +987,8 @@ impl Board {
         self.zoom = state.zoom;
         self.items = state.items.clone();
         self.next_item_id = state.next_item_id;
+        self.data_sources = state.data_sources.clone();
+        self.next_data_source_id = state.next_data_source_id;
         self.rebuild_index();
         self.mark_dirty();
     }

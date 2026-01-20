@@ -173,6 +173,20 @@ impl Humanboard {
                     })
                     .collect();
 
+                // Find charts that reference any of the tables being deleted (cascade delete)
+                let orphan_charts: Vec<u64> = board
+                    .items
+                    .iter()
+                    .filter_map(|item| {
+                        if let crate::types::ItemContent::Chart { source_item_id: Some(source_id), .. } = &item.content {
+                            if selected.contains(source_id) {
+                                return Some(item.id);
+                            }
+                        }
+                        None
+                    })
+                    .collect();
+
                 // Close preview tabs for deleted items
                 if let Some(ref mut preview) = self.preview {
                     let mut tabs_to_remove: Vec<usize> = Vec::new();
@@ -196,7 +210,10 @@ impl Humanboard {
                     }
                 }
 
-                let ids_to_remove: Vec<u64> = selected.iter().copied().collect();
+                // Combine selected items + orphaned charts for deletion
+                let mut ids_to_remove: Vec<u64> = selected.iter().copied().collect();
+                ids_to_remove.extend(orphan_charts);
+
                 board.remove_items(&ids_to_remove);
                 self.selected_items.clear();
                 board.push_history();

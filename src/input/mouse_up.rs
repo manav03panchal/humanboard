@@ -2,7 +2,7 @@
 
 use crate::app::Humanboard;
 use crate::constants::{DEFAULT_FONT_SIZE, DOCK_WIDTH, HEADER_HEIGHT};
-use crate::types::{ArrowHead, ItemContent, ShapeType, ToolType};
+use crate::types::{ArrowHead, DataSource, ItemContent, ShapeType, ToolType};
 use gpui::*;
 
 impl Humanboard {
@@ -169,6 +169,37 @@ impl Humanboard {
                         self.selected_items.insert(id);
                         self.start_textbox_editing(id, window, cx);
                     }
+                }
+                ToolType::Table => {
+                    if let Some(ref mut board) = self.board {
+                        // Create an empty data source for manual data entry
+                        let ds = DataSource::new_empty(
+                            board.next_data_source_id,
+                            "New Table".to_string(),
+                        );
+                        let ds_id = ds.id;
+                        board.data_sources.insert(ds_id, ds);
+                        board.next_data_source_id += 1;
+
+                        // Create the table item
+                        let id = board.add_item(
+                            point(px(pos_x), px(pos_y)),
+                            ItemContent::Table {
+                                data_source_id: ds_id,
+                                show_headers: true,
+                                stripe: true,
+                            },
+                        );
+                        if let Some(item) = board.get_item_mut(id) {
+                            item.size = (width.max(300.0), height.max(200.0));
+                        }
+                        self.selected_items.clear();
+                        self.selected_items.insert(id);
+                    }
+                }
+                ToolType::Chart => {
+                    // Charts are created from tables, not directly
+                    // This case is kept for backwards compatibility but does nothing
                 }
                 _ => {}
             }

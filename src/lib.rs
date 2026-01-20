@@ -24,6 +24,7 @@ pub mod background;
 pub mod constants;
 pub mod audio_webview;
 pub mod board;
+pub mod data;
 pub mod board_index;
 pub mod command_palette;
 pub mod command_registry;

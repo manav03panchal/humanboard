@@ -137,6 +137,10 @@ pub struct Humanboard {
     pub textbox_input: Option<Entity<gpui_component::input::InputState>>, // Input for editing textbox
     pub pending_textbox_drag: Option<(u64, Point<Pixels>)>, // Deferred drag for textboxes (to allow double-click)
 
+    // Table cell editing
+    pub editing_table_cell: Option<(u64, usize, usize)>, // (table_item_id, row, col)
+    pub table_cell_input: Option<Entity<gpui_component::input::InputState>>,
+
     // Hit testing
     pub hit_tester: HitTester,
 

@@ -4,6 +4,7 @@ use humanboard::board::{Board, BoardState};
 use humanboard::board_index::{BoardIndex, BoardMetadata};
 use humanboard::types::{CanvasItem, ItemContent};
 use gpui::{point, px};
+use std::collections::HashMap;
 
 #[test]
 fn test_new_board_workflow() {
@@ -51,6 +52,8 @@ fn test_board_state_round_trip() {
             content: item.content.clone(),
         }).collect(),
         next_item_id: board.next_item_id,
+        data_sources: board.data_sources.clone(),
+        next_data_source_id: board.next_data_source_id,
     };
 
     let json = serde_json::to_string_pretty(&state).unwrap();
@@ -151,6 +154,8 @@ fn test_complete_board_lifecycle() {
             id: item.id, position: item.position, size: item.size, content: item.content.clone(),
         }).collect(),
         next_item_id: board.next_item_id,
+        data_sources: board.data_sources.clone(),
+        next_data_source_id: board.next_data_source_id,
     };
 
     let json = serde_json::to_string(&state).unwrap();
@@ -181,6 +186,8 @@ fn test_board_with_mixed_content_types() {
             id: item.id, position: item.position, size: item.size, content: item.content.clone(),
         }).collect(),
         next_item_id: board.next_item_id,
+        data_sources: board.data_sources.clone(),
+        next_data_source_id: board.next_data_source_id,
     };
 
     let json = serde_json::to_string(&state).unwrap();

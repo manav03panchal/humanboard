@@ -226,6 +226,12 @@ impl Humanboard {
                     self.drawing_start = Some(mouse_pos);
                     self.drawing_current = Some(mouse_pos);
                 }
+                ToolType::Table | ToolType::Chart => {
+                    // Table and Chart creation handled via dedicated UI
+                    // Clicking on canvas just places a default item
+                    self.drawing_start = Some(mouse_pos);
+                    self.drawing_current = Some(mouse_pos);
+                }
             }
         }
 

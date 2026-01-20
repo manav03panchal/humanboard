@@ -5,6 +5,7 @@
 use humanboard::board::{Board, UndoOperation};
 use humanboard::types::{CanvasItem, ItemContent};
 use gpui::{point, px};
+use std::collections::HashMap;
 
 // Match the constant from board.rs for delta-based history
 const MAX_HISTORY_OPERATIONS: usize = 100;
@@ -191,6 +192,8 @@ fn test_board_state_serialization() {
             content: ItemContent::Text("Test".to_string()),
         }],
         next_item_id: 2,
+        data_sources: HashMap::new(),
+        next_data_source_id: 0,
     };
 
     let json = serde_json::to_string(&state).unwrap();
