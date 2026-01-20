@@ -11,9 +11,8 @@
 //! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::app::{Humanboard, SplitDirection};
-use crate::constants::HEADER_HEIGHT;
+use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
 use crate::profile_scope;
-use crate::render::dock::DOCK_WIDTH;
 use crate::types::ItemContent;
 use gpui::*;
 
@@ -61,9 +60,9 @@ impl Humanboard {
                     let mouse_x = f32::from(event.position.x);
                     let mouse_y = f32::from(event.position.y);
 
-                    let header_height = 40.0;
-                    let footer_height = 28.0;
-                    let dock_width = 40.0;
+                    let header_height = HEADER_HEIGHT;
+                    let footer_height = crate::constants::FOOTER_HEIGHT;
+                    let dock_width = DOCK_WIDTH;
 
                     let (panel_start, panel_size) = match preview.split {
                         SplitDirection::Vertical => {

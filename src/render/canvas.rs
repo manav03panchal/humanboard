@@ -17,6 +17,7 @@
 
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
+use crate::constants::HEADER_HEIGHT;
 use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
 use crate::profile_scope;
 use crate::types::{CanvasItem, ItemContent};
@@ -841,8 +842,13 @@ pub fn render_canvas_area(
         ))
         // Render marquee selection rectangle
         .when_some(marquee, |d, (start, current)| {
-            let min_x = f32::from(start.x).min(f32::from(current.x));
-            let max_x = f32::from(start.x).max(f32::from(current.x));
+            // Account for dock width since mouse coords are in window space
+            // but we're rendering in canvas space (after dock)
+            let dock_offset = crate::constants::DOCK_WIDTH;
+            let start_x = f32::from(start.x) - dock_offset;
+            let current_x = f32::from(current.x) - dock_offset;
+            let min_x = start_x.min(current_x);
+            let max_x = start_x.max(current_x);
             let min_y = f32::from(start.y).min(f32::from(current.y));
             let max_y = f32::from(start.y).max(f32::from(current.y));
             let width = max_x - min_x;
@@ -854,7 +860,7 @@ pub fn render_canvas_area(
                     div()
                         .absolute()
                         .left(px(min_x))
-                        .top(px(min_y - 40.0)) // Account for header offset
+                        .top(px(min_y - HEADER_HEIGHT)) // Account for header offset
                         .w(px(width))
                         .h(px(height))
                         .border_1()
@@ -868,9 +874,9 @@ pub fn render_canvas_area(
         })
         // Render drawing preview (for TextBox, Shape, Arrow while dragging)
         .when_some(drawing_preview, |d, (start, current, tool)| {
-            // Account for dock width (44px) since mouse coords are in window space
+            // Account for dock width since mouse coords are in window space
             // but we're rendering in canvas space (after dock)
-            let dock_offset = crate::render::dock::DOCK_WIDTH;
+            let dock_offset = crate::constants::DOCK_WIDTH;
             let start_x = f32::from(start.x) - dock_offset;
             let start_y = f32::from(start.y);
             let current_x = f32::from(current.x) - dock_offset;
@@ -892,7 +898,7 @@ pub fn render_canvas_area(
                             div()
                                 .absolute()
                                 .left(px(min_x))
-                                .top(px(min_y - 40.0)) // Account for header offset
+                                .top(px(min_y - HEADER_HEIGHT)) // Account for header offset
                                 .w(px(width.max(20.0)))
                                 .h(px(height.max(20.0)))
                                 .border_2()
@@ -904,9 +910,9 @@ pub fn render_canvas_area(
                     crate::types::ToolType::Arrow => {
                         // Arrow preview - line from start to current
                         let arrow_start_x = start_x;
-                        let arrow_start_y = start_y - 40.0; // Account for header
+                        let arrow_start_y = start_y - HEADER_HEIGHT; // Account for header
                         let arrow_end_x = current_x;
-                        let arrow_end_y = current_y - 40.0;
+                        let arrow_end_y = current_y - HEADER_HEIGHT;
 
                         d.child(
                             div()

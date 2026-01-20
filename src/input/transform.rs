@@ -1,7 +1,7 @@
 //! Canvas transformations - scroll, zoom, coordinate conversion.
 
 use crate::app::Humanboard;
-use crate::render::dock::DOCK_WIDTH;
+use crate::constants::DOCK_WIDTH;
 use gpui::*;
 
 impl Humanboard {

@@ -1,6 +1,7 @@
 //! Core preview panel methods - opening, PDF/code webviews, markdown/code editing.
 
 use super::{FocusedPane, Humanboard, PreviewPanel, PreviewTab, SplitDirection, TabMeta};
+use crate::constants::{DOCK_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT};
 use crate::focus::FocusContext;
 use crate::pdf_webview::PdfWebView;
 use gpui::*;
@@ -151,9 +152,9 @@ impl Humanboard {
             let window_height = f32::from(bounds.size.height);
 
             // Preview panel position and size
-            let header_height = 40.0;
-            let footer_height = 28.0;
-            let dock_width = 40.0; // Tool dock on left
+            let header_height = HEADER_HEIGHT;
+            let footer_height = FOOTER_HEIGHT;
+            let dock_width = DOCK_WIDTH;
             let tab_bar_height = 36.0;
 
             let main_splitter_size = 8.0; // Splitter between canvas and preview panel
