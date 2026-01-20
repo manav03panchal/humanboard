@@ -8,7 +8,7 @@
 
 use super::{Humanboard, PreviewTab, SplitDirection};
 use crate::audio_webview::AudioWebView;
-use crate::constants::{WEBVIEW_PRELOAD_DISTANCE, WEBVIEW_UNLOAD_DELAY_MS, WEBVIEW_UNLOAD_DISTANCE};
+use crate::constants::{HEADER_HEIGHT, WEBVIEW_PRELOAD_DISTANCE, WEBVIEW_UNLOAD_DELAY_MS, WEBVIEW_UNLOAD_DISTANCE};
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
@@ -381,7 +381,7 @@ impl Humanboard {
         };
 
         // Header offset
-        let header_height = 40.0;
+        let header_height = HEADER_HEIGHT;
         let canvas_top = header_height;
 
         let zoom = board.zoom;

@@ -14,6 +14,7 @@
 //! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::board_index::BoardIndex;
+use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
 use crate::error::BoardError;
 use crate::profile_scope;
 use crate::spatial_index::SpatialIndex;
@@ -627,9 +628,6 @@ impl Board {
     /// Convert screen position to canvas position
     #[inline]
     pub fn screen_to_canvas(&self, screen_pos: Point<Pixels>) -> Point<Pixels> {
-        // Account for dock width (44px) and header (40px)
-        const DOCK_WIDTH: f32 = 44.0;
-        const HEADER_HEIGHT: f32 = 40.0;
         point(
             px(
                 (f32::from(screen_pos.x) - DOCK_WIDTH - f32::from(self.canvas_offset.x))

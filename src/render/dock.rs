@@ -1,13 +1,11 @@
 //! Tool dock rendering - left-side toolbar for Miro-style tools
 
 use crate::app::Humanboard;
+use crate::constants::DOCK_WIDTH;
 use crate::focus_ring::focus_ring_shadow;
 use crate::types::ToolType;
 use gpui::*;
 use gpui_component::ActiveTheme as _;
-
-/// Width of the tool dock
-pub const DOCK_WIDTH: f32 = 44.0;
 
 /// Render a single tool button with focus ring support
 fn render_tool_button(

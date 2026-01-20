@@ -9,9 +9,8 @@
 //! Enable profiling with `cargo build --features profiling` to see timing.
 
 use crate::app::{Humanboard, SplitDirection};
-use crate::constants::{HEADER_HEIGHT, SPLITTER_WIDTH};
+use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT, SPLITTER_WIDTH};
 use crate::profile_scope;
-use crate::render::dock::DOCK_WIDTH;
 use crate::types::{ItemContent, ToolType};
 use gpui::*;
 
@@ -85,6 +84,9 @@ impl Humanboard {
         profile_scope!("hit_test_items");
 
         // Convert mouse position to canvas coordinates for spatial query
+        // Mouse coordinates are window-relative. Items are rendered within canvas_area
+        // which is offset by dock_width from the left edge, so we must subtract it.
+        // Formula: canvas_pos = (screen_pos - dock - canvas_offset) / zoom
         let canvas_x = (f32::from(mouse_pos.x) - dock_offset - f32::from(board.canvas_offset.x)) / board.zoom;
         let canvas_y = (f32::from(mouse_pos.y) - header_offset - f32::from(board.canvas_offset.y)) / board.zoom;
 

@@ -1,8 +1,7 @@
 //! Mouse up event handling - finalize operations, create drawn items.
 
 use crate::app::Humanboard;
-use crate::constants::{DEFAULT_FONT_SIZE, HEADER_HEIGHT};
-use crate::render::dock::DOCK_WIDTH;
+use crate::constants::{DEFAULT_FONT_SIZE, DOCK_WIDTH, HEADER_HEIGHT};
 use crate::types::{ArrowHead, ItemContent, ShapeType, ToolType};
 use gpui::*;
 

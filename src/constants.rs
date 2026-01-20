@@ -11,7 +11,7 @@
 pub const HEADER_HEIGHT: f32 = 40.0;
 
 /// Width of the tool dock (left sidebar) in pixels
-pub const DOCK_WIDTH: f32 = 48.0;
+pub const DOCK_WIDTH: f32 = 44.0;
 
 /// Height of the footer bar in pixels
 pub const FOOTER_HEIGHT: f32 = 28.0;
