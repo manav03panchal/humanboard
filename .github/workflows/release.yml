@@ -25,8 +25,6 @@ jobs:
 
       - name: Build release
         run: cargo build --release
-        env:
-          RUSTFLAGS: "-C target-cpu=apple-m1"
 
       - name: Create app bundle and DMG
         run: |
@@ -54,7 +52,7 @@ jobs:
             ### Homebrew (recommended)
             ```bash
             brew tap manav03panchal/humanboard
-            brew install --cask --no-quarantine humanboard
+            brew install --cask humanboard
             ```
 
             ### Manual Download
@@ -70,10 +68,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Homebrew tap
+      - name: Output Homebrew update info
         run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.TAP_UPDATE_TOKEN }}" \
-            https://api.github.com/repos/manav03panchal/homebrew-humanboard/dispatches \
-            -d '{"event_type":"update-cask","client_payload":{"version":"${{ steps.version.outputs.version }}","sha256":"${{ steps.sha.outputs.sha256 }}"}}'
+          echo "========================================"
+          echo "Update homebrew-humanboard cask with:"
+          echo "  version \"${{ steps.version.outputs.version }}\""
+          echo "  sha256 \"${{ steps.sha.outputs.sha256 }}\""
+          echo "========================================"
