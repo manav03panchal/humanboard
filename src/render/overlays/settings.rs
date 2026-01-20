@@ -145,6 +145,7 @@ fn render_settings_sidebar(
         .bg(title_bar)
         .border_r_1()
         .border_color(border)
+        .rounded_l(px(10.0))
         .p_2()
         .gap_1()
         // Appearance tab
