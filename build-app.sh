@@ -3,9 +3,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-echo "Building release..."
-cargo build --release
-
 echo "Creating app bundle..."
 APP_NAME="Humanboard"
 APP_DIR="$APP_NAME.app"
