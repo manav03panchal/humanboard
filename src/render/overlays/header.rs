@@ -98,6 +98,8 @@ fn render_header_left(
 }
 
 fn render_header_right(muted_fg: Hsla, list_hover: Hsla, cx: &mut Context<Humanboard>) -> Div {
+    let active_bg = list_hover.opacity(0.8);
+
     h_flex()
         .gap_2()
         // Add button
@@ -109,6 +111,7 @@ fn render_header_right(muted_fg: Hsla, list_hover: Hsla, cx: &mut Context<Humanb
                 .rounded(px(4.0))
                 .cursor(CursorStyle::PointingHand)
                 .hover(|s| s.bg(list_hover))
+                .active(|s| s.bg(active_bg))
                 .text_sm()
                 .text_color(muted_fg)
                 .child(
@@ -131,6 +134,7 @@ fn render_header_right(muted_fg: Hsla, list_hover: Hsla, cx: &mut Context<Humanb
                 .rounded(px(4.0))
                 .cursor(CursorStyle::PointingHand)
                 .hover(|s| s.bg(list_hover))
+                .active(|s| s.bg(active_bg))
                 .child(Icon::new(IconName::Settings).size(px(14.0)).text_color(muted_fg))
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.toggle_settings(window, cx);
@@ -145,6 +149,7 @@ fn render_header_right(muted_fg: Hsla, list_hover: Hsla, cx: &mut Context<Humanb
                 .rounded(px(4.0))
                 .cursor(CursorStyle::PointingHand)
                 .hover(|s| s.bg(list_hover))
+                .active(|s| s.bg(active_bg))
                 .text_sm()
                 .text_color(muted_fg)
                 .child("?")
@@ -229,6 +234,7 @@ pub fn render_footer_bar(
                         .rounded(px(4.0))
                         .cursor_pointer()
                         .hover(|s| s.bg(muted))
+                        .active(|s| s.bg(muted.opacity(0.7)))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_command_palette(window, cx);
                         }))
@@ -256,6 +262,7 @@ pub fn render_footer_bar(
                         .rounded(px(4.0))
                         .cursor_pointer()
                         .hover(|s| s.bg(muted))
+                        .active(|s| s.bg(muted.opacity(0.7)))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_shortcuts = !this.show_shortcuts;
                             cx.notify();

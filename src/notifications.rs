@@ -228,6 +228,25 @@ impl Toast {
             remaining * 5.0
         }
     }
+
+    /// Get the slide-in offset in pixels (0.0 when fully visible)
+    /// Toast slides in from the right over 200ms
+    /// If reduce_motion is true, returns 0.0 (no slide animation)
+    pub fn slide_offset(&self, reduce_motion: bool) -> f32 {
+        if reduce_motion {
+            return 0.0;
+        }
+        let elapsed_ms = self.created_at.elapsed().as_millis() as f32;
+        let slide_duration_ms = 200.0;
+        if elapsed_ms >= slide_duration_ms {
+            0.0
+        } else {
+            // Ease-out cubic for smooth deceleration
+            let progress = elapsed_ms / slide_duration_ms;
+            let eased = 1.0 - (1.0 - progress).powi(3);
+            (1.0 - eased) * 100.0 // Start 100px off to the right
+        }
+    }
 }
 
 /// Manager for toast notifications
@@ -297,6 +316,7 @@ pub fn render_toast(
 
     let bg = toast.variant.background_color(theme);
     let opacity = toast.opacity(reduce_motion);
+    let slide_offset = toast.slide_offset(reduce_motion);
     let icon = toast.variant.icon();
     let text = toast.variant.text_color(theme).opacity(opacity);
     let toast_id = toast.id;
@@ -310,11 +330,13 @@ pub fn render_toast(
         .px_4()
         .py_3()
         .mb_2()
-        .bg(bg)
+        .bg(bg.opacity(opacity))
         .text_color(text)
         .rounded_lg()
         .shadow_lg()
         .overflow_hidden()
+        // Slide-in animation: negative margin to slide in from right
+        .mr(px(-slide_offset))
         .child(
             div()
                 .text_lg()

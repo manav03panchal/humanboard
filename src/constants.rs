@@ -144,3 +144,61 @@ pub const WEBVIEW_PRELOAD_DISTANCE: f32 = 500.0;
 /// Minimum time (in milliseconds) a webview must be out of range before unloading
 /// 5 minutes - preserves playback state for reasonable pan-away durations
 pub const WEBVIEW_UNLOAD_DELAY_MS: u64 = 300_000;
+
+// ============================================================================
+// UI Spacing & Visual Consistency
+// ============================================================================
+
+/// Standard border radius for small elements (buttons, badges)
+pub const BORDER_RADIUS_SM: f32 = 4.0;
+
+/// Standard border radius for medium elements (cards, inputs)
+pub const BORDER_RADIUS_MD: f32 = 6.0;
+
+/// Standard border radius for large elements (modals, panels)
+pub const BORDER_RADIUS_LG: f32 = 10.0;
+
+/// Standard border radius for extra-large elements (full cards)
+pub const BORDER_RADIUS_XL: f32 = 12.0;
+
+/// Standard padding for compact elements
+pub const PADDING_XS: f32 = 4.0;
+
+/// Standard padding for small elements
+pub const PADDING_SM: f32 = 8.0;
+
+/// Standard padding for medium elements
+pub const PADDING_MD: f32 = 12.0;
+
+/// Standard padding for large elements
+pub const PADDING_LG: f32 = 16.0;
+
+/// Standard gap for tight spacing
+pub const GAP_XS: f32 = 2.0;
+
+/// Standard gap for small spacing
+pub const GAP_SM: f32 = 4.0;
+
+/// Standard gap for medium spacing
+pub const GAP_MD: f32 = 8.0;
+
+/// Standard gap for large spacing
+pub const GAP_LG: f32 = 12.0;
+
+/// Icon size for small icons
+pub const ICON_SIZE_SM: f32 = 12.0;
+
+/// Icon size for medium icons
+pub const ICON_SIZE_MD: f32 = 14.0;
+
+/// Icon size for large icons
+pub const ICON_SIZE_LG: f32 = 16.0;
+
+/// Standard button height (small)
+pub const BUTTON_HEIGHT_SM: f32 = 28.0;
+
+/// Standard button height (medium)
+pub const BUTTON_HEIGHT_MD: f32 = 32.0;
+
+/// Standard button height (large)
+pub const BUTTON_HEIGHT_LG: f32 = 40.0;
