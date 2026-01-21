@@ -103,6 +103,7 @@ impl Humanboard {
             pending_textbox_drag: None,
             editing_table_cell: None,
             table_cell_input: None,
+            chart_config_modal: None,
             hit_tester: HitTester::new(),
             perf_monitor: PerfMonitor::new(),
             background: BackgroundExecutor::with_default_workers(),

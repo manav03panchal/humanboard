@@ -31,4 +31,4 @@ mod data_viz;
 mod table_editing;
 
 pub use types::*;
-pub use state::Humanboard;
+pub use state::{ChartConfigModal, Humanboard};

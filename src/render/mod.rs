@@ -15,8 +15,8 @@ pub mod preview;
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use dock::render_tool_dock;
 pub use overlays::{
-    render_command_palette, render_create_board_modal, render_footer_bar, render_header_bar,
-    render_settings_modal, render_shortcuts_overlay,
+    render_chart_config_modal, render_command_palette, render_create_board_modal,
+    render_footer_bar, render_header_bar, render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
     render_drag_ghost, render_preview_panel, render_search_bar, render_selected_item_label,
@@ -166,6 +166,10 @@ impl Render for Humanboard {
                     ))
                 },
             )
+            // Chart configuration modal
+            .when_some(self.chart_config_modal.as_ref(), |d, modal| {
+                d.child(render_chart_config_modal(modal, cx))
+            })
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
                 d.child(render_toast_container(&toasts, reduce_motion, cx))

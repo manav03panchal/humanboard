@@ -24,6 +24,36 @@ use std::time::{Duration, Instant};
 
 use super::PanAnimation;
 
+/// State for the chart configuration modal
+#[derive(Clone)]
+pub struct ChartConfigModal {
+    /// ID of the table item being configured
+    pub table_item_id: u64,
+    /// Data source ID for the table
+    pub data_source_id: u64,
+    /// Selected chart type
+    pub chart_type: crate::types::ChartType,
+    /// Selected X axis column index
+    pub x_column: usize,
+    /// Selected Y axis column indices
+    pub y_columns: Vec<usize>,
+    /// Column names for display
+    pub column_names: Vec<String>,
+}
+
+impl ChartConfigModal {
+    pub fn new(table_item_id: u64, data_source_id: u64, column_names: Vec<String>) -> Self {
+        Self {
+            table_item_id,
+            data_source_id,
+            chart_type: crate::types::ChartType::Bar,
+            x_column: 0,
+            y_columns: if column_names.len() > 1 { vec![1] } else { vec![0] },
+            column_names,
+        }
+    }
+}
+
 pub struct Humanboard {
     // View state
     pub view: super::AppView,
@@ -140,6 +170,9 @@ pub struct Humanboard {
     // Table cell editing
     pub editing_table_cell: Option<(u64, usize, usize)>, // (table_item_id, row, col)
     pub table_cell_input: Option<Entity<gpui_component::input::InputState>>,
+
+    // Chart configuration modal state
+    pub chart_config_modal: Option<ChartConfigModal>,
 
     // Hit testing
     pub hit_tester: HitTester,

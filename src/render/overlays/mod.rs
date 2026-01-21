@@ -7,7 +7,9 @@
 //! - Command palette popup
 //! - Settings modal
 //! - Create board modal
+//! - Chart configuration modal
 
+mod chart_config;
 mod command_palette;
 mod create_board;
 mod header;
@@ -18,6 +20,7 @@ mod settings_dropdowns;
 mod shortcuts;
 
 // Re-export all public items
+pub use chart_config::render_chart_config_modal;
 pub use command_palette::render_command_palette;
 pub use create_board::render_create_board_modal;
 pub use header::{render_footer_bar, render_header_bar};

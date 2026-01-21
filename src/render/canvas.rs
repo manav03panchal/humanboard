@@ -1459,72 +1459,43 @@ pub fn render_items(
                             }))
                     )
                 })
-                // Add chart creation buttons for tables when selected (top-left corner)
+                // Add "Create Chart" button for tables when selected (top-right, above table)
                 .when(is_table && show_selection, |d| {
                     let primary_fg = cx.theme().primary_foreground;
-                    let btn_size = 20.0 * zoom;
-                    let btn_gap = 2.0 * zoom;
+                    let btn_height = 28.0 * zoom;
+                    let btn_padding = 12.0 * zoom;
                     d.child(
                         div()
+                            .id(ElementId::Name(format!("create-chart-{}", item_id).into()))
                             .absolute()
-                            .top(px(4.0 * zoom))
-                            .left(px(4.0 * zoom))
+                            .top(px(-btn_height - 8.0 * zoom))  // Above the table
+                            .right(px(0.0))
+                            .h(px(btn_height))
+                            .px(px(btn_padding))
+                            .bg(primary)
+                            .rounded(px(6.0 * zoom))
+                            .cursor_pointer()
                             .flex()
                             .flex_row()
-                            .gap(px(btn_gap))
+                            .items_center()
+                            .gap(px(6.0 * zoom))
+                            .hover(|s| s.opacity(0.9))
+                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.show_chart_config_modal(item_id, cx);
+                            }))
                             .child(
-                                // Bar chart button
                                 div()
-                                    .id(ElementId::Name(format!("chart-bar-{}", item_id).into()))
-                                    .w(px(btn_size))
-                                    .h(px(btn_size))
-                                    .bg(primary)
-                                    .rounded(px(3.0 * zoom))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.create_chart_from_table(item_id, crate::types::ChartType::Bar, cx);
-                                    }))
-                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("▮"))
+                                    .text_size(px(14.0 * zoom))
+                                    .text_color(primary_fg)
+                                    .child("📊")
                             )
                             .child(
-                                // Line chart button
                                 div()
-                                    .id(ElementId::Name(format!("chart-line-{}", item_id).into()))
-                                    .w(px(btn_size))
-                                    .h(px(btn_size))
-                                    .bg(primary)
-                                    .rounded(px(3.0 * zoom))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.create_chart_from_table(item_id, crate::types::ChartType::Line, cx);
-                                    }))
-                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("📈"))
-                            )
-                            .child(
-                                // Pie chart button
-                                div()
-                                    .id(ElementId::Name(format!("chart-pie-{}", item_id).into()))
-                                    .w(px(btn_size))
-                                    .h(px(btn_size))
-                                    .bg(primary)
-                                    .rounded(px(3.0 * zoom))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.create_chart_from_table(item_id, crate::types::ChartType::Pie, cx);
-                                    }))
-                                    .child(div().text_size(px(10.0 * zoom)).text_color(primary_fg).child("◐"))
+                                    .text_size(px(12.0 * zoom))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(primary_fg)
+                                    .child("Create Chart")
                             )
                     )
                 })
