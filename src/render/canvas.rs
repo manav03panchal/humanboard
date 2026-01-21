@@ -1312,7 +1312,10 @@ fn parse_hex_color(hex: &str) -> Option<Hsla> {
 /// Render all canvas items with positioning and selection
 ///
 /// This is a key hot path - called every frame for all visible items.
-/// Performance scales with O(n) where n is the number of items.
+/// Performance optimizations:
+/// - Viewport culling: Only renders items within the visible viewport
+/// - Pre-computed bounds: Calculates screen positions once per item
+/// - Early exit for items outside viewport
 pub fn render_items(
     items: &[CanvasItem],
     canvas_offset: Point<Pixels>,
@@ -1326,6 +1329,7 @@ pub fn render_items(
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
     table_cell_input: Option<&Entity<InputState>>,
+    viewport_size: Size<Pixels>,
     cx: &Context<Humanboard>,
 ) -> Vec<Div> {
     profile_scope!("render_items");
@@ -1333,30 +1337,45 @@ pub fn render_items(
     let offset_x = f32::from(canvas_offset.x);
     let offset_y = f32::from(canvas_offset.y);
 
+    // Viewport bounds for culling (with margin to prevent pop-in)
+    use crate::constants::CULLING_MARGIN;
+    let vp_left = -CULLING_MARGIN;
+    let vp_top = -CULLING_MARGIN;
+    let vp_right = f32::from(viewport_size.width) + CULLING_MARGIN;
+    let vp_bottom = f32::from(viewport_size.height) + CULLING_MARGIN;
+
     let fg = cx.theme().foreground;
     let muted_fg = cx.theme().muted_foreground;
     let muted_bg = cx.theme().muted;
     let danger = cx.theme().danger;
     let primary = cx.theme().primary;
 
-    items
-        .iter()
-        .map(|item| {
-            let x = item.position.0 * zoom + offset_x;
-            let y = item.position.1 * zoom + offset_y;
-            let w = item.size.0 * zoom;
-            let h = item.size.1 * zoom;
-            let is_selected = selected_items.contains(&item.id);
+    // Pre-allocate with estimated visible items to reduce allocations
+    let mut result = Vec::with_capacity(items.len().min(100));
 
-            // Check if this textbox is currently being edited
-            let is_editing_this = editing_textbox_id == Some(item.id);
-            // Don't show selection border while editing textbox (it has its own editing border)
-            let show_selection = is_selected && !is_editing_this;
+    for item in items {
+        let x = item.position.0 * zoom + offset_x;
+        let y = item.position.1 * zoom + offset_y;
+        let w = item.size.0 * zoom;
+        let h = item.size.1 * zoom;
 
-            // Check if this is a table item (for chart creation button)
-            let is_table = matches!(&item.content, ItemContent::Table { .. });
-            let item_id = item.id;
+        // VIEWPORT CULLING: Skip items completely outside visible area
+        if x + w < vp_left || x > vp_right || y + h < vp_top || y > vp_bottom {
+            continue;
+        }
 
+        let is_selected = selected_items.contains(&item.id);
+
+        // Check if this textbox is currently being edited
+        let is_editing_this = editing_textbox_id == Some(item.id);
+        // Don't show selection border while editing textbox (it has its own editing border)
+        let show_selection = is_selected && !is_editing_this;
+
+        // Check if this is a table item (for chart creation button)
+        let is_table = matches!(&item.content, ItemContent::Table { .. });
+        let item_id = item.id;
+
+        result.push(
             div()
                 .absolute()
                 .left(px(x))
@@ -1527,9 +1546,11 @@ pub fn render_items(
                                 .rounded(px(2.0 * zoom))
                                 .cursor(CursorStyle::ResizeUpLeftDownRight),
                         )
-                })
-        })
-        .collect()
+                }),
+        );
+    }
+
+    result
 }
 
 /// Render the canvas area container
@@ -1553,6 +1574,7 @@ pub fn render_canvas_area(
     table_cell_input: Option<&Entity<InputState>>,
     marquee: Option<(Point<Pixels>, Point<Pixels>)>,
     drawing_preview: Option<(Point<Pixels>, Point<Pixels>, crate::types::ToolType)>,
+    viewport_size: Size<Pixels>,
     cx: &Context<Humanboard>,
 ) -> Div {
     profile_scope!("render_canvas_area");
@@ -1581,6 +1603,7 @@ pub fn render_canvas_area(
             textbox_input,
             editing_table_cell,
             table_cell_input,
+            viewport_size,
             cx,
         ))
         // Render marquee selection rectangle

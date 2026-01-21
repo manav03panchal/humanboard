@@ -356,6 +356,29 @@ impl Humanboard {
             .as_ref()
             .map(|p| (p, p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
 
+        // Compute canvas viewport size for culling (accounts for dock, header, footer, preview)
+        let window_bounds = window.bounds();
+        let canvas_viewport_size = {
+            use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT, FOOTER_HEIGHT};
+            let available_width = f32::from(window_bounds.size.width) - DOCK_WIDTH;
+            let available_height = f32::from(window_bounds.size.height) - HEADER_HEIGHT - FOOTER_HEIGHT;
+
+            if let Some(ref preview) = self.preview {
+                match preview.split {
+                    SplitDirection::Vertical => {
+                        let canvas_width = available_width * (1.0 - preview.size);
+                        gpui::size(gpui::px(canvas_width), gpui::px(available_height))
+                    }
+                    SplitDirection::Horizontal => {
+                        let canvas_height = available_height * (1.0 - preview.size);
+                        gpui::size(gpui::px(available_width), gpui::px(canvas_height))
+                    }
+                }
+            } else {
+                gpui::size(gpui::px(available_width), gpui::px(available_height))
+            }
+        };
+
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
         let input_active = self.focus.is_input_active();
@@ -594,6 +617,7 @@ impl Humanboard {
                                             self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -723,6 +747,7 @@ impl Humanboard {
                                             self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -843,6 +868,7 @@ impl Humanboard {
                     self.table_cell_input.as_ref(),
                     marquee,
                     drawing_preview,
+                    canvas_viewport_size,
                     cx,
                 ))),
         }
