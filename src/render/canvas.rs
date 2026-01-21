@@ -1459,43 +1459,44 @@ pub fn render_items(
                             }))
                     )
                 })
-                // Add "Create Chart" button for tables when selected (top-right, above table)
+                // Add "Create Chart" button for tables when selected (top-right corner inside table)
                 .when(is_table && show_selection, |d| {
                     let primary_fg = cx.theme().primary_foreground;
-                    let btn_height = 28.0 * zoom;
-                    let btn_padding = 12.0 * zoom;
+                    let btn_height = 26.0 * zoom;
+                    let btn_padding = 10.0 * zoom;
                     d.child(
                         div()
                             .id(ElementId::Name(format!("create-chart-{}", item_id).into()))
                             .absolute()
-                            .top(px(-btn_height - 8.0 * zoom))  // Above the table
-                            .right(px(0.0))
+                            .top(px(6.0 * zoom))
+                            .right(px(6.0 * zoom))
                             .h(px(btn_height))
                             .px(px(btn_padding))
                             .bg(primary)
-                            .rounded(px(6.0 * zoom))
+                            .rounded(px(4.0 * zoom))
                             .cursor_pointer()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(6.0 * zoom))
-                            .hover(|s| s.opacity(0.9))
+                            .gap(px(4.0 * zoom))
+                            .shadow_md()
+                            .hover(|s| s.opacity(0.85))
                             .on_mouse_down(MouseButton::Left, |_, _, _| {})
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.show_chart_config_modal(item_id, cx);
                             }))
                             .child(
                                 div()
-                                    .text_size(px(14.0 * zoom))
+                                    .text_size(px(12.0 * zoom))
                                     .text_color(primary_fg)
                                     .child("📊")
                             )
                             .child(
                                 div()
-                                    .text_size(px(12.0 * zoom))
+                                    .text_size(px(11.0 * zoom))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(primary_fg)
-                                    .child("Create Chart")
+                                    .child("Chart")
                             )
                     )
                 })
