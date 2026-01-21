@@ -355,6 +355,28 @@ impl Humanboard {
             .as_ref()
             .map(|p| (p, p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
 
+        // Compute canvas viewport size for culling (accounts for preview split)
+        let window_bounds = window.bounds();
+        let window_size = window_bounds.size;
+        let canvas_viewport_size = if let Some((_, split, preview_fraction, _, _, _)) = preview_info {
+            match split {
+                SplitDirection::Vertical => {
+                    let canvas_width = f32::from(window_size.width) * (1.0 - preview_fraction)
+                        - crate::constants::DOCK_WIDTH;
+                    Size { width: px(canvas_width), height: window_size.height - px(68.0) } // header + footer
+                }
+                SplitDirection::Horizontal => {
+                    let canvas_height = f32::from(window_size.height) * (1.0 - preview_fraction) - 68.0;
+                    Size { width: window_size.width - px(crate::constants::DOCK_WIDTH), height: px(canvas_height) }
+                }
+            }
+        } else {
+            Size {
+                width: window_size.width - px(crate::constants::DOCK_WIDTH),
+                height: window_size.height - px(68.0), // header + footer
+            }
+        };
+
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
         let input_active = self.focus.is_input_active();
@@ -590,6 +612,7 @@ impl Humanboard {
                                             self.textbox_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -716,6 +739,7 @@ impl Humanboard {
                                             self.textbox_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -833,6 +857,7 @@ impl Humanboard {
                     self.textbox_input.as_ref(),
                     marquee,
                     drawing_preview,
+                    canvas_viewport_size,
                     cx,
                 ))),
         }
