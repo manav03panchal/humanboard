@@ -964,16 +964,21 @@ fn render_item_content(
                     use std::collections::HashMap;
                     use crate::types::{AggregationType, SortOrder};
 
-                    // Group raw values by label (X column)
+                    // Group raw values by label (X column), preserving insertion order
+                    let mut group_order: Vec<String> = Vec::new();
                     let mut groups: HashMap<String, Vec<f64>> = HashMap::new();
                     for row in &data_source.rows {
                         let label = row.cells.get(x_col).map(|c| c.to_string()).unwrap_or_default();
                         let value = row.cells.get(y_col).map(|c| c.to_f64()).unwrap_or(0.0);
+                        if !groups.contains_key(&label) {
+                            group_order.push(label.clone());
+                        }
                         groups.entry(label).or_default().push(value);
                     }
 
-                    // Apply aggregation
-                    let mut points: Vec<(String, f64)> = groups.into_iter().map(|(label, values)| {
+                    // Apply aggregation in insertion order
+                    let mut points: Vec<(String, f64)> = group_order.into_iter().map(|label| {
+                        let values = groups.get(&label).unwrap();
                         let aggregated = match config.aggregation {
                             AggregationType::None => values.first().copied().unwrap_or(0.0),
                             AggregationType::Sum => values.iter().sum(),
@@ -990,7 +995,7 @@ fn render_item_content(
 
                     // Apply sorting
                     match config.sort_order {
-                        SortOrder::None => {} // Keep insertion order (from HashMap, somewhat arbitrary)
+                        SortOrder::None => {} // Keep original insertion order
                         SortOrder::LabelAsc => points.sort_by(|a, b| a.0.cmp(&b.0)),
                         SortOrder::LabelDesc => points.sort_by(|a, b| b.0.cmp(&a.0)),
                         SortOrder::ValueAsc => points.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)),
