@@ -752,7 +752,7 @@ fn render_item_content(
             let border_color = muted_fg.opacity(0.3);
             let header_bg = muted_bg.opacity(0.5);
             let stripe_bg = muted_bg.opacity(0.3);
-            let cell_height = 28.0 * zoom;
+            let cell_height = ROW_HEIGHT * zoom;
             let cell_padding = 8.0 * zoom;
             let font_size = 12.0 * zoom;
 
@@ -760,6 +760,20 @@ fn render_item_content(
             if let Some(data_source) = data_sources.get(data_source_id) {
                 let col_count = data_source.column_count();
                 let row_count = data_source.row_count();
+
+                // Get scroll state for this table (or use default)
+                let default_scroll = VirtualScrollState::default();
+                let scroll_state = table_scroll_states.get(&item.id).unwrap_or(&default_scroll);
+
+                // Calculate visible rows using virtual scrolling
+                let header_height = if *show_headers { cell_height } else { 0.0 };
+                let visible_height = (item.size.1 * zoom - header_height).max(0.0);
+                let visible_row_count = (visible_height / cell_height).ceil() as usize + 1;
+
+                // Calculate start row based on scroll position
+                let start_row = (scroll_state.scroll_y / cell_height).floor() as usize;
+                let start_row = start_row.saturating_sub(BUFFER_ROWS);
+                let end_row = (start_row + visible_row_count + BUFFER_ROWS * 2).min(row_count);
 
                 // Calculate column widths (equal distribution for now)
                 let item_width = item.size.0 * zoom;
@@ -779,8 +793,10 @@ fn render_item_content(
                     .flex_col()
                     .overflow_hidden();
 
-                // Render header row
+                // Render header row with row count indicator
                 if *show_headers && col_count > 0 {
+                    let row_count_label = format_row_count(row_count);
+
                     let mut header_row = div()
                         .w_full()
                         .h(px(cell_height))
@@ -792,15 +808,13 @@ fn render_item_content(
 
                     for (col_idx, col) in data_source.columns.iter().enumerate() {
                         let is_last = col_idx == col_count - 1;
-                        header_row = header_row.child(
+
+                        // Add row count badge to first column header
+                        let column_content = if col_idx == 0 {
                             div()
-                                .w(px(col_width))
-                                .h_full()
-                                .px(px(cell_padding))
                                 .flex()
                                 .items_center()
-                                .overflow_hidden()
-                                .when(!is_last, |d| d.border_r_1().border_color(border_color))
+                                .gap(px(6.0 * zoom))
                                 .child(
                                     div()
                                         .text_size(px(font_size))
@@ -811,16 +825,48 @@ fn render_item_content(
                                         .whitespace_nowrap()
                                         .child(col.name.clone())
                                 )
+                                .child(
+                                    div()
+                                        .px(px(4.0 * zoom))
+                                        .py(px(1.0 * zoom))
+                                        .bg(muted_bg.opacity(0.5))
+                                        .rounded(px(3.0 * zoom))
+                                        .text_size(px(9.0 * zoom))
+                                        .text_color(muted_fg)
+                                        .child(row_count_label.clone())
+                                )
+                        } else {
+                            div()
+                                .text_size(px(font_size))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(fg)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .whitespace_nowrap()
+                                .child(col.name.clone())
+                        };
+
+                        header_row = header_row.child(
+                            div()
+                                .w(px(col_width))
+                                .h_full()
+                                .px(px(cell_padding))
+                                .flex()
+                                .items_center()
+                                .overflow_hidden()
+                                .when(!is_last, |d| d.border_r_1().border_color(border_color))
+                                .child(column_content)
                         );
                     }
                     table = table.child(header_row);
                 }
 
-                // Render data rows (limit to visible area for performance)
-                let visible_rows = ((item.size.1 * zoom - cell_height) / cell_height).ceil() as usize;
-                let rows_to_render = row_count.min(visible_rows.max(3));
+                // VIRTUAL SCROLLING: Only render visible rows + buffer
+                // Skip rows before start_row, take only visible range
+                let rows_to_render = end_row.saturating_sub(start_row);
 
-                for (row_idx, row) in data_source.rows.iter().take(rows_to_render).enumerate() {
+                for (idx, row) in data_source.rows.iter().skip(start_row).take(rows_to_render).enumerate() {
+                    let row_idx = start_row + idx;
                     let row_bg = if *stripe && row_idx % 2 == 1 {
                         stripe_bg
                     } else {
