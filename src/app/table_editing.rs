@@ -118,6 +118,8 @@ impl Humanboard {
                             };
                         }
                     }
+                    // Mark data source as dirty (has unsaved changes to file)
+                    ds.mark_dirty();
                 }
 
                 // Mark as modified

@@ -1594,54 +1594,142 @@ pub fn render_items(
             let primary_fg = cx.theme().primary_foreground;
             let btn_height = 28.0 * zoom;
             let btn_padding = 10.0 * zoom;
+            let btn_gap = 8.0 * zoom;
             let toolbar_y = y - btn_height - 8.0 * zoom;
 
-            result.push(
+            // Get data source info for save/reload buttons
+            let (can_save, is_dirty) = if let ItemContent::Table { data_source_id, .. } = &item.content {
+                let ds = data_sources.get(data_source_id);
+                let can_save = ds.map(|d| d.has_file_origin()).unwrap_or(false);
+                let is_dirty = ds.map(|d| d.is_dirty()).unwrap_or(false);
+                (can_save, is_dirty)
+            } else {
+                (false, false)
+            };
+
+            let success = cx.theme().success;
+            let warning = hsla(45.0 / 360.0, 0.9, 0.5, 1.0); // Yellow/orange for dirty indicator
+
+            let mut toolbar = div()
+                .absolute()
+                .left(px(x))
+                .top(px(toolbar_y))
+                .w(px(w))
+                .h(px(btn_height))
+                .flex()
+                .flex_row()
+                .justify_end()
+                .gap(px(btn_gap));
+
+            // Save button (only shown if table has file origin)
+            if can_save {
+                toolbar = toolbar.child(
+                    div()
+                        .id(ElementId::Name(format!("save-table-btn-{}", item_id).into()))
+                        .h(px(btn_height))
+                        .px(px(btn_padding))
+                        .bg(if is_dirty { warning } else { success })
+                        .rounded(px(6.0 * zoom))
+                        .cursor_pointer()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0 * zoom))
+                        .shadow_md()
+                        .hover(|s| s.opacity(0.85))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.save_table_to_file(item_id, cx);
+                        }))
+                        .when(is_dirty, |d| {
+                            // Dirty indicator dot
+                            d.child(
+                                div()
+                                    .w(px(6.0 * zoom))
+                                    .h(px(6.0 * zoom))
+                                    .rounded_full()
+                                    .bg(gpui::white())
+                            )
+                        })
+                        .child(
+                            div()
+                                .text_size(px(12.0 * zoom))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if is_dirty { gpui::black() } else { primary_fg })
+                                .child(if is_dirty { "Save*" } else { "Save" })
+                        )
+                );
+
+                // Reload button
+                toolbar = toolbar.child(
+                    div()
+                        .id(ElementId::Name(format!("reload-table-btn-{}", item_id).into()))
+                        .h(px(btn_height))
+                        .px(px(btn_padding))
+                        .bg(muted_bg)
+                        .rounded(px(6.0 * zoom))
+                        .cursor_pointer()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .shadow_md()
+                        .hover(|s| s.opacity(0.85))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.reload_table_from_file(item_id, cx);
+                        }))
+                        .child(
+                            div()
+                                .text_size(px(12.0 * zoom))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(fg)
+                                .child("Reload")
+                        )
+                );
+            }
+
+            // Create Chart button
+            toolbar = toolbar.child(
                 div()
-                    .absolute()
-                    .left(px(x))
-                    .top(px(toolbar_y))
-                    .w(px(w))
+                    .id(ElementId::Name(format!("create-chart-btn-{}", item_id).into()))
                     .h(px(btn_height))
+                    .px(px(btn_padding))
+                    .bg(primary)
+                    .rounded(px(6.0 * zoom))
+                    .cursor_pointer()
                     .flex()
                     .flex_row()
-                    .justify_end()
+                    .items_center()
+                    .gap(px(6.0 * zoom))
+                    .shadow_md()
+                    .hover(|s| s.opacity(0.85))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.show_chart_config_modal(item_id, cx);
+                    }))
                     .child(
                         div()
-                            .id(ElementId::Name(format!("create-chart-btn-{}", item_id).into()))
-                            .h(px(btn_height))
-                            .px(px(btn_padding))
-                            .bg(primary)
-                            .rounded(px(6.0 * zoom))
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0 * zoom))
-                            .shadow_md()
-                            .hover(|s| s.opacity(0.85))
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                cx.stop_propagation();
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.show_chart_config_modal(item_id, cx);
-                            }))
-                            .child(
-                                div()
-                                    .text_size(px(14.0 * zoom))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(primary_fg)
-                                    .child("+")
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.0 * zoom))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(primary_fg)
-                                    .child("Create Chart")
-                            )
+                            .text_size(px(14.0 * zoom))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(primary_fg)
+                            .child("+")
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0 * zoom))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(primary_fg)
+                            .child("Chart")
                     )
             );
+
+            result.push(toolbar);
         }
     }
 

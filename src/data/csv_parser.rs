@@ -94,6 +94,7 @@ pub fn parse_csv_content(
             path: source_path.unwrap_or_default(),
             delimiter,
         },
+        dirty: false,
     })
 }
 
@@ -228,6 +229,62 @@ pub fn is_data_file(path: &PathBuf) -> bool {
         .unwrap_or(false)
 }
 
+/// Write a DataSource back to a CSV file
+///
+/// Preserves the original delimiter from the DataOrigin.
+/// Returns the path written to, or an error message.
+pub fn write_csv_file(data_source: &DataSource) -> Result<PathBuf, String> {
+    let (path, delimiter) = match &data_source.origin {
+        DataOrigin::File { path, delimiter } => (path.clone(), *delimiter),
+        _ => return Err("Data source does not have a file origin".to_string()),
+    };
+
+    let content = write_csv_content(data_source, delimiter);
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(path)
+}
+
+/// Convert a DataSource to CSV string content
+pub fn write_csv_content(data_source: &DataSource, delimiter: char) -> String {
+    let mut lines = Vec::new();
+
+    // Write header row
+    let headers: Vec<String> = data_source.columns
+        .iter()
+        .map(|col| quote_csv_field(&col.name, delimiter))
+        .collect();
+    lines.push(headers.join(&delimiter.to_string()));
+
+    // Write data rows
+    for row in &data_source.rows {
+        let cells: Vec<String> = row.cells
+            .iter()
+            .map(|cell| quote_csv_field(&cell.to_string(), delimiter))
+            .collect();
+        lines.push(cells.join(&delimiter.to_string()));
+    }
+
+    lines.join("\n")
+}
+
+/// Quote a CSV field if necessary (contains delimiter, quotes, or newlines)
+fn quote_csv_field(value: &str, delimiter: char) -> String {
+    let needs_quoting = value.contains(delimiter)
+        || value.contains('"')
+        || value.contains('\n')
+        || value.contains('\r');
+
+    if needs_quoting {
+        // Escape internal quotes by doubling them
+        let escaped = value.replace('"', "\"\"");
+        format!("\"{}\"", escaped)
+    } else {
+        value.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +320,53 @@ mod tests {
         let result = parse_csv_content(content, ',', None).unwrap();
 
         assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_write_csv_content() {
+        let ds = DataSource {
+            id: 1,
+            name: "Test".to_string(),
+            columns: vec![
+                DataColumn::new("Name", DataType::Text),
+                DataColumn::new("Age", DataType::Number),
+            ],
+            rows: vec![
+                DataRow::new(vec![
+                    DataCell::Text("Alice".to_string()),
+                    DataCell::Number(30.0),
+                ]),
+                DataRow::new(vec![
+                    DataCell::Text("Bob".to_string()),
+                    DataCell::Number(25.0),
+                ]),
+            ],
+            origin: DataOrigin::Manual,
+            dirty: false,
+        };
+
+        let output = write_csv_content(&ds, ',');
+        assert!(output.contains("Name,Age"));
+        assert!(output.contains("Alice,30"));
+        assert!(output.contains("Bob,25"));
+    }
+
+    #[test]
+    fn test_quote_csv_field() {
+        assert_eq!(quote_csv_field("simple", ','), "simple");
+        assert_eq!(quote_csv_field("with,comma", ','), "\"with,comma\"");
+        assert_eq!(quote_csv_field("with\"quote", ','), "\"with\"\"quote\"");
+        assert_eq!(quote_csv_field("with\nnewline", ','), "\"with\nnewline\"");
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let original = "Name,Score\nAlice,95.5\nBob,87.0";
+        let parsed = parse_csv_content(original, ',', None).unwrap();
+        let written = write_csv_content(&parsed, ',');
+        let reparsed = parse_csv_content(&written, ',', None).unwrap();
+
+        assert_eq!(parsed.columns.len(), reparsed.columns.len());
+        assert_eq!(parsed.rows.len(), reparsed.rows.len());
     }
 }
