@@ -377,6 +377,7 @@ impl LazyDataSource {
             columns: self.columns.clone(),
             rows,
             origin: self.origin.clone(),
+            dirty: false,
         }
     }
 
