@@ -12,7 +12,7 @@
 //! - **Settings System**: Layered configuration with hot-reloading
 //! - **Action System**: Type-safe commands bound to keyboard shortcuts
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 // Re-export common error handling types
 pub use anyhow::{Context, Result};
@@ -22,6 +22,7 @@ pub mod animations;
 pub mod app;
 pub mod background;
 pub mod constants;
+pub mod data_table;
 pub mod audio_webview;
 pub mod board;
 pub mod board_index;
