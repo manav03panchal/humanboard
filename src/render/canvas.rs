@@ -18,7 +18,7 @@
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
 use crate::constants::HEADER_HEIGHT;
-use crate::data::{format_row_count, VirtualScrollState, BUFFER_ROWS, ROW_HEIGHT};
+use crate::data::{DataSourceDelegate, VirtualScrollState};
 use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
 use crate::profile_scope;
 use crate::types::{CanvasItem, DataSource, ItemContent};
@@ -28,7 +28,8 @@ use gpui::prelude::FluentBuilder;
 use gpui::{PathBuilder, *};
 use gpui_component::chart::{BarChart, LineChart, PieChart};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_component::table::TableState;
+use gpui_component::{ActiveTheme as _, Icon, IconName, h_flex, v_flex};
 use std::collections::HashMap;
 
 /// Theme-aware colors for different content types
@@ -264,11 +265,12 @@ fn render_item_content(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
-    table_scroll_states: &HashMap<u64, VirtualScrollState>,
+    _table_scroll_states: &HashMap<u64, VirtualScrollState>,
+    _table_states: &HashMap<u64, Entity<TableState<DataSourceDelegate>>>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
-    editing_table_cell: Option<(u64, usize, usize)>,
-    table_cell_input: Option<&Entity<InputState>>,
+    _editing_table_cell: Option<(u64, usize, usize)>,
+    _table_cell_input: Option<&Entity<InputState>>,
     fg: Hsla,
     muted_fg: Hsla,
     muted_bg: Hsla,
@@ -748,249 +750,174 @@ fn render_item_content(
                 .when_some(fill, |d, c| d.bg(c))
         }
 
-        ItemContent::Table { data_source_id, show_headers, stripe } => {
+        ItemContent::Table { data_source_id, show_headers: _, stripe: _ } => {
             let border_color = muted_fg.opacity(0.3);
-            let header_bg = muted_bg.opacity(0.5);
-            let stripe_bg = muted_bg.opacity(0.3);
-            let cell_height = ROW_HEIGHT * zoom;
-            let cell_padding = 8.0 * zoom;
-            let font_size = 12.0 * zoom;
+            let header_height = 32.0 * zoom;
+            let row_height = 24.0 * zoom;
+            let font_size = 11.0 * zoom;
+            let small_font = 10.0 * zoom;
+            let item_width = item.size.0 * zoom;
+            let accent_color = hsla(210.0 / 360.0, 0.7, 0.5, 1.0); // Blue accent
 
-            // Look up the data source
             if let Some(data_source) = data_sources.get(data_source_id) {
+                let row_count = data_source.rows.len();
                 let col_count = data_source.column_count();
-                let row_count = data_source.row_count();
+                let table_name = data_source.file_path()
+                    .and_then(|p| p.file_stem())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("Table");
 
-                // Get scroll state for this table (or use default)
-                let default_scroll = VirtualScrollState::default();
-                let scroll_state = table_scroll_states.get(&item.id).unwrap_or(&default_scroll);
-
-                // Calculate visible rows using virtual scrolling
-                let header_height = if *show_headers { cell_height } else { 0.0 };
-                let visible_height = (item.size.1 * zoom - header_height).max(0.0);
-                let visible_row_count = (visible_height / cell_height).ceil() as usize + 1;
-
-                // Calculate start row based on scroll position
-                let start_row = (scroll_state.scroll_y / cell_height).floor() as usize;
-                let start_row = start_row.saturating_sub(BUFFER_ROWS);
-                let end_row = (start_row + visible_row_count + BUFFER_ROWS * 2).min(row_count);
-
-                // Calculate column widths (equal distribution for now)
-                let item_width = item.size.0 * zoom;
+                // Show thumbnail view with header, stats, and preview rows
+                let preview_rows = 5.min(row_count);
                 let col_width = if col_count > 0 {
-                    (item_width - 2.0) / col_count as f32 // -2 for borders
+                    ((item_width - 2.0 * zoom) / col_count.min(10) as f32).max(60.0 * zoom)
                 } else {
                     100.0 * zoom
                 };
 
-                let mut table = div()
+                div()
                     .size_full()
-                    .bg(muted_bg.opacity(0.1))
+                    .bg(muted_bg.opacity(0.05))
                     .rounded(corner_radius)
                     .border_1()
                     .border_color(border_color)
+                    .overflow_hidden()
                     .flex()
                     .flex_col()
-                    .overflow_hidden();
-
-                // Render header row with row count indicator
-                if *show_headers && col_count > 0 {
-                    let row_count_label = format_row_count(row_count);
-
-                    let mut header_row = div()
-                        .w_full()
-                        .h(px(cell_height))
-                        .flex()
-                        .flex_shrink_0()
-                        .bg(header_bg)
-                        .border_b_1()
-                        .border_color(border_color);
-
-                    for (col_idx, col) in data_source.columns.iter().enumerate() {
-                        let is_last = col_idx == col_count - 1;
-
-                        // Add row count badge to first column header
-                        let column_content = if col_idx == 0 {
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.0 * zoom))
-                                .child(
-                                    div()
-                                        .text_size(px(font_size))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(fg)
-                                        .overflow_hidden()
-                                        .text_ellipsis()
-                                        .whitespace_nowrap()
-                                        .child(col.name.clone())
-                                )
-                                .child(
-                                    div()
-                                        .px(px(4.0 * zoom))
-                                        .py(px(1.0 * zoom))
-                                        .bg(muted_bg.opacity(0.5))
-                                        .rounded(px(3.0 * zoom))
-                                        .text_size(px(9.0 * zoom))
-                                        .text_color(muted_fg)
-                                        .child(row_count_label.clone())
-                                )
-                        } else {
-                            div()
-                                .text_size(px(font_size))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(fg)
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .whitespace_nowrap()
-                                .child(col.name.clone())
-                        };
-
-                        header_row = header_row.child(
-                            div()
-                                .w(px(col_width))
-                                .h_full()
-                                .px(px(cell_padding))
-                                .flex()
-                                .items_center()
-                                .overflow_hidden()
-                                .when(!is_last, |d| d.border_r_1().border_color(border_color))
-                                .child(column_content)
-                        );
-                    }
-                    table = table.child(header_row);
-                }
-
-                // VIRTUAL SCROLLING: Only render visible rows + buffer
-                // Skip rows before start_row, take only visible range
-                let rows_to_render = end_row.saturating_sub(start_row);
-
-                for (idx, row) in data_source.rows.iter().skip(start_row).take(rows_to_render).enumerate() {
-                    let row_idx = start_row + idx;
-                    let row_bg = if *stripe && row_idx % 2 == 1 {
-                        stripe_bg
-                    } else {
-                        Hsla::transparent_black()
-                    };
-                    let is_last_row = row_idx == rows_to_render - 1;
-
-                    let mut data_row = div()
-                        .w_full()
-                        .h(px(cell_height))
-                        .flex()
-                        .flex_shrink_0()
-                        .bg(row_bg)
-                        .when(!is_last_row, |d| d.border_b_1().border_color(border_color.opacity(0.5)));
-
-                    for (col_idx, cell) in row.cells.iter().enumerate() {
-                        let is_last_col = col_idx == col_count - 1;
-                        let cell_text = cell.to_string();
-
-                        // Check if this cell is being edited
-                        let is_editing_cell = editing_table_cell
-                            .map(|(table_id, edit_row, edit_col)| {
-                                table_id == item.id && edit_row == row_idx && edit_col == col_idx
-                            })
-                            .unwrap_or(false);
-
-                        data_row = data_row.child(
-                            div()
-                                .w(px(col_width))
-                                .h_full()
-                                .px(px(cell_padding))
-                                .flex()
-                                .items_center()
-                                .overflow_hidden()
-                                .when(!is_last_col, |d| d.border_r_1().border_color(border_color.opacity(0.5)))
-                                .when(is_editing_cell && table_cell_input.is_some(), |d| {
-                                    // Show input field when editing
-                                    d.child(
-                                        div()
-                                            .size_full()
-                                            .child(Input::new(table_cell_input.unwrap()).appearance(false).size_full())
+                    // Header with table name and stats
+                    .child(
+                        div()
+                            .h(px(header_height))
+                            .w_full()
+                            .bg(accent_color.opacity(0.15))
+                            .border_b_1()
+                            .border_color(border_color)
+                            .px(px(8.0 * zoom))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0 * zoom))
+                                    .child(
+                                        Icon::new(IconName::LayoutDashboard)
+                                            .size(px(14.0 * zoom))
+                                            .text_color(accent_color)
                                     )
-                                })
-                                .when(!is_editing_cell || table_cell_input.is_none(), |d| {
-                                    // Show static text when not editing
-                                    d.child(
+                                    .child(
                                         div()
                                             .text_size(px(font_size))
-                                            .text_color(if cell_text.is_empty() { muted_fg } else { fg })
-                                            .overflow_hidden()
-                                            .text_ellipsis()
-                                            .whitespace_nowrap()
-                                            .child(if cell_text.is_empty() { "-".to_string() } else { cell_text })
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child(table_name.to_string())
                                     )
-                                })
-                        );
-                    }
-                    table = table.child(data_row);
-                }
-
-                // Always show footer with pagination info
-                let footer_height = 24.0 * zoom;
-                let current_start = start_row + 1;
-                let current_end = end_row.min(row_count);
-
-                // Calculate scroll percentage for indicator
-                let scroll_pct = if row_count > 1 {
-                    (start_row as f32 / (row_count - 1).max(1) as f32).clamp(0.0, 1.0)
-                } else {
-                    0.0
-                };
-
-                table = table.child(
-                    div()
-                        .w_full()
-                        .h(px(footer_height))
-                        .flex_shrink_0()
-                        .px(px(cell_padding))
-                        .bg(header_bg.opacity(0.7))
-                        .border_t_1()
-                        .border_color(border_color)
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        // Left: row range info
-                        .child(
-                            div()
-                                .text_size(px(font_size * 0.8))
-                                .text_color(muted_fg)
-                                .child(format!("Rows {}-{} of {}", current_start, current_end, format_row_count(row_count)))
-                        )
-                        // Right: scroll position indicator
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.0 * zoom))
-                                // Mini scrollbar track
-                                .child(
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(small_font))
+                                    .text_color(muted_fg)
+                                    .child(format!("{} rows × {} cols", row_count, col_count))
+                            )
+                    )
+                    // Column headers
+                    .child(
+                        div()
+                            .h(px(row_height))
+                            .w_full()
+                            .bg(muted_bg.opacity(0.3))
+                            .border_b_1()
+                            .border_color(border_color)
+                            .flex()
+                            .overflow_hidden()
+                            .children(
+                                data_source.columns.iter().take(10).map(|col| {
                                     div()
-                                        .w(px(60.0 * zoom))
-                                        .h(px(4.0 * zoom))
-                                        .bg(muted_bg.opacity(0.5))
-                                        .rounded(px(2.0 * zoom))
+                                        .w(px(col_width))
+                                        .h_full()
+                                        .px(px(4.0 * zoom))
+                                        .flex()
+                                        .items_center()
+                                        .border_r_1()
+                                        .border_color(border_color.opacity(0.5))
                                         .child(
-                                            // Scrollbar thumb
                                             div()
-                                                .h_full()
-                                                .w(px(20.0 * zoom))
-                                                .ml(px(scroll_pct * 40.0 * zoom))
-                                                .bg(muted_fg.opacity(0.5))
-                                                .rounded(px(2.0 * zoom))
+                                                .text_size(px(small_font))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(fg)
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .child(col.name.clone())
                                         )
-                                )
-                                .child(
+                                })
+                            )
+                    )
+                    // Preview rows
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .children(
+                                (0..preview_rows).map(|row_idx| {
+                                    let is_alt = row_idx % 2 == 1;
                                     div()
-                                        .text_size(px(font_size * 0.75))
-                                        .text_color(muted_fg)
-                                        .child("↕ scroll")
-                                )
-                        )
-                );
-
-                table
+                                        .h(px(row_height))
+                                        .w_full()
+                                        .when(is_alt, |d| d.bg(muted_bg.opacity(0.15)))
+                                        .border_b_1()
+                                        .border_color(border_color.opacity(0.3))
+                                        .flex()
+                                        .overflow_hidden()
+                                        .children(
+                                            (0..col_count.min(10)).map(|col_idx| {
+                                                let cell_value = data_source.rows
+                                                    .get(row_idx)
+                                                    .and_then(|r| r.cells.get(col_idx))
+                                                    .map(|c| c.to_string())
+                                                    .unwrap_or_default();
+                                                div()
+                                                    .w(px(col_width))
+                                                    .h_full()
+                                                    .px(px(4.0 * zoom))
+                                                    .flex()
+                                                    .items_center()
+                                                    .border_r_1()
+                                                    .border_color(border_color.opacity(0.3))
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(small_font))
+                                                            .text_color(muted_fg)
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .child(cell_value)
+                                                    )
+                                            })
+                                        )
+                                })
+                            )
+                    )
+                    // Footer hint
+                    .child(
+                        div()
+                            .h(px(row_height))
+                            .w_full()
+                            .bg(muted_bg.opacity(0.2))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(small_font))
+                                    .text_color(muted_fg.opacity(0.7))
+                                    .child(if row_count > preview_rows {
+                                        format!("... {} more rows • Double-click to view", row_count - preview_rows)
+                                    } else {
+                                        "Double-click to view full table".to_string()
+                                    })
+                            )
+                    )
             } else {
                 // Data source not found - show placeholder
                 div()
@@ -1477,6 +1404,7 @@ pub fn render_items(
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
     table_scroll_states: &HashMap<u64, VirtualScrollState>,
+    table_states: &HashMap<u64, Entity<TableState<DataSourceDelegate>>>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
@@ -1542,6 +1470,7 @@ pub fn render_items(
                     video_webviews,
                     data_sources,
                     table_scroll_states,
+                    table_states,
                     editing_textbox_id,
                     textbox_input,
                     editing_table_cell,
@@ -1642,18 +1571,12 @@ pub fn render_items(
             let btn_gap = 8.0 * zoom;
             let toolbar_y = y - btn_height - 8.0 * zoom;
 
-            // Get data source info for save/reload buttons
-            let (can_save, is_dirty) = if let ItemContent::Table { data_source_id, .. } = &item.content {
-                let ds = data_sources.get(data_source_id);
-                let can_save = ds.map(|d| d.has_file_origin()).unwrap_or(false);
-                let is_dirty = ds.map(|d| d.is_dirty()).unwrap_or(false);
-                (can_save, is_dirty)
+            // Check if table has file origin for reload button
+            let has_file_origin = if let ItemContent::Table { data_source_id, .. } = &item.content {
+                data_sources.get(data_source_id).map(|d| d.has_file_origin()).unwrap_or(false)
             } else {
-                (false, false)
+                false
             };
-
-            let success = cx.theme().success;
-            let warning = hsla(45.0 / 360.0, 0.9, 0.5, 1.0); // Yellow/orange for dirty indicator
 
             let mut toolbar = div()
                 .absolute()
@@ -1666,48 +1589,8 @@ pub fn render_items(
                 .justify_end()
                 .gap(px(btn_gap));
 
-            // Save button (only shown if table has file origin)
-            if can_save {
-                toolbar = toolbar.child(
-                    div()
-                        .id(ElementId::Name(format!("save-table-btn-{}", item_id).into()))
-                        .h(px(btn_height))
-                        .px(px(btn_padding))
-                        .bg(if is_dirty { warning } else { success })
-                        .rounded(px(6.0 * zoom))
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(4.0 * zoom))
-                        .shadow_md()
-                        .hover(|s| s.opacity(0.85))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                            cx.stop_propagation();
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.save_table_to_file(item_id, cx);
-                        }))
-                        .when(is_dirty, |d| {
-                            // Dirty indicator dot
-                            d.child(
-                                div()
-                                    .w(px(6.0 * zoom))
-                                    .h(px(6.0 * zoom))
-                                    .rounded_full()
-                                    .bg(gpui::white())
-                            )
-                        })
-                        .child(
-                            div()
-                                .text_size(px(12.0 * zoom))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(if is_dirty { gpui::black() } else { primary_fg })
-                                .child(if is_dirty { "Save*" } else { "Save" })
-                        )
-                );
-
-                // Reload button
+            // Reload button (only shown if table has file origin)
+            if has_file_origin {
                 toolbar = toolbar.child(
                     div()
                         .id(ElementId::Name(format!("reload-table-btn-{}", item_id).into()))
@@ -1797,6 +1680,7 @@ pub fn render_canvas_area(
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
     table_scroll_states: &HashMap<u64, VirtualScrollState>,
+    table_states: &HashMap<u64, Entity<TableState<DataSourceDelegate>>>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
@@ -1829,6 +1713,7 @@ pub fn render_canvas_area(
             video_webviews,
             data_sources,
             table_scroll_states,
+            table_states,
             editing_textbox_id,
             textbox_input,
             editing_table_cell,

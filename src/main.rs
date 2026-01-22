@@ -271,6 +271,8 @@ fn register_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_CANVAS)),
         KeyBinding::new("cmd-s", SaveCode, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
         KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_CANVAS_INPUT_ACTIVE)),
+        KeyBinding::new("cmd-s", SaveCode, Some(FocusContext::KEY_PREVIEW)),
+        KeyBinding::new("ctrl-s", SaveCode, Some(FocusContext::KEY_PREVIEW)),
     ]);
 
     // Canvas-only shortcuts (not active when text input is focused)

@@ -2,11 +2,14 @@
 
 use super::{FocusedPane, Humanboard, PreviewPanel, PreviewTab, SplitDirection, TabMeta};
 use crate::constants::{DOCK_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT};
+use crate::data::DataSourceDelegate;
 use crate::focus::FocusContext;
 use crate::pdf_webview::PdfWebView;
 use gpui::*;
 use gpui_component::input::InputState;
+use gpui_component::table::TableState;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tracing::error;
 
 impl Humanboard {
@@ -89,7 +92,7 @@ impl Humanboard {
 
         if let Some(ref mut preview) = self.preview {
             // Check if file is already open in left pane
-            if let Some(index) = preview.tabs.iter().position(|t| t.path() == &path) {
+            if let Some(index) = preview.tabs.iter().position(|t| t.path() == Some(&path)) {
                 // File already open - just switch to it and make permanent if not preview mode
                 if !as_preview {
                     preview.tabs[index].make_permanent();
@@ -101,7 +104,7 @@ impl Humanboard {
             }
             // Check if file is already open in right pane (when split)
             if preview.is_pane_split {
-                if let Some(index) = preview.right_tabs.iter().position(|t| t.path() == &path) {
+                if let Some(index) = preview.right_tabs.iter().position(|t| t.path() == Some(&path)) {
                     if !as_preview {
                         preview.right_tabs[index].make_permanent();
                     }
@@ -379,6 +382,96 @@ impl Humanboard {
         }
     }
 
+    /// Ensure table states are created for preview panel table tabs
+    /// Also syncs dirty changes from preview back to board's data sources
+    pub fn ensure_preview_table_states(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // First, sync any dirty data from existing table states back to board
+        if let Some(ref mut preview) = self.preview {
+            let mut dirty_updates: Vec<(u64, crate::types::DataSource)> = Vec::new();
+
+            // Check left pane tabs for dirty data
+            for tab in preview.tabs.iter() {
+                if let PreviewTab::Table { data_source_id, table_state: Some(state), .. } = tab {
+                    let delegate_ds = state.read(cx).delegate().data_source();
+                    if delegate_ds.is_dirty() {
+                        dirty_updates.push((*data_source_id, (**delegate_ds).clone()));
+                    }
+                }
+            }
+
+            // Check right pane tabs for dirty data
+            for tab in preview.right_tabs.iter() {
+                if let PreviewTab::Table { data_source_id, table_state: Some(state), .. } = tab {
+                    let delegate_ds = state.read(cx).delegate().data_source();
+                    if delegate_ds.is_dirty() {
+                        dirty_updates.push((*data_source_id, (**delegate_ds).clone()));
+                    }
+                }
+            }
+
+            // Apply dirty updates to board
+            if !dirty_updates.is_empty() {
+                if let Some(ref mut board) = self.board {
+                    for (ds_id, updated_ds) in dirty_updates {
+                        board.data_sources.insert(ds_id, updated_ds);
+                    }
+                    board.push_history();
+                    let _ = board.flush_save();
+                }
+            }
+        }
+
+        // Collect data sources we need for table tabs
+        let data_sources_map = if let Some(ref board) = self.board {
+            board.data_sources.clone()
+        } else {
+            return;
+        };
+
+        if let Some(ref mut preview) = self.preview {
+            let is_split = preview.is_pane_split;
+
+            // Ensure table states for left pane
+            for tab in preview.tabs.iter_mut() {
+                if let PreviewTab::Table {
+                    data_source_id,
+                    table_state,
+                    ..
+                } = tab
+                {
+                    if table_state.is_none() {
+                        if let Some(ds) = data_sources_map.get(data_source_id) {
+                            // Create the delegate with a large width for preview panel
+                            let delegate = DataSourceDelegate::with_width(Arc::new(ds.clone()), 800.0);
+                            let state = cx.new(|cx| TableState::new(delegate, window, cx));
+                            *table_state = Some(state);
+                        }
+                    }
+                }
+            }
+
+            // Ensure table states for right pane (when split)
+            if is_split {
+                for tab in preview.right_tabs.iter_mut() {
+                    if let PreviewTab::Table {
+                        data_source_id,
+                        table_state,
+                        ..
+                    } = tab
+                    {
+                        if table_state.is_none() {
+                            if let Some(ds) = data_sources_map.get(data_source_id) {
+                                let delegate = DataSourceDelegate::with_width(Arc::new(ds.clone()), 800.0);
+                                let state = cx.new(|cx| TableState::new(delegate, window, cx));
+                                *table_state = Some(state);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn toggle_markdown_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(ref mut preview) = self.preview {
             if let Some(tab) = preview.tabs.get_mut(preview.active_tab) {
@@ -502,9 +595,89 @@ impl Humanboard {
                             }
                         }
                     }
+                    PreviewTab::Table { data_source_id, name, table_state, .. } => {
+                        // Save the data source to file
+                        let ds_id = *data_source_id;
+                        let table_name = name.clone();
+                        if let Some(ref mut board) = self.board {
+                            match board.save_data_source_to_file(ds_id) {
+                                Ok(_path) => {
+                                    // Clear dirty flag on the delegate's data source
+                                    if let Some(state) = table_state {
+                                        state.update(cx, |state, _cx| {
+                                            let delegate = state.delegate_mut();
+                                            // Get the clean data source from board and update delegate
+                                            if let Some(clean_ds) = board.data_sources.get(&ds_id) {
+                                                delegate.set_data_source(Arc::new(clean_ds.clone()));
+                                            }
+                                        });
+                                    }
+                                    self.show_toast(crate::notifications::Toast::success(
+                                        format!("Saved {}", table_name)
+                                    ));
+                                }
+                                Err(e) => {
+                                    self.show_toast(crate::notifications::Toast::error(e));
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
+        }
+        cx.notify();
+    }
+
+    /// Open a table in the preview panel
+    pub fn open_table_preview(
+        &mut self,
+        data_source_id: u64,
+        name: String,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let meta = TabMeta {
+            is_preview: false,
+            is_pinned: false,
+        };
+
+        let tab = PreviewTab::Table {
+            data_source_id,
+            name: name.clone(),
+            table_state: None, // Will be created when rendering
+            meta,
+        };
+
+        if let Some(ref mut preview) = self.preview {
+            // Check if table is already open (by data_source_id)
+            if let Some(index) = preview.tabs.iter().position(|t| {
+                matches!(t, PreviewTab::Table { data_source_id: id, .. } if *id == data_source_id)
+            }) {
+                preview.active_tab = index;
+                preview.focused_pane = FocusedPane::Left;
+                cx.notify();
+                return;
+            }
+            // Check right pane too
+            if preview.is_pane_split {
+                if let Some(index) = preview.right_tabs.iter().position(|t| {
+                    matches!(t, PreviewTab::Table { data_source_id: id, .. } if *id == data_source_id)
+                }) {
+                    preview.right_active_tab = index;
+                    preview.focused_pane = FocusedPane::Right;
+                    cx.notify();
+                    return;
+                }
+            }
+            // Add new tab
+            preview.tabs.push(tab);
+            preview.active_tab = preview.tabs.len() - 1;
+        } else {
+            // Create new preview panel with first tab
+            let mut panel = PreviewPanel::new(SplitDirection::Vertical, 0.4);
+            panel.tabs.push(tab);
+            self.preview = Some(panel);
         }
         cx.notify();
     }

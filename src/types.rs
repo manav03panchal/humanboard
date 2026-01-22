@@ -748,9 +748,9 @@ impl ItemContent {
             ItemContent::TextBox { .. }
                 | ItemContent::Arrow { .. }
                 | ItemContent::Shape { .. }
-                | ItemContent::Table { .. }
                 | ItemContent::Chart { .. }
         )
+        // Note: Table is now searchable - name comes from data source
     }
 
     pub fn type_label(&self) -> &str {

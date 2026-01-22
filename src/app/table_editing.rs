@@ -1,9 +1,12 @@
-//! Table cell editing methods
+//! Table cell editing and state management methods
 
 use crate::app::Humanboard;
+use crate::data::DataSourceDelegate;
 use crate::types::{DataCell, ItemContent};
 use gpui::*;
 use gpui_component::input::InputState;
+use gpui_component::table::TableState;
+use std::sync::Arc;
 
 impl Humanboard {
     /// Start editing a table cell
@@ -58,7 +61,7 @@ impl Humanboard {
         // Subscribe to input events
         cx.subscribe(
             &input_state,
-            |this, input, event: &gpui_component::input::InputEvent, cx| {
+            |this, _input, event: &gpui_component::input::InputEvent, cx| {
                 match event {
                     gpui_component::input::InputEvent::PressEnter { .. } => {
                         // Save on Enter
@@ -136,5 +139,95 @@ impl Humanboard {
         self.editing_table_cell = None;
         self.table_cell_input = None;
         cx.notify();
+    }
+
+    /// Ensure TableState entities exist for all table items.
+    /// Call this before rendering to ensure all tables have their state initialized.
+    /// Takes zoom to calculate actual pixel widths for columns.
+    pub fn ensure_table_states(&mut self, zoom: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ref board) = self.board else {
+            return;
+        };
+
+        // Collect table items that need states (with their size for column width calculation)
+        // Use actual pixel width (canvas size * zoom)
+        let tables_needing_state: Vec<(u64, u64, f32)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let ItemContent::Table { data_source_id, .. } = &item.content {
+                    if !self.table_states.contains_key(&item.id) {
+                        Some((item.id, *data_source_id, item.size.0 * zoom))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create states for tables that need them
+        for (table_id, data_source_id, pixel_width) in tables_needing_state {
+            if let Some(ds) = board.data_sources.get(&data_source_id) {
+                let delegate = DataSourceDelegate::with_width(Arc::new(ds.clone()), pixel_width);
+                let state = cx.new(|cx| TableState::new(delegate, window, cx));
+                self.table_states.insert(table_id, state);
+            }
+        }
+
+        // Update column widths for existing tables if their size or zoom changed
+        let existing_tables: Vec<(u64, f32)> = board
+            .items
+            .iter()
+            .filter_map(|item| {
+                if matches!(&item.content, ItemContent::Table { .. }) {
+                    Some((item.id, item.size.0 * zoom))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (table_id, pixel_width) in &existing_tables {
+            if let Some(state) = self.table_states.get(table_id) {
+                state.update(cx, |table_state, _cx| {
+                    table_state.delegate_mut().set_container_width(*pixel_width);
+                });
+            }
+        }
+
+        // Clean up states for tables that no longer exist
+        let existing_table_ids: std::collections::HashSet<u64> = existing_tables.iter().map(|(id, _)| *id).collect();
+        self.table_states.retain(|id, _| existing_table_ids.contains(id));
+    }
+
+    /// Update the data source for a specific table's TableState.
+    /// Call this when the underlying data changes.
+    pub fn update_table_data(&mut self, table_id: u64, cx: &mut Context<Self>) {
+        let Some(ref board) = self.board else {
+            return;
+        };
+
+        // Find the table item and its data source
+        let data_source = board.items.iter().find_map(|item| {
+            if item.id == table_id {
+                if let ItemContent::Table { data_source_id, .. } = &item.content {
+                    board.data_sources.get(data_source_id).cloned()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        if let Some(ds) = data_source {
+            if let Some(state) = self.table_states.get(&table_id) {
+                state.update(cx, |table_state, _cx| {
+                    table_state.delegate_mut().set_data_source(Arc::new(ds));
+                });
+            }
+        }
     }
 }

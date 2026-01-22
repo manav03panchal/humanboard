@@ -771,15 +771,28 @@ impl Board {
         let query_lower = query.to_lowercase();
         self.items
             .iter()
-            .filter(|item| {
-                item.content.is_searchable()
-                    && item
-                        .content
-                        .display_name()
-                        .to_lowercase()
-                        .contains(&query_lower)
+            .filter_map(|item| {
+                if !item.content.is_searchable() {
+                    return None;
+                }
+
+                // Get display name - for tables, use the data source name
+                let display_name = match &item.content {
+                    ItemContent::Table { data_source_id, .. } => {
+                        self.data_sources
+                            .get(data_source_id)
+                            .map(|ds| ds.name.clone())
+                            .unwrap_or_else(|| "Table".to_string())
+                    }
+                    _ => item.content.display_name(),
+                };
+
+                if display_name.to_lowercase().contains(&query_lower) {
+                    Some((item.id, display_name))
+                } else {
+                    None
+                }
             })
-            .map(|item| (item.id, item.content.display_name()))
             .collect()
     }
 

@@ -173,6 +173,17 @@ impl Humanboard {
                     })
                     .collect();
 
+                // Collect data_source_ids of tables being deleted (for closing preview tabs)
+                let deleted_data_sources: Vec<u64> = board
+                    .items
+                    .iter()
+                    .filter(|item| selected.contains(&item.id))
+                    .filter_map(|item| match &item.content {
+                        crate::types::ItemContent::Table { data_source_id, .. } => Some(*data_source_id),
+                        _ => None,
+                    })
+                    .collect();
+
                 // Find charts that reference any of the tables being deleted (cascade delete)
                 let orphan_charts: Vec<u64> = board
                     .items
@@ -191,8 +202,18 @@ impl Humanboard {
                 if let Some(ref mut preview) = self.preview {
                     let mut tabs_to_remove: Vec<usize> = Vec::new();
                     for (i, tab) in preview.tabs.iter().enumerate() {
-                        if deleted_paths.contains(tab.path()) {
-                            tabs_to_remove.push(i);
+                        // Check file-based tabs (PDF, Markdown, Code)
+                        if let Some(path) = tab.path() {
+                            if deleted_paths.contains(path) {
+                                tabs_to_remove.push(i);
+                                continue;
+                            }
+                        }
+                        // Check table tabs by data_source_id
+                        if let crate::app::PreviewTab::Table { data_source_id, .. } = tab {
+                            if deleted_data_sources.contains(data_source_id) {
+                                tabs_to_remove.push(i);
+                            }
                         }
                     }
                     // Remove in reverse order to preserve indices, cleaning up each tab

@@ -2,7 +2,6 @@
 
 use crate::app::Humanboard;
 use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
-use crate::data::{VirtualScrollState, ROW_HEIGHT};
 use crate::types::ItemContent;
 use gpui::*;
 
@@ -67,18 +66,12 @@ impl Humanboard {
             return;
         }
 
-        // Check if scrolling over a table item - scroll the table instead of canvas
-        let scroll_delta_y = match event.delta {
-            ScrollDelta::Pixels(delta) => f32::from(delta.y),
-            ScrollDelta::Lines(delta) => delta.y * ROW_HEIGHT,
-        };
-
         // Convert screen position to canvas coordinates
         let canvas_x = (f32::from(event.position.x) - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
         let canvas_y = (f32::from(event.position.y) - HEADER_HEIGHT - f32::from(board.canvas_offset.y)) / board.zoom;
 
-        // Find if mouse is over a table
-        let table_item = board.items.iter().find(|item| {
+        // Check if mouse is over a table - let the Table component handle its own scroll
+        let over_table = board.items.iter().any(|item| {
             if !matches!(item.content, ItemContent::Table { .. }) {
                 return false;
             }
@@ -87,30 +80,9 @@ impl Humanboard {
             canvas_x >= ix && canvas_x <= ix + iw && canvas_y >= iy && canvas_y <= iy + ih
         });
 
-        if let Some(table) = table_item {
-            // Scroll the table
-            if let ItemContent::Table { data_source_id, .. } = &table.content {
-                // Get row count from data source
-                let row_count = board.data_sources
-                    .get(data_source_id)
-                    .map(|ds| ds.row_count())
-                    .unwrap_or(0);
-
-                if row_count > 0 {
-                    let table_id = table.id;
-                    let table_height = table.size.1;
-
-                    // Get or create scroll state for this table
-                    let scroll_state = self.table_scroll_states
-                        .entry(table_id)
-                        .or_insert_with(|| VirtualScrollState::new(table_height));
-
-                    // Update scroll position (negative delta = scroll down)
-                    scroll_state.scroll_by(-scroll_delta_y, row_count);
-                    cx.notify();
-                    return; // Don't pan canvas
-                }
-            }
+        // If over a table, don't handle scroll here - let gpui-component Table handle it
+        if over_table {
+            return;
         }
 
         // Default: Canvas panning

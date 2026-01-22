@@ -279,6 +279,7 @@ impl Humanboard {
                     .with_action(crate::notifications::ToastAction::reload_webview()));
             }
             self.ensure_code_editors(window, cx);
+            self.ensure_preview_table_states(window, cx);
         }
 
         // Ensure YouTube WebViews are created for any YouTube items
@@ -318,6 +319,10 @@ impl Humanboard {
         } else {
             (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0, std::collections::HashMap::new())
         };
+
+        // Ensure TableState entities exist for all table items (for gpui-component Table)
+        // Must be called after we have zoom value to calculate correct column widths
+        self.ensure_table_states(zoom, window, cx);
 
         let fps = self.calculate_fps();
         let frame_count = self.frame_count;
@@ -616,6 +621,7 @@ impl Humanboard {
                                             &self.video_webviews,
                                             &data_sources,
                                             &self.table_scroll_states,
+                                            &self.table_states,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
                                             self.editing_table_cell,
@@ -747,6 +753,7 @@ impl Humanboard {
                                             &self.video_webviews,
                                             &data_sources,
                                             &self.table_scroll_states,
+                                            &self.table_states,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
                                             self.editing_table_cell,
@@ -869,6 +876,7 @@ impl Humanboard {
                     &self.video_webviews,
                     &data_sources,
                     &self.table_scroll_states,
+                    &self.table_states,
                     self.editing_textbox_id,
                     self.textbox_input.as_ref(),
                     self.editing_table_cell,

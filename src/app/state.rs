@@ -6,18 +6,19 @@ use crate::audio_webview::AudioWebView;
 use crate::background::BackgroundExecutor;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
+use crate::data::{DataSourceDelegate, VirtualScrollState};
 use crate::focus::FocusManager;
 use crate::hit_testing::HitTester;
 use crate::notifications::ToastManager;
 use crate::perf::PerfMonitor;
 use crate::settings::Settings;
 use crate::settings_watcher::SettingsWatcher;
-use crate::data::VirtualScrollState;
 use crate::types::ToolType;
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
+use gpui_component::table::TableState;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
@@ -180,6 +181,9 @@ pub struct Humanboard {
 
     // Table virtual scrolling (keyed by table item ID)
     pub table_scroll_states: HashMap<u64, VirtualScrollState>,
+
+    // gpui-component Table states (keyed by table item ID)
+    pub table_states: HashMap<u64, Entity<TableState<DataSourceDelegate>>>,
 
     // Chart configuration modal state
     pub chart_config_modal: Option<ChartConfigModal>,

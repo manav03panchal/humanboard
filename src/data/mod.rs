@@ -14,7 +14,9 @@
 mod csv_parser;
 mod json_parser;
 mod lazy_source;
+mod table_delegate;
 
 pub use csv_parser::*;
 pub use json_parser::*;
 pub use lazy_source::*;
+pub use table_delegate::*;

@@ -154,6 +154,21 @@ impl Humanboard {
                     return;
                 }
 
+                // Check for table items - open in preview panel
+                if let Some(item) = board.get_item(item_id) {
+                    if let ItemContent::Table { data_source_id, .. } = &item.content {
+                        // Get table name from data source (CSV filename)
+                        let name = board.data_sources.get(data_source_id)
+                            .and_then(|ds| ds.file_path())
+                            .and_then(|p| p.file_stem())
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Table")
+                            .to_string();
+                        self.open_table_preview(*data_source_id, name, window, cx);
+                        return;
+                    }
+                }
+
                 let content_path = board
                     .get_item(item_id)
                     .and_then(|item| match &item.content {
