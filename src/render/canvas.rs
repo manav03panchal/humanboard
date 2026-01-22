@@ -1512,7 +1512,9 @@ pub fn render_items(
                             .gap(px(6.0 * zoom))
                             .shadow_md()
                             .hover(|s| s.opacity(0.85))
-                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                cx.stop_propagation();
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.show_chart_config_modal(item_id, cx);
                             }))
