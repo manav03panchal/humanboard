@@ -2,6 +2,7 @@
 //!
 //! Bridges our DataSource type to gpui-component's Table.
 
+use crate::focus::FocusContext;
 use crate::types::{DataCell, DataSource};
 use gpui::*;
 use gpui_component::input::{Input, InputState};
@@ -337,6 +338,7 @@ impl TableDelegate for DataSourceDelegate {
             if let Some(input) = &self.edit_input {
                 return div()
                     .size_full()
+                    .key_context(FocusContext::KEY_PREVIEW)
                     .child(
                         Input::new(input)
                             .appearance(false)

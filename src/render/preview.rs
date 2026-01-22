@@ -1028,6 +1028,9 @@ pub fn render_tab_content(
                 .map(|state| state.read(cx).delegate().is_dirty())
                 .unwrap_or(false);
 
+            // Focus handle for key context
+            let table_focus = cx.focus_handle();
+
             v_flex()
                 .flex_1()
                 .w_full()
@@ -1040,6 +1043,14 @@ pub fn render_tab_content(
                         .flex_1()
                         .overflow_hidden()
                         .bg(bg)
+                        .track_focus(&table_focus)
+                        .key_context(FocusContext::KEY_PREVIEW)
+                        .on_click(cx.listener(move |this, _event, window, cx| {
+                            // Set focus context to Preview and focus the table
+                            this.focus.focus(crate::focus::FocusContext::Preview, window);
+                            table_focus.focus(window);
+                            cx.notify();
+                        }))
                         .when_some(table_state.as_ref(), |d, state| {
                             use gpui_component::table::Table;
                             d.child(
