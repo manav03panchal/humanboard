@@ -42,15 +42,15 @@ pub fn render_chart_config_modal(
             .flex()
             .items_center()
             .justify_center()
-            .on_mouse_down(MouseButton::Left, |_, _, _| {})
-            .on_click(cx.listener(|this, _, _, cx| {
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
                 this.close_chart_config_modal(cx);
             }))
             .child(
                 v_flex()
                     .id("chart-config-modal")
-                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                    .on_click(|_, _, _| {}) // Prevent click-through
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
                     .w(px(480.0))
                     .bg(bg)
                     .border_1()

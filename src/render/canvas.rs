@@ -1459,47 +1459,6 @@ pub fn render_items(
                             }))
                     )
                 })
-                // Add "Create Chart" button for tables when selected (top-right corner inside table)
-                .when(is_table && show_selection, |d| {
-                    let primary_fg = cx.theme().primary_foreground;
-                    let btn_height = 26.0 * zoom;
-                    let btn_padding = 10.0 * zoom;
-                    d.child(
-                        div()
-                            .id(ElementId::Name(format!("create-chart-{}", item_id).into()))
-                            .absolute()
-                            .top(px(6.0 * zoom))
-                            .right(px(6.0 * zoom))
-                            .h(px(btn_height))
-                            .px(px(btn_padding))
-                            .bg(primary)
-                            .rounded(px(4.0 * zoom))
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(4.0 * zoom))
-                            .shadow_md()
-                            .hover(|s| s.opacity(0.85))
-                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.show_chart_config_modal(item_id, cx);
-                            }))
-                            .child(
-                                div()
-                                    .text_size(px(12.0 * zoom))
-                                    .text_color(primary_fg)
-                                    .child("📊")
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.0 * zoom))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(primary_fg)
-                                    .child("Chart")
-                            )
-                    )
-                })
                 .when(show_selection, |d| {
                     d
                         // Selection border
@@ -1520,6 +1479,59 @@ pub fn render_items(
                         )
                 }),
         );
+
+        // Add chart toolbar as SEPARATE element (not child) for selected tables
+        // This avoids clipping issues with the parent item bounds
+        if is_table && show_selection {
+            let primary_fg = cx.theme().primary_foreground;
+            let btn_height = 28.0 * zoom;
+            let btn_padding = 10.0 * zoom;
+            let toolbar_y = y - btn_height - 8.0 * zoom;
+
+            result.push(
+                div()
+                    .absolute()
+                    .left(px(x))
+                    .top(px(toolbar_y))
+                    .w(px(w))
+                    .h(px(btn_height))
+                    .flex()
+                    .flex_row()
+                    .justify_end()
+                    .child(
+                        div()
+                            .id(ElementId::Name(format!("create-chart-btn-{}", item_id).into()))
+                            .h(px(btn_height))
+                            .px(px(btn_padding))
+                            .bg(primary)
+                            .rounded(px(6.0 * zoom))
+                            .cursor_pointer()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0 * zoom))
+                            .shadow_md()
+                            .hover(|s| s.opacity(0.85))
+                            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.show_chart_config_modal(item_id, cx);
+                            }))
+                            .child(
+                                div()
+                                    .text_size(px(13.0 * zoom))
+                                    .text_color(primary_fg)
+                                    .child("📊")
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.0 * zoom))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(primary_fg)
+                                    .child("Create Chart")
+                            )
+                    )
+            );
+        }
     }
 
     result
