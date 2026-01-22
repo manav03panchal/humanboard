@@ -927,23 +927,68 @@ fn render_item_content(
                     table = table.child(data_row);
                 }
 
-                // Show row count indicator if there are more rows
-                if row_count > rows_to_render {
-                    table = table.child(
-                        div()
-                            .w_full()
-                            .flex_1()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(font_size * 0.9))
-                                    .text_color(muted_fg)
-                                    .child(format!("... {} more rows", row_count - rows_to_render))
-                            )
-                    );
-                }
+                // Always show footer with pagination info
+                let footer_height = 24.0 * zoom;
+                let current_start = start_row + 1;
+                let current_end = end_row.min(row_count);
+
+                // Calculate scroll percentage for indicator
+                let scroll_pct = if row_count > 1 {
+                    (start_row as f32 / (row_count - 1).max(1) as f32).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+
+                table = table.child(
+                    div()
+                        .w_full()
+                        .h(px(footer_height))
+                        .flex_shrink_0()
+                        .px(px(cell_padding))
+                        .bg(header_bg.opacity(0.7))
+                        .border_t_1()
+                        .border_color(border_color)
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        // Left: row range info
+                        .child(
+                            div()
+                                .text_size(px(font_size * 0.8))
+                                .text_color(muted_fg)
+                                .child(format!("Rows {}-{} of {}", current_start, current_end, format_row_count(row_count)))
+                        )
+                        // Right: scroll position indicator
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0 * zoom))
+                                // Mini scrollbar track
+                                .child(
+                                    div()
+                                        .w(px(60.0 * zoom))
+                                        .h(px(4.0 * zoom))
+                                        .bg(muted_bg.opacity(0.5))
+                                        .rounded(px(2.0 * zoom))
+                                        .child(
+                                            // Scrollbar thumb
+                                            div()
+                                                .h_full()
+                                                .w(px(20.0 * zoom))
+                                                .ml(px(scroll_pct * 40.0 * zoom))
+                                                .bg(muted_fg.opacity(0.5))
+                                                .rounded(px(2.0 * zoom))
+                                        )
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(font_size * 0.75))
+                                        .text_color(muted_fg)
+                                        .child("↕ scroll")
+                                )
+                        )
+                );
 
                 table
             } else {

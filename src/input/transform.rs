@@ -52,8 +52,8 @@ impl Humanboard {
             return;
         };
 
-        if event.modifiers.platform {
-            // Pinch-to-zoom
+        // Zoom with Command (platform) or Control key
+        if event.modifiers.platform || event.modifiers.control {
             let zoom_factor = match event.delta {
                 ScrollDelta::Pixels(delta) => 1.0 - f32::from(delta.y) / 500.0,
                 ScrollDelta::Lines(delta) => 1.0 - delta.y / 50.0,
@@ -64,67 +64,68 @@ impl Humanboard {
                     cx.notify();
                 }
             }
-        } else {
-            // Check if scrolling over a table item - scroll the table instead of canvas
-            let scroll_delta_y = match event.delta {
-                ScrollDelta::Pixels(delta) => f32::from(delta.y),
-                ScrollDelta::Lines(delta) => delta.y * ROW_HEIGHT,
-            };
+            return;
+        }
 
-            // Convert screen position to canvas coordinates
-            let canvas_x = (f32::from(event.position.x) - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
-            let canvas_y = (f32::from(event.position.y) - HEADER_HEIGHT - f32::from(board.canvas_offset.y)) / board.zoom;
+        // Check if scrolling over a table item - scroll the table instead of canvas
+        let scroll_delta_y = match event.delta {
+            ScrollDelta::Pixels(delta) => f32::from(delta.y),
+            ScrollDelta::Lines(delta) => delta.y * ROW_HEIGHT,
+        };
 
-            // Find if mouse is over a table
-            let table_item = board.items.iter().find(|item| {
-                if !matches!(item.content, ItemContent::Table { .. }) {
-                    return false;
-                }
-                let (ix, iy) = item.position;
-                let (iw, ih) = item.size;
-                canvas_x >= ix && canvas_x <= ix + iw && canvas_y >= iy && canvas_y <= iy + ih
-            });
+        // Convert screen position to canvas coordinates
+        let canvas_x = (f32::from(event.position.x) - DOCK_WIDTH - f32::from(board.canvas_offset.x)) / board.zoom;
+        let canvas_y = (f32::from(event.position.y) - HEADER_HEIGHT - f32::from(board.canvas_offset.y)) / board.zoom;
 
-            if let Some(table) = table_item {
-                // Scroll the table
-                if let ItemContent::Table { data_source_id, .. } = &table.content {
-                    // Get row count from data source
-                    let row_count = board.data_sources
-                        .get(data_source_id)
-                        .map(|ds| ds.row_count())
-                        .unwrap_or(0);
+        // Find if mouse is over a table
+        let table_item = board.items.iter().find(|item| {
+            if !matches!(item.content, ItemContent::Table { .. }) {
+                return false;
+            }
+            let (ix, iy) = item.position;
+            let (iw, ih) = item.size;
+            canvas_x >= ix && canvas_x <= ix + iw && canvas_y >= iy && canvas_y <= iy + ih
+        });
 
-                    if row_count > 0 {
-                        let table_id = table.id;
-                        let table_height = table.size.1;
+        if let Some(table) = table_item {
+            // Scroll the table
+            if let ItemContent::Table { data_source_id, .. } = &table.content {
+                // Get row count from data source
+                let row_count = board.data_sources
+                    .get(data_source_id)
+                    .map(|ds| ds.row_count())
+                    .unwrap_or(0);
 
-                        // Get or create scroll state for this table
-                        let scroll_state = self.table_scroll_states
-                            .entry(table_id)
-                            .or_insert_with(|| VirtualScrollState::new(table_height));
+                if row_count > 0 {
+                    let table_id = table.id;
+                    let table_height = table.size.1;
 
-                        // Update scroll position (negative delta = scroll down)
-                        scroll_state.scroll_by(-scroll_delta_y, row_count);
-                        cx.notify();
-                        return; // Don't pan canvas
-                    }
+                    // Get or create scroll state for this table
+                    let scroll_state = self.table_scroll_states
+                        .entry(table_id)
+                        .or_insert_with(|| VirtualScrollState::new(table_height));
+
+                    // Update scroll position (negative delta = scroll down)
+                    scroll_state.scroll_by(-scroll_delta_y, row_count);
+                    cx.notify();
+                    return; // Don't pan canvas
                 }
             }
+        }
 
-            // Default: Canvas panning
-            match event.delta {
-                ScrollDelta::Pixels(delta) => {
-                    board.canvas_offset.x += delta.x;
-                    board.canvas_offset.y += delta.y;
-                    board.mark_dirty();
-                    cx.notify();
-                }
-                ScrollDelta::Lines(delta) => {
-                    board.canvas_offset.x += px(delta.x * 20.0);
-                    board.canvas_offset.y += px(delta.y * 20.0);
-                    board.mark_dirty();
-                    cx.notify();
-                }
+        // Default: Canvas panning
+        match event.delta {
+            ScrollDelta::Pixels(delta) => {
+                board.canvas_offset.x += delta.x;
+                board.canvas_offset.y += delta.y;
+                board.mark_dirty();
+                cx.notify();
+            }
+            ScrollDelta::Lines(delta) => {
+                board.canvas_offset.x += px(delta.x * 20.0);
+                board.canvas_offset.y += px(delta.y * 20.0);
+                board.mark_dirty();
+                cx.notify();
             }
         }
     }
