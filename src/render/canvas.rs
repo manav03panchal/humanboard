@@ -1520,9 +1520,10 @@ pub fn render_items(
                             }))
                             .child(
                                 div()
-                                    .text_size(px(13.0 * zoom))
+                                    .text_size(px(14.0 * zoom))
+                                    .font_weight(FontWeight::BOLD)
                                     .text_color(primary_fg)
-                                    .child("📊")
+                                    .child("+")
                             )
                             .child(
                                 div()
