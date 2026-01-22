@@ -7,7 +7,7 @@
 
 use crate::app::ChartConfigModal;
 use crate::app::Humanboard;
-use crate::types::ChartType;
+use crate::types::{AggregationType, ChartType, SortOrder};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -30,6 +30,8 @@ pub fn render_chart_config_modal(
     let x_col = modal.x_column;
     let y_cols = modal.y_columns.clone();
     let column_names = modal.column_names.clone();
+    let selected_aggregation = modal.aggregation;
+    let selected_sort = modal.sort_order;
 
     deferred(
         div()
@@ -241,6 +243,83 @@ pub fn render_chart_config_modal(
                                                             .child(name.clone())
                                                     )
                                             })),
+                                    ),
+                            )
+                            // Aggregation and Sort Order (side by side)
+                            .child(
+                                h_flex()
+                                    .gap(px(16.0))
+                                    // Aggregation selector
+                                    .child(
+                                        v_flex()
+                                            .flex_1()
+                                            .gap(px(8.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(fg)
+                                                    .child("Aggregation"),
+                                            )
+                                            .child(
+                                                h_flex()
+                                                    .flex_wrap()
+                                                    .gap(px(6.0))
+                                                    .children(AggregationType::all().iter().map(|&agg| {
+                                                        let is_selected = agg == selected_aggregation;
+                                                        div()
+                                                            .id(ElementId::Name(format!("agg-{:?}", agg).into()))
+                                                            .px(px(10.0))
+                                                            .py(px(6.0))
+                                                            .rounded(px(6.0))
+                                                            .bg(if is_selected { primary } else { list_hover })
+                                                            .text_color(if is_selected { cx.theme().primary_foreground } else { fg })
+                                                            .text_size(px(11.0))
+                                                            .font_weight(if is_selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                                                            .cursor_pointer()
+                                                            .hover(|s| if !is_selected { s.bg(list_active) } else { s })
+                                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                                this.set_chart_config_aggregation(agg, cx);
+                                                            }))
+                                                            .child(agg.label())
+                                                    })),
+                                            ),
+                                    )
+                                    // Sort order selector
+                                    .child(
+                                        v_flex()
+                                            .flex_1()
+                                            .gap(px(8.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.0))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(fg)
+                                                    .child("Sort Order"),
+                                            )
+                                            .child(
+                                                h_flex()
+                                                    .flex_wrap()
+                                                    .gap(px(6.0))
+                                                    .children(SortOrder::all().iter().map(|&sort| {
+                                                        let is_selected = sort == selected_sort;
+                                                        div()
+                                                            .id(ElementId::Name(format!("sort-{:?}", sort).into()))
+                                                            .px(px(10.0))
+                                                            .py(px(6.0))
+                                                            .rounded(px(6.0))
+                                                            .bg(if is_selected { primary } else { list_hover })
+                                                            .text_color(if is_selected { cx.theme().primary_foreground } else { fg })
+                                                            .text_size(px(11.0))
+                                                            .font_weight(if is_selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                                                            .cursor_pointer()
+                                                            .hover(|s| if !is_selected { s.bg(list_active) } else { s })
+                                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                                this.set_chart_config_sort_order(sort, cx);
+                                                            }))
+                                                            .child(sort.label())
+                                                    })),
+                                            ),
                                     ),
                             ),
                     )

@@ -2,7 +2,7 @@
 
 use super::state::ChartConfigModal;
 use crate::app::Humanboard;
-use crate::types::{ChartConfig, ChartType, ItemContent};
+use crate::types::{AggregationType, ChartConfig, ChartType, ItemContent, SortOrder};
 use gpui::*;
 
 impl Humanboard {
@@ -67,12 +67,30 @@ impl Humanboard {
         }
     }
 
+    /// Set the aggregation type in the config modal
+    pub fn set_chart_config_aggregation(&mut self, aggregation: AggregationType, cx: &mut Context<Self>) {
+        if let Some(ref mut modal) = self.chart_config_modal {
+            modal.aggregation = aggregation;
+            cx.notify();
+        }
+    }
+
+    /// Set the sort order in the config modal
+    pub fn set_chart_config_sort_order(&mut self, sort_order: SortOrder, cx: &mut Context<Self>) {
+        if let Some(ref mut modal) = self.chart_config_modal {
+            modal.sort_order = sort_order;
+            cx.notify();
+        }
+    }
+
     /// Confirm and create the chart from the modal configuration
     pub fn confirm_chart_config(&mut self, cx: &mut Context<Self>) {
         if let Some(modal) = self.chart_config_modal.take() {
             // Create the chart with the configured settings
             let config = ChartConfig::new(modal.chart_type)
-                .with_columns(modal.x_column, modal.y_columns);
+                .with_columns(modal.x_column, modal.y_columns)
+                .with_aggregation(modal.aggregation)
+                .with_sort_order(modal.sort_order);
 
             self.create_chart_from_table_with_config(
                 modal.table_item_id,

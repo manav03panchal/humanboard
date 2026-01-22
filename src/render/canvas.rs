@@ -959,15 +959,57 @@ fn render_item_content(
                     hsla(320.0 / 360.0, 0.75, 0.55, 1.0),  // Pink/Magenta
                 ];
 
-                let data: Vec<ChartPoint> = data_source.rows.iter().enumerate()
-                    .take(12)  // Limit for readability
-                    .map(|(i, row)| {
+                // Build chart data with grouping, aggregation, and sorting
+                let data: Vec<ChartPoint> = {
+                    use std::collections::HashMap;
+                    use crate::types::{AggregationType, SortOrder};
+
+                    // Group raw values by label (X column)
+                    let mut groups: HashMap<String, Vec<f64>> = HashMap::new();
+                    for row in &data_source.rows {
                         let label = row.cells.get(x_col).map(|c| c.to_string()).unwrap_or_default();
                         let value = row.cells.get(y_col).map(|c| c.to_f64()).unwrap_or(0.0);
-                        let color = chart_colors[i % chart_colors.len()];
-                        ChartPoint { label, value, color }
-                    })
-                    .collect();
+                        groups.entry(label).or_default().push(value);
+                    }
+
+                    // Apply aggregation
+                    let mut points: Vec<(String, f64)> = groups.into_iter().map(|(label, values)| {
+                        let aggregated = match config.aggregation {
+                            AggregationType::None => values.first().copied().unwrap_or(0.0),
+                            AggregationType::Sum => values.iter().sum(),
+                            AggregationType::Average => {
+                                if values.is_empty() { 0.0 }
+                                else { values.iter().sum::<f64>() / values.len() as f64 }
+                            }
+                            AggregationType::Count => values.len() as f64,
+                            AggregationType::Min => values.iter().cloned().fold(f64::INFINITY, f64::min),
+                            AggregationType::Max => values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                        };
+                        (label, aggregated)
+                    }).collect();
+
+                    // Apply sorting
+                    match config.sort_order {
+                        SortOrder::None => {} // Keep insertion order (from HashMap, somewhat arbitrary)
+                        SortOrder::LabelAsc => points.sort_by(|a, b| a.0.cmp(&b.0)),
+                        SortOrder::LabelDesc => points.sort_by(|a, b| b.0.cmp(&a.0)),
+                        SortOrder::ValueAsc => points.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)),
+                        SortOrder::ValueDesc => points.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)),
+                    }
+
+                    // Convert to ChartPoints with colors, limit for readability
+                    points.into_iter()
+                        .take(12)
+                        .enumerate()
+                        .map(|(i, (label, value))| {
+                            ChartPoint {
+                                label,
+                                value,
+                                color: chart_colors[i % chart_colors.len()],
+                            }
+                        })
+                        .collect()
+                };
 
                 let mut chart_container = div()
                     .size_full()
@@ -1006,7 +1048,18 @@ fn render_item_content(
                                     div()
                                         .text_size(px(font_size * 0.85))
                                         .text_color(muted_fg)
-                                        .child(format!("{} by {}", y_col_name, x_col_name))
+                                        .child({
+                                            use crate::types::AggregationType;
+                                            let agg_label = match config.aggregation {
+                                                AggregationType::None => "",
+                                                AggregationType::Sum => "Sum of ",
+                                                AggregationType::Average => "Avg of ",
+                                                AggregationType::Count => "Count of ",
+                                                AggregationType::Min => "Min of ",
+                                                AggregationType::Max => "Max of ",
+                                            };
+                                            format!("{}{} by {}", agg_label, y_col_name, x_col_name)
+                                        })
                                 )
                         )
                         .child(

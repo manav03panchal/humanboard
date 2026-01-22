@@ -234,6 +234,10 @@ pub struct ChartConfig {
     pub title: Option<String>,
     /// Whether to show legend
     pub show_legend: bool,
+    /// How to aggregate Y values when X has duplicates
+    pub aggregation: AggregationType,
+    /// Sort order for the chart data
+    pub sort_order: SortOrder,
 }
 
 impl Default for ChartConfig {
@@ -244,6 +248,8 @@ impl Default for ChartConfig {
             y_columns: vec![1],
             title: None,
             show_legend: true,
+            aggregation: AggregationType::default(),
+            sort_order: SortOrder::default(),
         }
     }
 }
@@ -264,6 +270,16 @@ impl ChartConfig {
 
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    pub fn with_aggregation(mut self, aggregation: AggregationType) -> Self {
+        self.aggregation = aggregation;
+        self
+    }
+
+    pub fn with_sort_order(mut self, sort_order: SortOrder) -> Self {
+        self.sort_order = sort_order;
         self
     }
 }
@@ -292,11 +308,91 @@ impl ChartType {
 
     pub fn all() -> &'static [ChartType] {
         &[
-            ChartType::Line,
             ChartType::Bar,
+            ChartType::Line,
             ChartType::Area,
             ChartType::Pie,
             ChartType::Scatter,
+        ]
+    }
+}
+
+/// Aggregation method for grouping duplicate X values
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AggregationType {
+    /// No aggregation - show raw values (may have duplicates)
+    None,
+    /// Sum values for each group
+    #[default]
+    Sum,
+    /// Average values for each group
+    Average,
+    /// Count occurrences in each group
+    Count,
+    /// Minimum value in each group
+    Min,
+    /// Maximum value in each group
+    Max,
+}
+
+impl AggregationType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            AggregationType::None => "None",
+            AggregationType::Sum => "Sum",
+            AggregationType::Average => "Average",
+            AggregationType::Count => "Count",
+            AggregationType::Min => "Min",
+            AggregationType::Max => "Max",
+        }
+    }
+
+    pub fn all() -> &'static [AggregationType] {
+        &[
+            AggregationType::Sum,
+            AggregationType::Average,
+            AggregationType::Count,
+            AggregationType::Min,
+            AggregationType::Max,
+            AggregationType::None,
+        ]
+    }
+}
+
+/// Sort order for chart data
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortOrder {
+    /// No sorting - keep original order
+    #[default]
+    None,
+    /// Sort by X axis (label) ascending (A-Z, 0-9)
+    LabelAsc,
+    /// Sort by X axis (label) descending (Z-A, 9-0)
+    LabelDesc,
+    /// Sort by Y axis (value) ascending (low to high)
+    ValueAsc,
+    /// Sort by Y axis (value) descending (high to low)
+    ValueDesc,
+}
+
+impl SortOrder {
+    pub fn label(&self) -> &'static str {
+        match self {
+            SortOrder::None => "Original",
+            SortOrder::LabelAsc => "Label A→Z",
+            SortOrder::LabelDesc => "Label Z→A",
+            SortOrder::ValueAsc => "Value ↑",
+            SortOrder::ValueDesc => "Value ↓",
+        }
+    }
+
+    pub fn all() -> &'static [SortOrder] {
+        &[
+            SortOrder::None,
+            SortOrder::LabelAsc,
+            SortOrder::LabelDesc,
+            SortOrder::ValueAsc,
+            SortOrder::ValueDesc,
         ]
     }
 }

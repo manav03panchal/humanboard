@@ -39,6 +39,10 @@ pub struct ChartConfigModal {
     pub y_columns: Vec<usize>,
     /// Column names for display
     pub column_names: Vec<String>,
+    /// Aggregation method for duplicate X values
+    pub aggregation: crate::types::AggregationType,
+    /// Sort order for chart data
+    pub sort_order: crate::types::SortOrder,
 }
 
 impl ChartConfigModal {
@@ -50,6 +54,8 @@ impl ChartConfigModal {
             x_column: 0,
             y_columns: if column_names.len() > 1 { vec![1] } else { vec![0] },
             column_names,
+            aggregation: crate::types::AggregationType::default(),
+            sort_order: crate::types::SortOrder::default(),
         }
     }
 }
