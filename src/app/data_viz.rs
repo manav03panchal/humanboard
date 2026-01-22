@@ -153,6 +153,125 @@ impl Humanboard {
         cx.notify();
     }
 
+    // =========================================================================
+    // Data Source File Operations (Save/Reload)
+    // =========================================================================
+
+    /// Save a table's data source back to its original file
+    pub fn save_table_to_file(&mut self, table_item_id: u64, cx: &mut Context<Self>) {
+        // Get the data source ID from the table
+        let data_source_id = if let Some(ref board) = self.board {
+            board.items.iter()
+                .find(|i| i.id == table_item_id)
+                .and_then(|item| {
+                    if let ItemContent::Table { data_source_id, .. } = &item.content {
+                        Some(*data_source_id)
+                    } else {
+                        None
+                    }
+                })
+        } else {
+            None
+        };
+
+        let Some(ds_id) = data_source_id else {
+            self.show_toast(crate::notifications::Toast::error("Table not found"));
+            return;
+        };
+
+        // Save the data source
+        if let Some(ref mut board) = self.board {
+            match board.save_data_source_to_file(ds_id) {
+                Ok(path) => {
+                    let filename = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file");
+                    self.show_toast(crate::notifications::Toast::success(
+                        format!("Saved to {}", filename)
+                    ));
+                }
+                Err(e) => {
+                    self.show_toast(crate::notifications::Toast::error(e));
+                }
+            }
+        }
+
+        cx.notify();
+    }
+
+    /// Reload a table's data source from its original file
+    pub fn reload_table_from_file(&mut self, table_item_id: u64, cx: &mut Context<Self>) {
+        // Get the data source ID from the table
+        let data_source_id = if let Some(ref board) = self.board {
+            board.items.iter()
+                .find(|i| i.id == table_item_id)
+                .and_then(|item| {
+                    if let ItemContent::Table { data_source_id, .. } = &item.content {
+                        Some(*data_source_id)
+                    } else {
+                        None
+                    }
+                })
+        } else {
+            None
+        };
+
+        let Some(ds_id) = data_source_id else {
+            self.show_toast(crate::notifications::Toast::error("Table not found"));
+            return;
+        };
+
+        // Reload the data source
+        if let Some(ref mut board) = self.board {
+            match board.reload_data_source_from_file(ds_id) {
+                Ok(()) => {
+                    self.show_toast(crate::notifications::Toast::success("Reloaded from file"));
+                }
+                Err(e) => {
+                    self.show_toast(crate::notifications::Toast::error(e));
+                }
+            }
+        }
+
+        cx.notify();
+    }
+
+    /// Check if a table's data source is dirty (has unsaved changes)
+    pub fn is_table_dirty(&self, table_item_id: u64) -> bool {
+        if let Some(ref board) = self.board {
+            board.items.iter()
+                .find(|i| i.id == table_item_id)
+                .and_then(|item| {
+                    if let ItemContent::Table { data_source_id, .. } = &item.content {
+                        Some(board.is_data_source_dirty(*data_source_id))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
+    /// Check if a table's data source can be saved to file
+    pub fn can_save_table(&self, table_item_id: u64) -> bool {
+        if let Some(ref board) = self.board {
+            board.items.iter()
+                .find(|i| i.id == table_item_id)
+                .and_then(|item| {
+                    if let ItemContent::Table { data_source_id, .. } = &item.content {
+                        Some(board.can_save_data_source(*data_source_id))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
     /// Create a chart from an existing table item
     /// The chart will be positioned to the right of the table
     pub fn create_chart_from_table(&mut self, table_item_id: u64, chart_type: ChartType, cx: &mut Context<Self>) {

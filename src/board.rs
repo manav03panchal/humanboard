@@ -18,7 +18,8 @@ use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
 use crate::error::BoardError;
 use crate::profile_scope;
 use crate::spatial_index::SpatialIndex;
-use crate::data::{is_data_file, parse_csv_file, parse_json_file};
+use crate::data::{is_data_file, parse_csv_file, parse_json_file, write_csv_file, write_json_file};
+use crate::types::DataOrigin;
 use crate::types::{CanvasItem, DataSource, ItemContent};
 use crate::validation::validate_items;
 use gpui::{point, px, Pixels, Point, Size};
@@ -991,6 +992,89 @@ impl Board {
         self.next_data_source_id = state.next_data_source_id;
         self.rebuild_index();
         self.mark_dirty();
+    }
+
+    // =========================================================================
+    // Data Source File Operations
+    // =========================================================================
+
+    /// Save a data source back to its original file.
+    ///
+    /// Only works for data sources with file origins (CSV/JSON).
+    /// Returns Ok with the path saved to, or Err with error message.
+    pub fn save_data_source_to_file(&mut self, data_source_id: u64) -> Result<PathBuf, String> {
+        let ds = self.data_sources.get(&data_source_id)
+            .ok_or_else(|| "Data source not found".to_string())?;
+
+        let result = match &ds.origin {
+            DataOrigin::File { .. } => write_csv_file(ds),
+            DataOrigin::Json { path: Some(_) } => write_json_file(ds),
+            DataOrigin::Json { path: None } => {
+                Err("JSON data source has no file path".to_string())
+            }
+            DataOrigin::Manual => {
+                Err("Cannot save manually-created data to file".to_string())
+            }
+            DataOrigin::Api { .. } => {
+                Err("Cannot save API data source to file".to_string())
+            }
+        };
+
+        // If successful, mark the data source as clean
+        if result.is_ok() {
+            if let Some(ds) = self.data_sources.get_mut(&data_source_id) {
+                ds.mark_clean();
+            }
+        }
+
+        result
+    }
+
+    /// Reload a data source from its original file.
+    ///
+    /// Replaces the current data with fresh data from the file.
+    /// Returns Ok on success, or Err with error message.
+    pub fn reload_data_source_from_file(&mut self, data_source_id: u64) -> Result<(), String> {
+        let ds = self.data_sources.get(&data_source_id)
+            .ok_or_else(|| "Data source not found".to_string())?;
+
+        let new_data = match &ds.origin {
+            DataOrigin::File { path, .. } => parse_csv_file(path),
+            DataOrigin::Json { path: Some(p) } => parse_json_file(p),
+            DataOrigin::Json { path: None } => {
+                Err("JSON data source has no file path".to_string())
+            }
+            DataOrigin::Manual => {
+                Err("Cannot reload manually-created data".to_string())
+            }
+            DataOrigin::Api { .. } => {
+                Err("API reload not implemented".to_string())
+            }
+        }?;
+
+        // Update the existing data source with new data
+        if let Some(ds) = self.data_sources.get_mut(&data_source_id) {
+            ds.columns = new_data.columns;
+            ds.rows = new_data.rows;
+            ds.mark_clean();
+        }
+
+        self.mark_dirty();
+        Ok(())
+    }
+
+    /// Check if a data source has unsaved changes
+    pub fn is_data_source_dirty(&self, data_source_id: u64) -> bool {
+        self.data_sources.get(&data_source_id)
+            .map(|ds| ds.is_dirty())
+            .unwrap_or(false)
+    }
+
+    /// Check if a data source can be saved to file
+    pub fn can_save_data_source(&self, data_source_id: u64) -> bool {
+        self.data_sources.get(&data_source_id)
+            .map(|ds| ds.has_file_origin())
+            .unwrap_or(false)
     }
 
     /// Create a fresh board for testing (doesn't load from disk)

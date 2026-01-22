@@ -41,6 +41,7 @@ pub fn parse_json_content(json: &str) -> Result<DataSource, String> {
             columns: vec![],
             rows: vec![],
             origin: DataOrigin::Json { path: None },
+            dirty: false,
         });
     }
 
@@ -83,6 +84,7 @@ pub fn parse_json_content(json: &str) -> Result<DataSource, String> {
         columns,
         rows,
         origin: DataOrigin::Json { path: None },
+        dirty: false,
     })
 }
 
@@ -200,6 +202,61 @@ pub async fn fetch_json_from_url(url: &str) -> Result<DataSource, String> {
     Err(format!("URL fetching not implemented yet: {}", url))
 }
 
+/// Write a DataSource back to a JSON file
+///
+/// Writes as an array of objects with pretty formatting.
+/// Returns the path written to, or an error message.
+pub fn write_json_file(data_source: &DataSource) -> Result<PathBuf, String> {
+    let path = match &data_source.origin {
+        DataOrigin::Json { path: Some(p) } => p.clone(),
+        _ => return Err("Data source does not have a JSON file origin".to_string()),
+    };
+
+    let content = write_json_content(data_source);
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(path)
+}
+
+/// Convert a DataSource to JSON string content (array of objects)
+pub fn write_json_content(data_source: &DataSource) -> String {
+    let mut array: Vec<serde_json::Map<String, Value>> = Vec::new();
+
+    for row in &data_source.rows {
+        let mut obj = serde_json::Map::new();
+        for (col_idx, cell) in row.cells.iter().enumerate() {
+            if let Some(col) = data_source.columns.get(col_idx) {
+                let value = cell_to_json_value(cell);
+                obj.insert(col.name.clone(), value);
+            }
+        }
+        array.push(obj);
+    }
+
+    serde_json::to_string_pretty(&array).unwrap_or_else(|_| "[]".to_string())
+}
+
+/// Convert a DataCell to a JSON Value
+fn cell_to_json_value(cell: &DataCell) -> Value {
+    match cell {
+        DataCell::Text(s) => Value::String(s.clone()),
+        DataCell::Number(n) => {
+            // Use integer if it's a whole number
+            if n.fract() == 0.0 && *n >= i64::MIN as f64 && *n <= i64::MAX as f64 {
+                Value::Number(serde_json::Number::from(*n as i64))
+            } else {
+                serde_json::Number::from_f64(*n)
+                    .map(Value::Number)
+                    .unwrap_or(Value::Null)
+            }
+        }
+        DataCell::Boolean(b) => Value::Bool(*b),
+        DataCell::Date(d) => Value::String(d.clone()),
+        DataCell::Empty => Value::Null,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +316,43 @@ mod tests {
 
         assert_eq!(result.columns.len(), 0);
         assert_eq!(result.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_write_json_content() {
+        let ds = DataSource {
+            id: 1,
+            name: "Test".to_string(),
+            columns: vec![
+                DataColumn::new("name", DataType::Text),
+                DataColumn::new("age", DataType::Number),
+                DataColumn::new("active", DataType::Boolean),
+            ],
+            rows: vec![
+                DataRow::new(vec![
+                    DataCell::Text("Alice".to_string()),
+                    DataCell::Number(30.0),
+                    DataCell::Boolean(true),
+                ]),
+            ],
+            origin: DataOrigin::Manual,
+            dirty: false,
+        };
+
+        let output = write_json_content(&ds);
+        assert!(output.contains("\"name\": \"Alice\""));
+        assert!(output.contains("\"age\": 30"));
+        assert!(output.contains("\"active\": true"));
+    }
+
+    #[test]
+    fn test_json_roundtrip() {
+        let original = r#"[{"name": "Test", "value": 42}]"#;
+        let parsed = parse_json_content(original).unwrap();
+        let written = write_json_content(&parsed);
+        let reparsed = parse_json_content(&written).unwrap();
+
+        assert_eq!(parsed.columns.len(), reparsed.columns.len());
+        assert_eq!(parsed.rows.len(), reparsed.rows.len());
     }
 }

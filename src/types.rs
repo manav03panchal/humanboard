@@ -26,6 +26,9 @@ pub struct DataSource {
     pub rows: Vec<DataRow>,
     /// Where this data came from (for refresh capability)
     pub origin: DataOrigin,
+    /// Whether this data has unsaved changes (not serialized)
+    #[serde(skip)]
+    pub dirty: bool,
 }
 
 impl DataSource {
@@ -57,7 +60,40 @@ impl DataSource {
                 ]),
             ],
             origin: DataOrigin::Manual,
+            dirty: false,
         }
+    }
+
+    /// Check if this data source has a file origin (can be saved back)
+    pub fn has_file_origin(&self) -> bool {
+        matches!(
+            &self.origin,
+            DataOrigin::File { .. } | DataOrigin::Json { path: Some(_) }
+        )
+    }
+
+    /// Get the file path if this data source has a file origin
+    pub fn file_path(&self) -> Option<&std::path::Path> {
+        match &self.origin {
+            DataOrigin::File { path, .. } => Some(path),
+            DataOrigin::Json { path: Some(p) } => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Mark this data source as dirty (has unsaved changes)
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Mark this data source as clean (changes saved)
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Check if this data source has unsaved changes
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     /// Get the number of rows
