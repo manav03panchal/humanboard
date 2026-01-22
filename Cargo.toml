@@ -48,6 +48,16 @@ notify = "6.1"
 # Secure temp file handling
 tempfile = "3.10"
 
+# High-performance dataframe for large CSV/JSON datasets
+# Enables lazy evaluation and streaming for 100k+ row files
+polars = { version = "0.46", default-features = false, features = [
+    "lazy",           # Lazy evaluation - only compute what's needed
+    "csv",            # CSV parsing
+    "json",           # JSON parsing
+    "streaming",      # Stream large files without loading all into memory
+    "dtype-struct",   # Struct type support
+] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 core-text = "20.1"
 

@@ -104,6 +104,7 @@ impl Humanboard {
             editing_table_cell: None,
             table_cell_input: None,
             chart_config_modal: None,
+            table_scroll_states: HashMap::new(),
             hit_tester: HitTester::new(),
             perf_monitor: PerfMonitor::new(),
             background: BackgroundExecutor::with_default_workers(),

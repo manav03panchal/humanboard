@@ -18,6 +18,7 @@
 use crate::app::Humanboard;
 use crate::audio_webview::AudioWebView;
 use crate::constants::HEADER_HEIGHT;
+use crate::data::{format_row_count, VirtualScrollState, BUFFER_ROWS, ROW_HEIGHT};
 use crate::markdown_card::{render_collapsed_code, render_collapsed_markdown};
 use crate::profile_scope;
 use crate::types::{CanvasItem, DataSource, ItemContent};
@@ -263,6 +264,7 @@ fn render_item_content(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
+    table_scroll_states: &HashMap<u64, VirtualScrollState>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
@@ -1383,6 +1385,7 @@ pub fn render_items(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
+    table_scroll_states: &HashMap<u64, VirtualScrollState>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
@@ -1447,6 +1450,7 @@ pub fn render_items(
                     audio_webviews,
                     video_webviews,
                     data_sources,
+                    table_scroll_states,
                     editing_textbox_id,
                     textbox_input,
                     editing_table_cell,
@@ -1613,6 +1617,7 @@ pub fn render_canvas_area(
     audio_webviews: &HashMap<u64, AudioWebView>,
     video_webviews: &HashMap<u64, VideoWebView>,
     data_sources: &HashMap<u64, DataSource>,
+    table_scroll_states: &HashMap<u64, VirtualScrollState>,
     editing_textbox_id: Option<u64>,
     textbox_input: Option<&Entity<InputState>>,
     editing_table_cell: Option<(u64, usize, usize)>,
@@ -1644,6 +1649,7 @@ pub fn render_canvas_area(
             audio_webviews,
             video_webviews,
             data_sources,
+            table_scroll_states,
             editing_textbox_id,
             textbox_input,
             editing_table_cell,

@@ -12,6 +12,7 @@ use crate::notifications::ToastManager;
 use crate::perf::PerfMonitor;
 use crate::settings::Settings;
 use crate::settings_watcher::SettingsWatcher;
+use crate::data::VirtualScrollState;
 use crate::types::ToolType;
 use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
@@ -176,6 +177,9 @@ pub struct Humanboard {
     // Table cell editing
     pub editing_table_cell: Option<(u64, usize, usize)>, // (table_item_id, row, col)
     pub table_cell_input: Option<Entity<gpui_component::input::InputState>>,
+
+    // Table virtual scrolling (keyed by table item ID)
+    pub table_scroll_states: HashMap<u64, VirtualScrollState>,
 
     // Chart configuration modal state
     pub chart_config_modal: Option<ChartConfigModal>,
