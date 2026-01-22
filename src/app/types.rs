@@ -1,10 +1,11 @@
 //! Types and enums used by the Humanboard application.
 
+use crate::data_table::DataTableState;
 use crate::pdf_webview::PdfWebView;
-use gpui::Point;
-use gpui::Pixels;
-use gpui_component::input::InputState;
 use gpui::Entity;
+use gpui::Pixels;
+use gpui::Point;
+use gpui_component::input::InputState;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -136,6 +137,21 @@ pub enum PreviewTab {
         editor: Option<Entity<InputState>>,
         meta: TabMeta,
     },
+    /// Data tab for CSV/JSON tabular data with Excel-like UI
+    Data {
+        path: PathBuf,
+        /// Display title (usually filename without extension)
+        title: String,
+        /// Column headers
+        columns: Vec<String>,
+        /// Row data (each row is a vector of cell values)
+        rows: Vec<Vec<String>>,
+        /// Table UI state (pagination, collapse, etc.)
+        table_state: DataTableState,
+        /// Whether the data has been modified (dirty state)
+        dirty: bool,
+        meta: TabMeta,
+    },
 }
 
 impl PreviewTab {
@@ -144,6 +160,7 @@ impl PreviewTab {
             PreviewTab::Pdf { path, .. } => path,
             PreviewTab::Markdown { path, .. } => path,
             PreviewTab::Code { path, .. } => path,
+            PreviewTab::Data { path, .. } => path,
         }
     }
 
@@ -172,6 +189,7 @@ impl PreviewTab {
                 .and_then(|n| n.to_str())
                 .unwrap_or("Untitled")
                 .to_string(),
+            PreviewTab::Data { title, .. } => title.clone(),
         }
     }
 
@@ -180,7 +198,10 @@ impl PreviewTab {
     }
 
     pub fn is_dirty(&self) -> bool {
-        matches!(self, PreviewTab::Code { dirty: true, .. })
+        matches!(
+            self,
+            PreviewTab::Code { dirty: true, .. } | PreviewTab::Data { dirty: true, .. }
+        )
     }
 
     /// Get tab metadata
@@ -189,6 +210,7 @@ impl PreviewTab {
             PreviewTab::Pdf { meta, .. } => meta,
             PreviewTab::Markdown { meta, .. } => meta,
             PreviewTab::Code { meta, .. } => meta,
+            PreviewTab::Data { meta, .. } => meta,
         }
     }
 
@@ -198,6 +220,7 @@ impl PreviewTab {
             PreviewTab::Pdf { meta, .. } => meta,
             PreviewTab::Markdown { meta, .. } => meta,
             PreviewTab::Code { meta, .. } => meta,
+            PreviewTab::Data { meta, .. } => meta,
         }
     }
 
@@ -229,6 +252,9 @@ impl PreviewTab {
             PreviewTab::Code { editor, .. } => {
                 // Clear the editor entity
                 *editor = None;
+            }
+            PreviewTab::Data { .. } => {
+                // Data tabs don't have external resources to clean up
             }
         }
     }

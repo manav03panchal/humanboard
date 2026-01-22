@@ -139,6 +139,7 @@ impl PreviewTabExt for PreviewTab {
             PreviewTab::Code { language, .. } => Some(language),
             PreviewTab::Markdown { .. } => Some("markdown"),
             PreviewTab::Pdf { .. } => None,
+            PreviewTab::Data { .. } => None,
         }
     }
 

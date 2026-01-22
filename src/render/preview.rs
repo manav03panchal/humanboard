@@ -69,6 +69,7 @@ pub fn render_tab_bar(
                     let filename = tab.title();
                     let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
                     let is_code = matches!(tab, PreviewTab::Code { .. });
+                    let is_data = matches!(tab, PreviewTab::Data { .. });
                     let is_dirty = tab.is_dirty();
                     let is_preview = tab.is_preview();
                     let is_pinned = tab.is_pinned();
@@ -159,6 +160,8 @@ pub fn render_tab_bar(
                                 .text_color(primary) // Use theme primary for code
                         } else if is_markdown {
                             Icon::new(IconName::File).xsmall().text_color(primary)
+                        } else if is_data {
+                            Icon::new(IconName::LayoutDashboard).xsmall().text_color(primary) // Data table
                         } else {
                             Icon::new(IconName::File).xsmall().text_color(danger) // PDF
                         })
@@ -1002,6 +1005,63 @@ pub fn render_tab_content(
                             d.child(div().text_xs().text_color(muted_fg).child("⌘S to save"))
                         }),
                 )
+        }
+        PreviewTab::Data {
+            title,
+            columns,
+            rows,
+            table_state,
+            dirty,
+            ..
+        } => {
+            use crate::data_table::{render_data_table, DataTableColors};
+
+            let colors = DataTableColors::from_theme(
+                bg,
+                cx.theme().muted,
+                border,
+                cx.theme().foreground,
+                muted_fg,
+                primary,
+                title_bar,
+            );
+
+            // Convert column headers from Vec<String> to Vec<&str>
+            let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+
+            v_flex()
+                .flex_1()
+                .w_full()
+                .min_h_0()
+                .bg(bg)
+                .overflow_hidden()
+                .p_2()
+                .child(
+                    render_data_table(
+                        "data-table",
+                        title,
+                        &col_refs,
+                        rows,
+                        table_state,
+                        |row, col_idx| row.get(col_idx).cloned().unwrap_or_default(),
+                        &colors,
+                    ),
+                )
+                .when(*dirty, |d| {
+                    d.child(
+                        h_flex()
+                            .w_full()
+                            .px_3()
+                            .py_2()
+                            .justify_end()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child("Modified • ⌘S to save"),
+                            ),
+                    )
+                })
         }
     }
 }
