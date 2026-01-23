@@ -55,7 +55,7 @@ impl PreviewPanelExt for PreviewPanel {
     }
 
     fn find_tab(&self, path: &PathBuf) -> Option<usize> {
-        self.tabs.iter().position(|t| t.path() == path)
+        self.tabs.iter().position(|t| t.path() == Some(path))
     }
 
     fn next_tab(&mut self) {
@@ -139,6 +139,7 @@ impl PreviewTabExt for PreviewTab {
             PreviewTab::Code { language, .. } => Some(language),
             PreviewTab::Markdown { .. } => Some("markdown"),
             PreviewTab::Pdf { .. } => None,
+            PreviewTab::Table { .. } => None,
         }
     }
 

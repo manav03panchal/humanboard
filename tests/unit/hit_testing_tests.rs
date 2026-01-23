@@ -48,7 +48,7 @@ fn test_hit_test_canvas() {
 #[test]
 fn test_screen_to_canvas() {
     let tester = HitTester::new();
-    let screen_pos = point(px(148.0), px(140.0)); // 48 (dock) + 100, 40 (header) + 100
+    let screen_pos = point(px(144.0), px(140.0)); // 44 (DOCK_WIDTH) + 100, 40 (header) + 100
     let canvas_pos = tester.screen_to_canvas(screen_pos, point(px(0.0), px(0.0)), 1.0);
     assert_eq!(f32::from(canvas_pos.x), 100.0);
     assert_eq!(f32::from(canvas_pos.y), 100.0);

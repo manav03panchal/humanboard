@@ -18,7 +18,9 @@ use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT};
 use crate::error::BoardError;
 use crate::profile_scope;
 use crate::spatial_index::SpatialIndex;
-use crate::types::{CanvasItem, ItemContent};
+use crate::data::{is_data_file, parse_csv_file, parse_json_file, write_csv_file, write_json_file};
+use crate::types::DataOrigin;
+use crate::types::{CanvasItem, DataSource, ItemContent};
 use crate::validation::validate_items;
 use gpui::{point, px, Pixels, Point, Size};
 use serde::{Deserialize, Serialize};
@@ -43,6 +45,11 @@ pub struct BoardState {
     pub zoom: f32,
     pub items: Vec<CanvasItem>,
     pub next_item_id: u64,
+    /// Shared data sources for tables and charts
+    #[serde(default)]
+    pub data_sources: HashMap<u64, DataSource>,
+    #[serde(default)]
+    pub next_data_source_id: u64,
 }
 
 /// A single undoable operation (delta-based)
@@ -274,6 +281,10 @@ pub struct Board {
 
     pub next_item_id: u64,
 
+    /// Shared data sources for tables and charts
+    pub data_sources: HashMap<u64, DataSource>,
+    pub next_data_source_id: u64,
+
     // Delta-based history using VecDeque for O(1) front removal
     history: VecDeque<HistoryEntry>,
     history_index: usize,
@@ -326,6 +337,8 @@ impl Board {
                 items_index,
                 spatial_index,
                 next_item_id: state.next_item_id,
+                data_sources: state.data_sources,
+                next_data_source_id: state.next_data_source_id,
                 history: VecDeque::new(),
                 history_index: 0,
                 ops_since_snapshot: 0,
@@ -354,6 +367,8 @@ impl Board {
             items_index: HashMap::new(),
             spatial_index: SpatialIndex::new(),
             next_item_id: 0,
+            data_sources: HashMap::new(),
+            next_data_source_id: 0,
             history: VecDeque::new(),
             history_index: 0,
             ops_since_snapshot: 0,
@@ -487,14 +502,58 @@ impl Board {
                 path.clone()
             };
 
-            let content = ItemContent::from_path(&actual_path);
             let base_pos = self.screen_to_canvas(position);
             let staggered_pos = point(
                 px(f32::from(base_pos.x) + (i as f32 * STAGGER_X)),
                 px(f32::from(base_pos.y) + (i as f32 * STAGGER_Y)),
             );
-            let id = self.add_item_internal(staggered_pos, content);
-            added_ids.push(id);
+
+            // Check if this is a data file (CSV/TSV/JSON)
+            if is_data_file(&actual_path) {
+                let filename = actual_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("data");
+
+                // Parse the data file
+                let parse_result = if actual_path.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase() == "json")
+                    .unwrap_or(false)
+                {
+                    parse_json_file(&actual_path)
+                } else {
+                    parse_csv_file(&actual_path)
+                };
+
+                match parse_result {
+                    Ok(mut data_source) => {
+                        // Assign ID and store the data source
+                        data_source.id = self.next_data_source_id;
+                        self.next_data_source_id += 1;
+                        let ds_id = data_source.id;
+                        self.data_sources.insert(ds_id, data_source);
+
+                        // Create a table item referencing this data source
+                        let content = ItemContent::Table {
+                            data_source_id: ds_id,
+                            show_headers: true,
+                            stripe: true,
+                        };
+                        let id = self.add_item_internal(staggered_pos, content);
+                        added_ids.push(id);
+                        info!("Created table from data file: {}", filename);
+                    }
+                    Err(e) => {
+                        errors.push(format!("Failed to parse '{}': {}", filename, e));
+                        warn!("Failed to parse data file '{}': {}", filename, e);
+                    }
+                }
+            } else {
+                // Handle as regular file (image, video, etc.)
+                let content = ItemContent::from_path(&actual_path);
+                let id = self.add_item_internal(staggered_pos, content);
+                added_ids.push(id);
+            }
         }
 
         // Create batch operation for all added items
@@ -712,15 +771,28 @@ impl Board {
         let query_lower = query.to_lowercase();
         self.items
             .iter()
-            .filter(|item| {
-                item.content.is_searchable()
-                    && item
-                        .content
-                        .display_name()
-                        .to_lowercase()
-                        .contains(&query_lower)
+            .filter_map(|item| {
+                if !item.content.is_searchable() {
+                    return None;
+                }
+
+                // Get display name - for tables, use the data source name
+                let display_name = match &item.content {
+                    ItemContent::Table { data_source_id, .. } => {
+                        self.data_sources
+                            .get(data_source_id)
+                            .map(|ds| ds.name.clone())
+                            .unwrap_or_else(|| "Table".to_string())
+                    }
+                    _ => item.content.display_name(),
+                };
+
+                if display_name.to_lowercase().contains(&query_lower) {
+                    Some((item.id, display_name))
+                } else {
+                    None
+                }
             })
-            .map(|item| (item.id, item.content.display_name()))
             .collect()
     }
 
@@ -764,6 +836,8 @@ impl Board {
             zoom: self.zoom,
             items: self.items.clone(),
             next_item_id: self.next_item_id,
+            data_sources: self.data_sources.clone(),
+            next_data_source_id: self.next_data_source_id,
         };
 
         // Get path from board index (supports custom storage locations)
@@ -826,6 +900,8 @@ impl Board {
             zoom: self.zoom,
             items: self.items.clone(),
             next_item_id: self.next_item_id,
+            data_sources: self.data_sources.clone(),
+            next_data_source_id: self.next_data_source_id,
         };
         self.history.push_back(HistoryEntry::Snapshot(state));
         self.history_index = self.history.len();
@@ -925,8 +1001,93 @@ impl Board {
         self.zoom = state.zoom;
         self.items = state.items.clone();
         self.next_item_id = state.next_item_id;
+        self.data_sources = state.data_sources.clone();
+        self.next_data_source_id = state.next_data_source_id;
         self.rebuild_index();
         self.mark_dirty();
+    }
+
+    // =========================================================================
+    // Data Source File Operations
+    // =========================================================================
+
+    /// Save a data source back to its original file.
+    ///
+    /// Only works for data sources with file origins (CSV/JSON).
+    /// Returns Ok with the path saved to, or Err with error message.
+    pub fn save_data_source_to_file(&mut self, data_source_id: u64) -> Result<PathBuf, String> {
+        let ds = self.data_sources.get(&data_source_id)
+            .ok_or_else(|| "Data source not found".to_string())?;
+
+        let result = match &ds.origin {
+            DataOrigin::File { .. } => write_csv_file(ds),
+            DataOrigin::Json { path: Some(_) } => write_json_file(ds),
+            DataOrigin::Json { path: None } => {
+                Err("JSON data source has no file path".to_string())
+            }
+            DataOrigin::Manual => {
+                Err("Cannot save manually-created data to file".to_string())
+            }
+            DataOrigin::Api { .. } => {
+                Err("Cannot save API data source to file".to_string())
+            }
+        };
+
+        // If successful, mark the data source as clean
+        if result.is_ok() {
+            if let Some(ds) = self.data_sources.get_mut(&data_source_id) {
+                ds.mark_clean();
+            }
+        }
+
+        result
+    }
+
+    /// Reload a data source from its original file.
+    ///
+    /// Replaces the current data with fresh data from the file.
+    /// Returns Ok on success, or Err with error message.
+    pub fn reload_data_source_from_file(&mut self, data_source_id: u64) -> Result<(), String> {
+        let ds = self.data_sources.get(&data_source_id)
+            .ok_or_else(|| "Data source not found".to_string())?;
+
+        let new_data = match &ds.origin {
+            DataOrigin::File { path, .. } => parse_csv_file(path),
+            DataOrigin::Json { path: Some(p) } => parse_json_file(p),
+            DataOrigin::Json { path: None } => {
+                Err("JSON data source has no file path".to_string())
+            }
+            DataOrigin::Manual => {
+                Err("Cannot reload manually-created data".to_string())
+            }
+            DataOrigin::Api { .. } => {
+                Err("API reload not implemented".to_string())
+            }
+        }?;
+
+        // Update the existing data source with new data
+        if let Some(ds) = self.data_sources.get_mut(&data_source_id) {
+            ds.columns = new_data.columns;
+            ds.rows = new_data.rows;
+            ds.mark_clean();
+        }
+
+        self.mark_dirty();
+        Ok(())
+    }
+
+    /// Check if a data source has unsaved changes
+    pub fn is_data_source_dirty(&self, data_source_id: u64) -> bool {
+        self.data_sources.get(&data_source_id)
+            .map(|ds| ds.is_dirty())
+            .unwrap_or(false)
+    }
+
+    /// Check if a data source can be saved to file
+    pub fn can_save_data_source(&self, data_source_id: u64) -> bool {
+        self.data_sources.get(&data_source_id)
+            .map(|ds| ds.has_file_origin())
+            .unwrap_or(false)
     }
 
     /// Create a fresh board for testing (doesn't load from disk)

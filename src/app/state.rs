@@ -6,6 +6,7 @@ use crate::audio_webview::AudioWebView;
 use crate::background::BackgroundExecutor;
 use crate::board::Board;
 use crate::board_index::BoardIndex;
+use crate::data::{DataSourceDelegate, VirtualScrollState};
 use crate::focus::FocusManager;
 use crate::hit_testing::HitTester;
 use crate::notifications::ToastManager;
@@ -17,12 +18,49 @@ use crate::video_webview::VideoWebView;
 use crate::youtube_webview::YouTubeWebView;
 use gpui::*;
 use gpui_component::input::InputState;
+use gpui_component::table::TableState;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use super::PanAnimation;
+
+/// State for the chart configuration modal
+#[derive(Clone)]
+pub struct ChartConfigModal {
+    /// ID of the table item being configured
+    pub table_item_id: u64,
+    /// Data source ID for the table
+    pub data_source_id: u64,
+    /// Selected chart type
+    pub chart_type: crate::types::ChartType,
+    /// Selected X axis column index
+    pub x_column: usize,
+    /// Selected Y axis column indices
+    pub y_columns: Vec<usize>,
+    /// Column names for display
+    pub column_names: Vec<String>,
+    /// Aggregation method for duplicate X values
+    pub aggregation: crate::types::AggregationType,
+    /// Sort order for chart data
+    pub sort_order: crate::types::SortOrder,
+}
+
+impl ChartConfigModal {
+    pub fn new(table_item_id: u64, data_source_id: u64, column_names: Vec<String>) -> Self {
+        Self {
+            table_item_id,
+            data_source_id,
+            chart_type: crate::types::ChartType::Bar,
+            x_column: 0,
+            y_columns: if column_names.len() > 1 { vec![1] } else { vec![0] },
+            column_names,
+            aggregation: crate::types::AggregationType::default(),
+            sort_order: crate::types::SortOrder::default(),
+        }
+    }
+}
 
 pub struct Humanboard {
     // View state
@@ -136,6 +174,19 @@ pub struct Humanboard {
     pub editing_textbox_id: Option<u64>,      // ID of textbox being edited
     pub textbox_input: Option<Entity<gpui_component::input::InputState>>, // Input for editing textbox
     pub pending_textbox_drag: Option<(u64, Point<Pixels>)>, // Deferred drag for textboxes (to allow double-click)
+
+    // Table cell editing
+    pub editing_table_cell: Option<(u64, usize, usize)>, // (table_item_id, row, col)
+    pub table_cell_input: Option<Entity<gpui_component::input::InputState>>,
+
+    // Table virtual scrolling (keyed by table item ID)
+    pub table_scroll_states: HashMap<u64, VirtualScrollState>,
+
+    // gpui-component Table states (keyed by table item ID)
+    pub table_states: HashMap<u64, Entity<TableState<DataSourceDelegate>>>,
+
+    // Chart configuration modal state
+    pub chart_config_modal: Option<ChartConfigModal>,
 
     // Hit testing
     pub hit_tester: HitTester,

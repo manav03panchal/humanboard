@@ -69,7 +69,15 @@ pub fn render_tab_bar(
                     let filename = tab.title();
                     let is_markdown = matches!(tab, PreviewTab::Markdown { .. });
                     let is_code = matches!(tab, PreviewTab::Code { .. });
-                    let is_dirty = tab.is_dirty();
+                    let is_table = matches!(tab, PreviewTab::Table { .. });
+                    // Check dirty state - for tables, check the delegate's data source
+                    let is_dirty = match tab {
+                        PreviewTab::Code { dirty: true, .. } => true,
+                        PreviewTab::Table { table_state: Some(state), .. } => {
+                            state.read(cx).delegate().is_dirty()
+                        }
+                        _ => false,
+                    };
                     let is_preview = tab.is_preview();
                     let is_pinned = tab.is_pinned();
                     let is_being_dragged = dragging_tab == Some(index);
@@ -153,7 +161,11 @@ pub fn render_tab_bar(
                         .when(is_pinned, |d| {
                             d.child(div().text_xs().text_color(muted_fg).mr_1().child("📌"))
                         })
-                        .child(if is_code {
+                        .child(if is_table {
+                            Icon::new(IconName::LayoutDashboard)
+                                .xsmall()
+                                .text_color(primary)
+                        } else if is_code {
                             Icon::new(IconName::SquareTerminal)
                                 .xsmall()
                                 .text_color(primary) // Use theme primary for code
@@ -996,6 +1008,98 @@ pub fn render_tab_content(
                                         .text_xs()
                                         .text_color(muted_fg)
                                         .child(format!("{} lines", line_count)),
+                                ),
+                        )
+                        .when(is_dirty, |d| {
+                            d.child(div().text_xs().text_color(muted_fg).child("⌘S to save"))
+                        }),
+                )
+        }
+
+        PreviewTab::Table {
+            name,
+            table_state,
+            ..
+        } => {
+            let table_name = name.clone();
+            // Check if table has unsaved changes
+            let is_dirty = table_state
+                .as_ref()
+                .map(|state| state.read(cx).delegate().is_dirty())
+                .unwrap_or(false);
+
+            // Focus handle for key context
+            let table_focus = cx.focus_handle();
+
+            v_flex()
+                .flex_1()
+                .w_full()
+                .min_h_0()
+                .bg(bg)
+                .child(
+                    // Table content area
+                    div()
+                        .id("table-content-scroll")
+                        .flex_1()
+                        .overflow_hidden()
+                        .bg(bg)
+                        .track_focus(&table_focus)
+                        .key_context(FocusContext::KEY_PREVIEW)
+                        .on_click(cx.listener(move |this, _event, window, cx| {
+                            // Set focus context to Preview and focus the table
+                            this.focus.focus(crate::focus::FocusContext::Preview, window);
+                            table_focus.focus(window);
+                            cx.notify();
+                        }))
+                        .when_some(table_state.as_ref(), |d, state| {
+                            use gpui_component::table::Table;
+                            d.child(
+                                Table::new(state)
+                                    .bordered(true)
+                                    .stripe(true)
+                            )
+                        })
+                        .when(table_state.is_none(), |d| {
+                            d.child(
+                                div()
+                                    .p_4()
+                                    .child(render_loading_spinner(
+                                        "Loading table...",
+                                        cx.theme().primary,
+                                        cx.theme().muted_foreground,
+                                    ))
+                            )
+                        }),
+                )
+                .child(
+                    // Footer with table info
+                    h_flex()
+                        .h(px(40.0))
+                        .bg(title_bar)
+                        .border_t_1()
+                        .border_color(border)
+                        .items_center()
+                        .justify_between()
+                        .px_3()
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .px(px(6.0))
+                                        .py(px(2.0))
+                                        .bg(primary.opacity(0.2))
+                                        .rounded(px(3.0))
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(primary)
+                                        .child("CSV"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted_fg)
+                                        .child(table_name),
                                 ),
                         )
                         .when(is_dirty, |d| {

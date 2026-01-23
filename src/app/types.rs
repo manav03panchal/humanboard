@@ -32,7 +32,7 @@ pub enum SplitDirection {
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum CmdPaletteMode {
     #[default]
-    Items, // Searching canvas items
+    Items, // Searching canvas items (includes tables by CSV name)
     Themes, // Selecting theme
 }
 
@@ -136,14 +136,24 @@ pub enum PreviewTab {
         editor: Option<Entity<InputState>>,
         meta: TabMeta,
     },
+    Table {
+        /// The data source ID this table references
+        data_source_id: u64,
+        /// Display name (from CSV filename)
+        name: String,
+        /// Table state for gpui-component Table
+        table_state: Option<gpui::Entity<gpui_component::table::TableState<crate::data::DataSourceDelegate>>>,
+        meta: TabMeta,
+    },
 }
 
 impl PreviewTab {
-    pub fn path(&self) -> &PathBuf {
+    pub fn path(&self) -> Option<&PathBuf> {
         match self {
-            PreviewTab::Pdf { path, .. } => path,
-            PreviewTab::Markdown { path, .. } => path,
-            PreviewTab::Code { path, .. } => path,
+            PreviewTab::Pdf { path, .. } => Some(path),
+            PreviewTab::Markdown { path, .. } => Some(path),
+            PreviewTab::Code { path, .. } => Some(path),
+            PreviewTab::Table { .. } => None, // Tables don't have file paths
         }
     }
 
@@ -172,6 +182,7 @@ impl PreviewTab {
                 .and_then(|n| n.to_str())
                 .unwrap_or("Untitled")
                 .to_string(),
+            PreviewTab::Table { name, .. } => name.clone(),
         }
     }
 
@@ -189,6 +200,7 @@ impl PreviewTab {
             PreviewTab::Pdf { meta, .. } => meta,
             PreviewTab::Markdown { meta, .. } => meta,
             PreviewTab::Code { meta, .. } => meta,
+            PreviewTab::Table { meta, .. } => meta,
         }
     }
 
@@ -198,6 +210,7 @@ impl PreviewTab {
             PreviewTab::Pdf { meta, .. } => meta,
             PreviewTab::Markdown { meta, .. } => meta,
             PreviewTab::Code { meta, .. } => meta,
+            PreviewTab::Table { meta, .. } => meta,
         }
     }
 
@@ -229,6 +242,10 @@ impl PreviewTab {
             PreviewTab::Code { editor, .. } => {
                 // Clear the editor entity
                 *editor = None;
+            }
+            PreviewTab::Table { table_state, .. } => {
+                // Clear the table state entity
+                *table_state = None;
             }
         }
     }

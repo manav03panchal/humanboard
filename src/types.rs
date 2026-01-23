@@ -8,6 +8,431 @@ use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+// ============================================================================
+// Data Visualization Types
+// ============================================================================
+
+/// A data source that can be shared between tables and charts.
+/// Stored in the Board's data_sources HashMap, referenced by ID.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSource {
+    /// Unique identifier
+    pub id: u64,
+    /// Human-readable name (from filename or user-defined)
+    pub name: String,
+    /// Column definitions
+    pub columns: Vec<DataColumn>,
+    /// Data rows
+    pub rows: Vec<DataRow>,
+    /// Where this data came from (for refresh capability)
+    pub origin: DataOrigin,
+    /// Whether this data has unsaved changes (not serialized)
+    #[serde(skip)]
+    pub dirty: bool,
+}
+
+impl DataSource {
+    /// Create an empty data source for manual entry
+    pub fn new_empty(id: u64, name: String) -> Self {
+        Self {
+            id,
+            name,
+            columns: vec![
+                DataColumn::new("Column A", DataType::Text),
+                DataColumn::new("Column B", DataType::Text),
+                DataColumn::new("Column C", DataType::Text),
+            ],
+            rows: vec![
+                DataRow::new(vec![
+                    DataCell::Empty,
+                    DataCell::Empty,
+                    DataCell::Empty,
+                ]),
+                DataRow::new(vec![
+                    DataCell::Empty,
+                    DataCell::Empty,
+                    DataCell::Empty,
+                ]),
+                DataRow::new(vec![
+                    DataCell::Empty,
+                    DataCell::Empty,
+                    DataCell::Empty,
+                ]),
+            ],
+            origin: DataOrigin::Manual,
+            dirty: false,
+        }
+    }
+
+    /// Check if this data source has a file origin (can be saved back)
+    pub fn has_file_origin(&self) -> bool {
+        matches!(
+            &self.origin,
+            DataOrigin::File { .. } | DataOrigin::Json { path: Some(_) }
+        )
+    }
+
+    /// Get the file path if this data source has a file origin
+    pub fn file_path(&self) -> Option<&std::path::Path> {
+        match &self.origin {
+            DataOrigin::File { path, .. } => Some(path),
+            DataOrigin::Json { path: Some(p) } => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Mark this data source as dirty (has unsaved changes)
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Mark this data source as clean (changes saved)
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Check if this data source has unsaved changes
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Get the number of rows
+    pub fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// Get the number of columns
+    pub fn column_count(&self) -> usize {
+        self.columns.len()
+    }
+
+    /// Add a new row at the end
+    pub fn add_row(&mut self) {
+        let cells = (0..self.columns.len())
+            .map(|_| DataCell::Empty)
+            .collect();
+        self.rows.push(DataRow::new(cells));
+    }
+
+    /// Add a new column at the end
+    pub fn add_column(&mut self, name: String, data_type: DataType) {
+        self.columns.push(DataColumn::new(&name, data_type));
+        for row in &mut self.rows {
+            row.cells.push(DataCell::Empty);
+        }
+    }
+}
+
+/// Column metadata
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataColumn {
+    /// Column name/header
+    pub name: String,
+    /// Data type for this column
+    pub data_type: DataType,
+    /// Optional width for rendering (in pixels at zoom 1.0)
+    pub width: Option<f32>,
+}
+
+impl DataColumn {
+    pub fn new(name: &str, data_type: DataType) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type,
+            width: None,
+        }
+    }
+}
+
+/// Supported data types for cells
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DataType {
+    Text,
+    Number,
+    Boolean,
+    Date,
+}
+
+impl Default for DataType {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
+/// A row of data cells
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataRow {
+    pub cells: Vec<DataCell>,
+}
+
+impl DataRow {
+    pub fn new(cells: Vec<DataCell>) -> Self {
+        Self { cells }
+    }
+}
+
+/// A single cell value
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DataCell {
+    Text(String),
+    Number(f64),
+    Boolean(bool),
+    Date(String), // ISO 8601 format
+    Empty,
+}
+
+impl DataCell {
+    /// Convert cell to string representation
+    pub fn to_string(&self) -> String {
+        match self {
+            DataCell::Text(s) => s.clone(),
+            DataCell::Number(n) => {
+                // Format nicely: no trailing zeros for whole numbers
+                if n.fract() == 0.0 {
+                    format!("{}", *n as i64)
+                } else {
+                    format!("{}", n)
+                }
+            }
+            DataCell::Boolean(b) => if *b { "true" } else { "false" }.to_string(),
+            DataCell::Date(d) => d.clone(),
+            DataCell::Empty => String::new(),
+        }
+    }
+
+    /// Try to convert cell to f64 (for charts)
+    pub fn to_f64(&self) -> f64 {
+        match self {
+            DataCell::Number(n) => *n,
+            DataCell::Text(s) => s.parse().unwrap_or(0.0),
+            DataCell::Boolean(b) => if *b { 1.0 } else { 0.0 },
+            _ => 0.0,
+        }
+    }
+
+    /// Parse a string into a DataCell, trying to preserve type
+    pub fn parse(value: &str, hint: &DataType) -> Self {
+        if value.is_empty() {
+            return DataCell::Empty;
+        }
+
+        match hint {
+            DataType::Number => value
+                .parse::<f64>()
+                .map(DataCell::Number)
+                .unwrap_or(DataCell::Text(value.to_string())),
+            DataType::Boolean => match value.to_lowercase().as_str() {
+                "true" | "yes" | "1" => DataCell::Boolean(true),
+                "false" | "no" | "0" => DataCell::Boolean(false),
+                _ => DataCell::Text(value.to_string()),
+            },
+            DataType::Date => DataCell::Date(value.to_string()),
+            DataType::Text => DataCell::Text(value.to_string()),
+        }
+    }
+}
+
+/// Origin of a data source (for refresh capability)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DataOrigin {
+    /// Manually entered data
+    Manual,
+    /// Imported from CSV/TSV file
+    File {
+        path: PathBuf,
+        delimiter: char,
+    },
+    /// Loaded from JSON file
+    Json {
+        path: Option<PathBuf>,
+    },
+    /// Fetched from API URL
+    Api {
+        url: String,
+        last_fetched: Option<u64>,
+    },
+}
+
+// ============================================================================
+// Chart Types
+// ============================================================================
+
+/// Chart configuration
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChartConfig {
+    /// Type of chart to render
+    pub chart_type: ChartType,
+    /// Column index for X axis (labels)
+    pub x_column: Option<usize>,
+    /// Column indices for Y axis (values)
+    pub y_columns: Vec<usize>,
+    /// Optional chart title
+    pub title: Option<String>,
+    /// Whether to show legend
+    pub show_legend: bool,
+    /// How to aggregate Y values when X has duplicates
+    pub aggregation: AggregationType,
+    /// Sort order for the chart data
+    pub sort_order: SortOrder,
+}
+
+impl Default for ChartConfig {
+    fn default() -> Self {
+        Self {
+            chart_type: ChartType::Bar,
+            x_column: Some(0),
+            y_columns: vec![1],
+            title: None,
+            show_legend: true,
+            aggregation: AggregationType::default(),
+            sort_order: SortOrder::default(),
+        }
+    }
+}
+
+impl ChartConfig {
+    pub fn new(chart_type: ChartType) -> Self {
+        Self {
+            chart_type,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_columns(mut self, x: usize, y: Vec<usize>) -> Self {
+        self.x_column = Some(x);
+        self.y_columns = y;
+        self
+    }
+
+    pub fn with_title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    pub fn with_aggregation(mut self, aggregation: AggregationType) -> Self {
+        self.aggregation = aggregation;
+        self
+    }
+
+    pub fn with_sort_order(mut self, sort_order: SortOrder) -> Self {
+        self.sort_order = sort_order;
+        self
+    }
+}
+
+/// Types of charts available
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChartType {
+    Line,
+    #[default]
+    Bar,
+    Area,
+    Pie,
+    Scatter,
+}
+
+impl ChartType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ChartType::Line => "Line",
+            ChartType::Bar => "Bar",
+            ChartType::Area => "Area",
+            ChartType::Pie => "Pie",
+            ChartType::Scatter => "Scatter",
+        }
+    }
+
+    pub fn all() -> &'static [ChartType] {
+        &[
+            ChartType::Bar,
+            ChartType::Line,
+            ChartType::Area,
+            ChartType::Pie,
+            ChartType::Scatter,
+        ]
+    }
+}
+
+/// Aggregation method for grouping duplicate X values
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AggregationType {
+    /// No aggregation - show raw values (may have duplicates)
+    None,
+    /// Sum values for each group
+    #[default]
+    Sum,
+    /// Average values for each group
+    Average,
+    /// Count occurrences in each group
+    Count,
+    /// Minimum value in each group
+    Min,
+    /// Maximum value in each group
+    Max,
+}
+
+impl AggregationType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            AggregationType::None => "None",
+            AggregationType::Sum => "Sum",
+            AggregationType::Average => "Average",
+            AggregationType::Count => "Count",
+            AggregationType::Min => "Min",
+            AggregationType::Max => "Max",
+        }
+    }
+
+    pub fn all() -> &'static [AggregationType] {
+        &[
+            AggregationType::Sum,
+            AggregationType::Average,
+            AggregationType::Count,
+            AggregationType::Min,
+            AggregationType::Max,
+            AggregationType::None,
+        ]
+    }
+}
+
+/// Sort order for chart data
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortOrder {
+    /// No sorting - keep original order
+    #[default]
+    None,
+    /// Sort by X axis (label) ascending (A-Z, 0-9)
+    LabelAsc,
+    /// Sort by X axis (label) descending (Z-A, 9-0)
+    LabelDesc,
+    /// Sort by Y axis (value) ascending (low to high)
+    ValueAsc,
+    /// Sort by Y axis (value) descending (high to low)
+    ValueDesc,
+}
+
+impl SortOrder {
+    pub fn label(&self) -> &'static str {
+        match self {
+            SortOrder::None => "Original",
+            SortOrder::LabelAsc => "Label A→Z",
+            SortOrder::LabelDesc => "Label Z→A",
+            SortOrder::ValueAsc => "Value ↑",
+            SortOrder::ValueDesc => "Value ↓",
+        }
+    }
+
+    pub fn all() -> &'static [SortOrder] {
+        &[
+            SortOrder::None,
+            SortOrder::LabelAsc,
+            SortOrder::LabelDesc,
+            SortOrder::ValueAsc,
+            SortOrder::ValueDesc,
+        ]
+    }
+}
+
 /// An item placed on the infinite canvas.
 ///
 /// Each canvas item has a unique ID, position, size, and content type.
@@ -32,6 +457,8 @@ pub enum ToolType {
     Text,
     Arrow,
     Shape,
+    Table,
+    Chart,
 }
 
 /// Shape types for the Shape tool
@@ -124,6 +551,24 @@ pub enum ItemContent {
         border_color: String,
         /// Border width in pixels
         border_width: f32,
+    },
+    /// A data table with editable cells
+    Table {
+        /// Reference to the shared data source
+        data_source_id: u64,
+        /// Whether to show column headers
+        show_headers: bool,
+        /// Whether to stripe alternating rows
+        stripe: bool,
+    },
+    /// A chart visualizing data from a data source
+    Chart {
+        /// Reference to the shared data source
+        data_source_id: u64,
+        /// ID of the source table item (for drawing connection lines)
+        source_item_id: Option<u64>,
+        /// Chart configuration (type, columns, styling)
+        config: ChartConfig,
     },
 }
 
@@ -258,6 +703,8 @@ impl ItemContent {
                 (w, h)
             }
             ItemContent::Shape { .. } => (150.0, 100.0), // Default shape size
+            ItemContent::Table { .. } => (400.0, 300.0), // Default table size
+            ItemContent::Chart { .. } => (400.0, 300.0), // Default chart size
         }
     }
 
@@ -289,6 +736,8 @@ impl ItemContent {
                 ShapeType::RoundedRect => "Rounded Rect".to_string(),
                 ShapeType::Ellipse => "Ellipse".to_string(),
             },
+            ItemContent::Table { .. } => "Table".to_string(),
+            ItemContent::Chart { config, .. } => format!("{} Chart", config.chart_type.label()),
         }
     }
 
@@ -296,8 +745,12 @@ impl ItemContent {
     pub fn is_searchable(&self) -> bool {
         !matches!(
             self,
-            ItemContent::TextBox { .. } | ItemContent::Arrow { .. } | ItemContent::Shape { .. }
+            ItemContent::TextBox { .. }
+                | ItemContent::Arrow { .. }
+                | ItemContent::Shape { .. }
+                | ItemContent::Chart { .. }
         )
+        // Note: Table is now searchable - name comes from data source
     }
 
     pub fn type_label(&self) -> &str {
@@ -334,6 +787,14 @@ impl ItemContent {
                 ShapeType::Rectangle => "RECT",
                 ShapeType::RoundedRect => "RRECT",
                 ShapeType::Ellipse => "ELLIPSE",
+            },
+            ItemContent::Table { .. } => "TABLE",
+            ItemContent::Chart { config, .. } => match config.chart_type {
+                ChartType::Line => "LINE",
+                ChartType::Bar => "BAR",
+                ChartType::Area => "AREA",
+                ChartType::Pie => "PIE",
+                ChartType::Scatter => "SCATTER",
             },
         }
     }

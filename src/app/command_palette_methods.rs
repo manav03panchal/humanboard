@@ -194,7 +194,19 @@ impl Humanboard {
                     .items
                     .iter()
                     .filter(|item| item.content.is_searchable())
-                    .map(|item| (item.id, item.content.display_name()))
+                    .map(|item| {
+                        // For tables, use the data source name instead of generic "Table"
+                        let name = match &item.content {
+                            crate::types::ItemContent::Table { data_source_id, .. } => {
+                                board.data_sources
+                                    .get(data_source_id)
+                                    .map(|ds| ds.name.clone())
+                                    .unwrap_or_else(|| "Table".to_string())
+                            }
+                            _ => item.content.display_name(),
+                        };
+                        (item.id, name)
+                    })
                     .collect();
             } else {
                 self.search_results = board.find_items(text);

@@ -15,8 +15,8 @@ pub mod preview;
 pub use canvas::{render_canvas, render_canvas_area, render_items};
 pub use dock::render_tool_dock;
 pub use overlays::{
-    render_command_palette, render_create_board_modal, render_footer_bar, render_header_bar,
-    render_settings_modal, render_shortcuts_overlay,
+    render_chart_config_modal, render_command_palette, render_create_board_modal,
+    render_footer_bar, render_header_bar, render_settings_modal, render_shortcuts_overlay,
 };
 pub use preview::{
     render_drag_ghost, render_preview_panel, render_search_bar, render_selected_item_label,
@@ -166,6 +166,10 @@ impl Render for Humanboard {
                     ))
                 },
             )
+            // Chart configuration modal
+            .when_some(self.chart_config_modal.as_ref(), |d, modal| {
+                d.child(render_chart_config_modal(modal, cx))
+            })
             // Toast notifications
             .when(!toasts.is_empty(), |d| {
                 d.child(render_toast_container(&toasts, reduce_motion, cx))
@@ -275,6 +279,7 @@ impl Humanboard {
                     .with_action(crate::notifications::ToastAction::reload_webview()));
             }
             self.ensure_code_editors(window, cx);
+            self.ensure_preview_table_states(window, cx);
         }
 
         // Ensure YouTube WebViews are created for any YouTube items
@@ -303,16 +308,21 @@ impl Humanboard {
         self.update_webview_visibility(window, cx);
 
         // Get board data (with fallback defaults if somehow no board)
-        let (canvas_offset, zoom, items, item_count) = if let Some(ref board) = self.board {
+        let (canvas_offset, zoom, items, item_count, data_sources) = if let Some(ref board) = self.board {
             (
                 board.canvas_offset,
                 board.zoom,
                 board.items.clone(),
                 board.items.len(),
+                board.data_sources.clone(),
             )
         } else {
-            (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0)
+            (point(px(0.0), px(0.0)), 1.0, Vec::new(), 0, std::collections::HashMap::new())
         };
+
+        // Ensure TableState entities exist for all table items (for gpui-component Table)
+        // Must be called after we have zoom value to calculate correct column widths
+        self.ensure_table_states(zoom, window, cx);
 
         let fps = self.calculate_fps();
         let frame_count = self.frame_count;
@@ -354,6 +364,29 @@ impl Humanboard {
             .preview
             .as_ref()
             .map(|p| (p, p.split, p.size, &p.tabs, p.active_tab, p.is_pane_split));
+
+        // Compute canvas viewport size for culling (accounts for dock, header, footer, preview)
+        let window_bounds = window.bounds();
+        let canvas_viewport_size = {
+            use crate::constants::{DOCK_WIDTH, HEADER_HEIGHT, FOOTER_HEIGHT};
+            let available_width = f32::from(window_bounds.size.width) - DOCK_WIDTH;
+            let available_height = f32::from(window_bounds.size.height) - HEADER_HEIGHT - FOOTER_HEIGHT;
+
+            if let Some(ref preview) = self.preview {
+                match preview.split {
+                    SplitDirection::Vertical => {
+                        let canvas_width = available_width * (1.0 - preview.size);
+                        gpui::size(gpui::px(canvas_width), gpui::px(available_height))
+                    }
+                    SplitDirection::Horizontal => {
+                        let canvas_height = available_height * (1.0 - preview.size);
+                        gpui::size(gpui::px(available_width), gpui::px(canvas_height))
+                    }
+                }
+            } else {
+                gpui::size(gpui::px(available_width), gpui::px(available_height))
+            }
+        };
 
         // Check if we should block canvas keyboard shortcuts
         // When input is active, we use a different key context to avoid shortcut conflicts
@@ -586,10 +619,16 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
+                                            &data_sources,
+                                            &self.table_scroll_states,
+                                            &self.table_states,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
+                                            self.editing_table_cell,
+                                            self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -712,10 +751,16 @@ impl Humanboard {
                                             &self.youtube_webviews,
                                             &self.audio_webviews,
                                             &self.video_webviews,
+                                            &data_sources,
+                                            &self.table_scroll_states,
+                                            &self.table_states,
                                             self.editing_textbox_id,
                                             self.textbox_input.as_ref(),
+                                            self.editing_table_cell,
+                                            self.table_cell_input.as_ref(),
                                             marquee,
                                             drawing_preview,
+                                            canvas_viewport_size,
                                             cx,
                                         )),
                                 )
@@ -829,10 +874,16 @@ impl Humanboard {
                     &self.youtube_webviews,
                     &self.audio_webviews,
                     &self.video_webviews,
+                    &data_sources,
+                    &self.table_scroll_states,
+                    &self.table_states,
                     self.editing_textbox_id,
                     self.textbox_input.as_ref(),
+                    self.editing_table_cell,
+                    self.table_cell_input.as_ref(),
                     marquee,
                     drawing_preview,
+                    canvas_viewport_size,
                     cx,
                 ))),
         }

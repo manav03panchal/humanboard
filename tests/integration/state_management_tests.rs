@@ -5,6 +5,7 @@ use humanboard::board_index::{BoardIndex, BoardMetadata};
 use humanboard::notifications::ToastManager;
 use humanboard::types::{CanvasItem, ItemContent};
 use gpui::{point, px};
+use std::collections::HashMap;
 
 #[test]
 fn test_board_state_serialization() {
@@ -20,6 +21,8 @@ fn test_board_state_serialization() {
             },
         ],
         next_item_id: 1,
+        data_sources: HashMap::new(),
+        next_data_source_id: 0,
     };
 
     let json = serde_json::to_string(&state).unwrap();
@@ -105,6 +108,8 @@ fn test_canvas_state_persistence() {
             id: i.id, position: i.position, size: i.size, content: i.content.clone(),
         }).collect(),
         next_item_id: board.next_item_id,
+        data_sources: board.data_sources.clone(),
+        next_data_source_id: board.next_data_source_id,
     };
 
     assert_eq!(state.canvas_offset, (150.0, 250.0));
@@ -153,6 +158,8 @@ fn test_board_state_with_all_content_types() {
             CanvasItem { id: 4, position: (350.0, 350.0), size: (200.0, 50.0), content: ItemContent::Audio("/audio.mp3".into()) },
         ],
         next_item_id: 5,
+        data_sources: HashMap::new(),
+        next_data_source_id: 0,
     };
 
     let json = serde_json::to_string_pretty(&state).unwrap();
