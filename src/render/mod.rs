@@ -486,20 +486,17 @@ impl Humanboard {
             }))
             .on_action(cx.listener(|this, _: &CloseCommandPalette, window, cx| {
                 if this.command_palette.is_some() {
-                    println!("[DEBUG ROOT] CloseCommandPalette - closing palette");
                     this.close_command_palette(window, cx)
                 }
             }))
             // Command palette arrow navigation - handlers at root level to catch global keybindings
             .on_action(cx.listener(|this, _: &CmdPaletteUp, _, cx| {
                 if this.command_palette.is_some() {
-                    println!("[DEBUG ROOT] CmdPaletteUp - navigating prev");
                     this.select_prev_result(cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &CmdPaletteDown, _, cx| {
                 if this.command_palette.is_some() {
-                    println!("[DEBUG ROOT] CmdPaletteDown - navigating next");
                     this.select_next_result(cx);
                 }
             }))

@@ -125,7 +125,7 @@ panic = "abort"
 
 [package.metadata.bundle]
 name = "Humanboard"
-identifier = "com.manavpanchal.humanboard"
+identifier = "com.humancorp.humanboard"
 # icon = ["assets/icon.icns"]  # or icon.png
 version = "0.1.0"
 copyright = "Copyright © 2025"

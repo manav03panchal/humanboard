@@ -53,7 +53,7 @@ jobs:
 
             ### Homebrew (recommended)
             ```bash
-            brew tap manav03panchal/humanboard
+            brew tap humancorp-humancorp/humanboard
             brew install --cask humanboard
             ```
 
@@ -75,5 +75,5 @@ jobs:
           curl -X POST \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.TAP_UPDATE_TOKEN }}" \
-            https://api.github.com/repos/manav03panchal/homebrew-humanboard/dispatches \
+            https://api.github.com/repos/humancorp-humancorp/homebrew-humanboard/dispatches \
             -d '{"event_type":"update-cask","client_payload":{"version":"${{ steps.version.outputs.version }}","sha256":"${{ steps.sha.outputs.sha256 }}"}}'

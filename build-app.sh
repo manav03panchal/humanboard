@@ -37,7 +37,7 @@ cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
     <key>CFBundleDisplayName</key>
     <string>Humanboard</string>
     <key>CFBundleIdentifier</key>
-    <string>com.manavpanchal.humanboard</string>
+    <string>com.humancorp.humanboard</string>
     <key>CFBundleVersion</key>
     <string>0.1.0</string>
     <key>CFBundleShortVersionString</key>
@@ -57,7 +57,7 @@ cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2025 Manav Panchal</string>
+    <string>Copyright © 2025 Humancorp</string>
 </dict>
 </plist>
 EOF

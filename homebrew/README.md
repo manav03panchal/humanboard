@@ -10,7 +10,7 @@ Create a new GitHub repo named `homebrew-humanboard` under your account.
 
 ```bash
 # Clone the new repo
-git clone https://github.com/manav03panchal/homebrew-humanboard.git
+git clone https://github.com/humancorp-humancorp/homebrew-humanboard.git
 cd homebrew-humanboard
 
 # Create the Casks directory
@@ -34,7 +34,7 @@ After creating a GitHub release, update `Casks/humanboard.rb` with:
 ### 3. Users install with
 
 ```bash
-brew tap manav03panchal/humanboard
+brew tap humancorp-humancorp/humanboard
 brew install --cask humanboard
 ```
 
